@@ -23,7 +23,7 @@ jobs:
             **/requirements*.txt
       - name: Install Dependencies
         run: |
-          pip install -r requirements.txt git+https://github.com/henriquegemignani/PyQtDarkTheme.git@main
+          pip install -r requirements.txt git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
 
       - name: Build Executable
         uses: Nuitka/Nuitka-Action@main
