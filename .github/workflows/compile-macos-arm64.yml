@@ -32,7 +32,10 @@ jobs:
           script-name: startLive-qt.py
           mode: app
           enable-plugins: pyside6
-          disable-console: true
+          noinclude-setuptools-mode: "nofollow"
+          noinclude-pytest-mode: "nofollow"
+          noinclude-unittest-mode: "nofollow"
+          deployment: true
         
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
