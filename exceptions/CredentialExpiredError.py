@@ -1,0 +1,2 @@
+class CredentialExpiredError(Exception):
+    pass

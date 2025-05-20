@@ -1,0 +1,9 @@
+PySide6~=6.9.0
+pillow~=11.2.1
+qrcode~=8.2
+requests~=2.32.3
+obsws-python
+nuitka~=2.7.3
+keyring~=25.6.0
+darkdetect~=0.8.0
+# PyQtDarkTheme-fork~=2.3.4
