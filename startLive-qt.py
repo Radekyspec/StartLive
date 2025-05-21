@@ -61,7 +61,7 @@ obs_req_queue = Queue()
 
 
 class ThreadSafeDict:
-    def __init__(self, value):
+    def __init__(self, value: dict):
         self._dict: dict = value
         self._lock = Lock()
 
@@ -95,7 +95,8 @@ class ThreadSafeDict:
         with self._lock:
             self._dict.update(value, **kwargs)
 
-    def internal(self):
+    @property
+    def internal(self) -> dict:
         return self._dict
 
 
@@ -837,6 +838,7 @@ class MainWindow(QMainWindow):
 
         # Start fetching QR and begin polling thread
         self.credential_worker = CredentialManagerWorker(self)
+        self.login_worker = None
         self.add_thread(self.credential_worker)
         self.timer.timeout.connect(self.load_credentials)
         self.timer.start(50)
@@ -850,10 +852,11 @@ class MainWindow(QMainWindow):
         # Start fetching QR and begin polling thread
         scan_status["timeout"] = False
         self.add_thread(QRLoginWorker(self))
-        if retry:
+        if retry and self.login_worker is not None:
             self.status_label.clicked.disconnect(self.fetch_qr)
-        else:
-            self.add_thread(FetchLoginWorker(self), True)
+            self.login_worker.stop()
+        self.login_worker = FetchLoginWorker(self)
+        self.add_thread(self.login_worker, True)
         self.login_label.setText("请使用手机扫码登录：")
         self.status_label.setText("等待扫码中...")
         self.status_label.setStyleSheet("color: blue; font-size: 16pt;")
@@ -912,7 +915,7 @@ class MainWindow(QMainWindow):
     def on_exit(self):
         if stream_settings:
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
-                         dumps(stream_settings.internal()))
+                         dumps(stream_settings.internal))
         for worker in self._ll_workers:
             worker.stop()
 
