@@ -6,4 +6,3 @@ obsws-python
 nuitka~=2.7.3
 keyring~=25.6.0
 darkdetect~=0.8.0
-# PyQtDarkTheme-fork~=2.3.4
