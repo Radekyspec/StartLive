@@ -30,8 +30,10 @@ jobs:
         with:
           nuitka-version: main
           script-name: startLive-qt.py
+          mingw64: true
           mode: app
           enable-plugins: pyside6
+          windows-console-mode: "disable"
           noinclude-setuptools-mode: "nofollow"
           noinclude-pytest-mode: "nofollow"
           noinclude-unittest-mode: "nofollow"
