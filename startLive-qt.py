@@ -17,7 +17,7 @@ from darkdetect import isDark
 from keyring import get_password, set_password
 from obsws_python import ReqClient
 from PIL import ImageQt
-from PySide6.QtCore import Qt, QTimer, QRunnable, Slot, QThreadPool, Signal
+from PySide6.QtCore import Qt, QTimer, Slot, QThreadPool, Signal
 from PySide6.QtGui import QIntValidator, QPixmap
 from PySide6.QtWidgets import (QApplication,
                                QCheckBox, QComboBox, QGridLayout, QGroupBox,
@@ -34,6 +34,7 @@ from requests.cookies import cookiejar_from_dict
 # local package import
 from constant import *
 from exceptions import CredentialExpiredError
+from models import BaseWorker, LongLiveWorker
 
 dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))
@@ -161,13 +162,10 @@ class FocusAwareLineEdit(QLineEdit):
         self.setEchoMode(QLineEdit.Password)  # Hide text when focus is lost
 
 
-class CredentialManagerWorker(QRunnable):
+class CredentialManagerWorker(BaseWorker):
     def __init__(self, parent_window: "MainWindow"):
-        super().__init__()
-        self.name = "凭据管理"
+        super().__init__(name="凭据管理")
         self.parent_window = parent_window
-        self.exception = None
-        self.finished = False
 
     @Slot()
     def run(self, /) -> None:
@@ -206,13 +204,10 @@ class CredentialManagerWorker(QRunnable):
             self.finished = True
 
 
-class QRLoginWorker(QRunnable):
+class QRLoginWorker(BaseWorker):
     def __init__(self, parent_window: "MainWindow"):
-        super().__init__()
-        self.name = "登录二维码"
+        super().__init__(name="登录二维码")
         self.parent_window = parent_window
-        self.finished = False
-        self.exception = None
 
     @Slot()
     def run(self):
@@ -229,12 +224,9 @@ class QRLoginWorker(QRunnable):
             self.finished = True
 
 
-class StartLiveWorker(QRunnable):
+class StartLiveWorker(BaseWorker):
     def __init__(self, parent_window: "StreamConfigPanel", area):
-        super().__init__()
-        self.name = "开播任务"
-        self.exception = None
-        self.finished = False
+        super().__init__(name="开播任务")
         self.area = area
         self.parent_window = parent_window
 
@@ -270,8 +262,9 @@ class StartLiveWorker(QRunnable):
         except Exception as e:
             self.parent_window.start_btn.setEnabled(True)
             self.parent_window.stop_btn.setEnabled(False)
-            self.parent_window.parent_combo.setEnabled(True)
-            self.parent_window.child_combo.setEnabled(True)
+            # self.parent_window.parent_combo.setEnabled(True)
+            # self.parent_window.child_combo.setEnabled(True)
+            self.parent_window.save_area_btn.setEnabled(True)
             self.exception = e
         finally:
             self.finished = True
@@ -290,12 +283,9 @@ class StartLiveWorker(QRunnable):
             "code"]
 
 
-class StopLiveWorker(QRunnable):
+class StopLiveWorker(BaseWorker):
     def __init__(self, parent_window: "StreamConfigPanel"):
-        super().__init__()
-        self.name = "停播任务"
-        self.exception = None
-        self.finished = False
+        super().__init__(name="停播任务")
         self.parent_window = parent_window
 
     @Slot()
@@ -314,20 +304,17 @@ class StopLiveWorker(QRunnable):
         except Exception as e:
             self.parent_window.start_btn.setEnabled(False)
             self.parent_window.stop_btn.setEnabled(True)
-            self.parent_window.parent_combo.setEnabled(False)
-            self.parent_window.child_combo.setEnabled(False)
+            # self.parent_window.parent_combo.setEnabled(False)
+            # self.parent_window.child_combo.setEnabled(False)
+            self.parent_window.save_area_btn.setEnabled(True)
             self.exception = e
         finally:
             self.finished = True
 
 
-class FetchLoginWorker(QRunnable):
+class FetchLoginWorker(LongLiveWorker):
     def __init__(self, parent_window: "MainWindow"):
-        super().__init__()
-        self.name = "登录"
-        self.exception = None
-        self.finished = False
-        self._is_running = True
+        super().__init__(name="登录")
         self.parent_window = parent_window
 
     @staticmethod
@@ -387,17 +374,11 @@ class FetchLoginWorker(QRunnable):
         finally:
             self.finished = True
 
-    def stop(self):
-        self._is_running = False
 
-
-class FetchPreLiveWorker(QRunnable):
+class FetchPreLiveWorker(BaseWorker):
     def __init__(self, parent_window: "StreamConfigPanel"):
-        super().__init__()
-        self.name = "房间信息"
+        super().__init__(name="房间信息")
         self.parent_window = parent_window
-        self.exception = None
-        self.finished = False
 
     def _fetch_pre_live(self):
         info_url = "https://api.live.bilibili.com/xlive/web-ucenter/user/live_info"
@@ -442,14 +423,11 @@ class FetchPreLiveWorker(QRunnable):
             self.finished = True
 
 
-class TitleUpdateWorker(QRunnable):
+class TitleUpdateWorker(BaseWorker):
     def __init__(self, parent_window: "StreamConfigPanel", title):
-        super().__init__()
-        self.name = "标题更新"
+        super().__init__(name="标题更新")
         self.parent_window = parent_window
         self.title = title
-        self.exception = None
-        self.finished = False
 
     @Slot()
     def run(self, /) -> None:
@@ -472,14 +450,38 @@ class TitleUpdateWorker(QRunnable):
             self.finished = True
 
 
-class ObsDaemonWorker(QRunnable):
+class AreaUpdateWorker(BaseWorker):
+    def __init__(self, parent_window: "StreamConfigPanel"):
+        super().__init__(name="标题更新")
+        self.parent_window = parent_window
+
+    @Slot()
+    def run(self, /) -> None:
+        url = "https://api.live.bilibili.com/xlive/app-blink/v2/room/AnchorChangeRoomArea"
+        area_data = {
+            "room_id": room_info["room_id"],
+            "area_id": area_codes[self.parent_window.child_combo.currentText()],
+            "platform": "pc_link",
+            "csrf_token": cookies_dict["bili_jct"],
+            "csrf": cookies_dict["bili_jct"],
+        }
+        try:
+            response = session.post(url, data=area_data)
+            print(response.text)
+            response.raise_for_status()
+            if (response := response.json())["code"] != 0:
+                raise ValueError(response["message"])
+        except Exception as e:
+            self.exception = e
+            self.parent_window.save_area_btn.setEnabled(True)
+        finally:
+            self.finished = True
+
+
+class ObsDaemonWorker(LongLiveWorker):
     def __init__(self, parent_window: "StreamConfigPanel",
                  host, port, password):
-        super().__init__()
-        self.name = "OBS通讯"
-        self.exception = None
-        self.finished = False
-        self._is_running = True
+        super().__init__(name="OBS通讯")
         self.parent_window = parent_window
         self.host = host
         self.port = port
@@ -509,9 +511,6 @@ class ObsDaemonWorker(QRunnable):
             self.disconnect_obs()
             self.finished = True
 
-    def stop(self):
-        self._is_running = False
-
     @staticmethod
     def disconnect_obs():
         global obs_op, obs_client
@@ -522,14 +521,10 @@ class ObsDaemonWorker(QRunnable):
         obs_op = False
 
 
-class FaceAuthWorker(QRunnable):
+class FaceAuthWorker(LongLiveWorker):
     def __init__(self, qr_window: "FaceQRWidget"):
-        super().__init__()
-        self.name = "人脸认证"
+        super().__init__(name="人脸认证")
         self.qr_window = qr_window
-        self.exception = None
-        self.finished = False
-        self._is_running = True
 
     @Slot()
     def run(self, /) -> None:
@@ -556,9 +551,6 @@ class FaceAuthWorker(QRunnable):
             with suppress(RuntimeError):
                 self.qr_window.deleteLater()
             self.finished = True
-
-    def stop(self):
-        self._is_running = False
 
 
 class FaceQRWidget(QWidget):
@@ -656,51 +648,49 @@ class StreamConfigPanel(QWidget):
         stream_group = QGroupBox("推流信息 (自动生成)")
         stream_layout = QGridLayout()
 
-        stream_layout.addWidget(QLabel("串流地址:"), 0, 0)
+        stream_layout.addWidget(QLabel("串流地址:"), 0, 0, 1, 1)
         self.addr_input = QLineEdit()
         self.addr_input.setReadOnly(True)
-        stream_layout.addWidget(self.addr_input, 0, 1)
+        stream_layout.addWidget(self.addr_input, 0, 1, 1, 6)
         self.copy_addr_btn = QPushButton("复制")
-        stream_layout.addWidget(self.copy_addr_btn, 0, 2)
+        stream_layout.addWidget(self.copy_addr_btn, 0, 8)
 
-        stream_layout.addWidget(QLabel("串流密钥:"), 1, 0)
+        stream_layout.addWidget(QLabel("串流密钥:"), 1, 0, 1, 1)
         self.key_input = FocusAwareLineEdit()
         self.key_input.setReadOnly(True)
-        stream_layout.addWidget(self.key_input, 1, 1)
+        stream_layout.addWidget(self.key_input, 1, 1, 1, 6)
         self.copy_key_btn = QPushButton("复制")
-        stream_layout.addWidget(self.copy_key_btn, 1, 2)
+        stream_layout.addWidget(self.copy_key_btn, 1, 8)
 
         stream_group.setLayout(stream_layout)
         self.main_layout.addWidget(stream_group, stretch=1)
 
         # 分区选择
         area_group = QGroupBox("直播信息")
-        area_group_layout = QVBoxLayout()
-        title_widget = QWidget()
-        title_layout = QGridLayout()
-        title_layout.addWidget(QLabel("房间标题:"), 0, 0)
+        area_group_layout = QGridLayout()
+        area_group_layout.addWidget(QLabel("房间标题:"), 0, 0, 1, 1)
         self.title_input = QLineEdit()
-        title_layout.addWidget(self.title_input, 0, 1)
+        area_group_layout.addWidget(self.title_input, 0, 1, 1, 6)
         self.save_title_btn = QPushButton("保存")
         self.save_title_btn.setEnabled(False)
         self.save_title_btn.clicked.connect(self._save_title)
-        title_layout.addWidget(self.save_title_btn, 0, 2)
-        title_widget.setLayout(title_layout)
+        area_group_layout.addWidget(self.save_title_btn, 0, 8)
 
-        area_widget = QWidget()
-        area_layout = QHBoxLayout()
-        area_layout.addWidget(QLabel("分区选择:"))
+        area_group_layout.addWidget(QLabel("分区选择:"), 1, 0, 1, 1)
         self.parent_combo = QComboBox()
         self.parent_combo.addItems(parent_area)
-        area_layout.addWidget(self.parent_combo)
+        area_group_layout.addWidget(self.parent_combo, 1, 1, 1, 3)
 
         self.child_combo = QComboBox()
         self.child_combo.setEnabled(False)
-        area_layout.addWidget(self.child_combo)
-        area_widget.setLayout(area_layout)
+        area_group_layout.addWidget(self.child_combo, 1, 4, 1, 3)
+        self.save_area_btn = QPushButton("保存")
+        self.save_area_btn.setEnabled(False)
+        self.save_area_btn.clicked.connect(self._save_area)
+        self.parent_combo.activated.connect(self._activate_area_save)
+        self.child_combo.activated.connect(self._activate_area_save)
+        area_group_layout.addWidget(self.save_area_btn, 1, 8)
 
-        area_group_layout.addWidget(title_widget, stretch=1)
-        area_group_layout.addWidget(area_widget, stretch=1)
         area_group.setLayout(area_group_layout)
         self.main_layout.addWidget(area_group, stretch=1)
 
@@ -733,6 +723,9 @@ class StreamConfigPanel(QWidget):
             self.child_combo.clear()
             self.child_combo.setEnabled(False)
 
+    def _activate_area_save(self):
+        self.save_area_btn.setEnabled(True)
+
     def copy_address(self):
         QApplication.clipboard().setText(self.addr_input.text())
 
@@ -744,8 +737,9 @@ class StreamConfigPanel(QWidget):
             return
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.parent_combo.setEnabled(False)
-        self.child_combo.setEnabled(False)
+        # self.parent_combo.setEnabled(False)
+        # self.child_combo.setEnabled(False)
+        self.save_area_btn.setEnabled(False)
         area_code = area_codes[self.child_combo.currentText()]
         self.parent_window.add_thread(StartLiveWorker(self, area_code))
         self.parent_window.timer.timeout.connect(
@@ -755,8 +749,8 @@ class StreamConfigPanel(QWidget):
     def _stop_live(self):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
-        self.parent_combo.setEnabled(True)
-        self.child_combo.setEnabled(True)
+        # self.parent_combo.setEnabled(True)
+        # self.child_combo.setEnabled(True)
         stream_status["stream_key"] = None
         stream_status["stream_addr"] = None
         self.addr_input.setText("")
@@ -778,7 +772,7 @@ class StreamConfigPanel(QWidget):
             self.parent_window.add_thread(
                 ObsDaemonWorker(self, host=obs_host,
                                 port=self.port_input.text(),
-                                password=self.pass_input.text()), True)
+                                password=self.pass_input.text()))
         else:
             ObsDaemonWorker.disconnect_obs()
             self.obs_auto_start_checkbox.setEnabled(False)
@@ -795,9 +789,16 @@ class StreamConfigPanel(QWidget):
         self.parent_window.add_thread(
             TitleUpdateWorker(self, self.title_input.text()))
 
+    def _save_area(self):
+        self.save_area_btn.setEnabled(False)
+        self.parent_window.add_thread(AreaUpdateWorker(self))
+
 
 # Main GUI window
 class MainWindow(QMainWindow):
+    _managed_workers: list[BaseWorker | LongLiveWorker]
+    _ll_workers: list[LongLiveWorker]
+
     def __init__(self):
         super().__init__()
         self._base_interval = 200
@@ -809,7 +810,7 @@ class MainWindow(QMainWindow):
         self.timer = QTimer()
         # Long live workers
         self._ll_workers = []
-        self.setWindowTitle("登录器 (PySide6)")
+        self.setWindowTitle(f"登录器 {VERSION}")
         self.setGeometry(300, 200, 520, 420)
 
         # Widgets for login phase
@@ -856,7 +857,7 @@ class MainWindow(QMainWindow):
             self.status_label.clicked.disconnect(self.fetch_qr)
             self.login_worker.stop()
         self.login_worker = FetchLoginWorker(self)
-        self.add_thread(self.login_worker, True)
+        self.add_thread(self.login_worker)
         self.login_label.setText("请使用手机扫码登录：")
         self.status_label.setText("等待扫码中...")
         self.status_label.setStyleSheet("color: blue; font-size: 16pt;")
@@ -873,9 +874,9 @@ class MainWindow(QMainWindow):
                 # Needs update credential
                 self.fetch_qr()
 
-    def add_thread(self, worker, is_long_live=False):
+    def add_thread(self, worker: BaseWorker | LongLiveWorker):
         self._managed_workers.append(worker)
-        if is_long_live:
+        if isinstance(worker, LongLiveWorker):
             self._ll_workers.append(worker)
         self._thread_pool.start(worker)
 
@@ -995,7 +996,7 @@ class MainWindow(QMainWindow):
             ))
             auth_worker = FaceAuthWorker(self.face_window)
             self.face_window.destroyed.connect(auth_worker.stop)
-            self.add_thread(auth_worker, True)
+            self.add_thread(auth_worker)
             self.face_window.show()
 
 
