@@ -48,9 +48,9 @@ headers = {
     "Dnt": "1",
     "Pragma": "no-cache",
     "Priority": "u=1, i",
-    "Origin": "https://www.bilibili.com",
-    "Referer": "https://www.bilibili.com/",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+    "Origin": "https://live.bilibili.com",
+    "Referer": "https://live.bilibili.com/",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/8902"
 }
 
 # Global session for HTTP requests
