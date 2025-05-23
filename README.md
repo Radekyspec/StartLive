@@ -1,7 +1,7 @@
 # StartLive
 绕过强制使用直播姬开播的要求
 
-更新/答疑QQ群：1022778201
+更新/答疑QQ群：[1022778201](https://qm.qq.com/q/fPBktdfdrG)
 
 下载链接：[点击这里下载](https://github.com/Radekyspec/StartLive/releases/latest)
 
