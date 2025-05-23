@@ -35,6 +35,7 @@ from requests.cookies import cookiejar_from_dict
 from constant import *
 from exceptions import CredentialExpiredError
 from models import BaseWorker, LongLiveWorker
+from sign import livehime_sign, order_payload, LIVEHIME_BUILD
 
 dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))
@@ -235,14 +236,16 @@ class StartLiveWorker(BaseWorker):
         live_url = "https://api.live.bilibili.com/room/v1/Room/startLive"
         try:
             self.fetch_upstream()
-            live_data = {
+            live_data = livehime_sign({
                 "room_id": room_info["room_id"],
-                "platform": "pc_link",
                 "area_v2": self.area,
-                "backup_stream": 0,
+                "type": 2,
+            })
+            live_data.update({
                 "csrf_token": cookies_dict["bili_jct"],
                 "csrf": cookies_dict["bili_jct"]
-            }
+            })
+            live_data = order_payload(live_data)
             response = session.post(live_url, data=live_data)
             response = response.json()
             print(response)
@@ -272,12 +275,14 @@ class StartLiveWorker(BaseWorker):
     @staticmethod
     def fetch_upstream():
         stream_url = "https://api.live.bilibili.com/xlive/app-blink/v1/live/FetchWebUpStreamAddr"
-        stream_data = {
-            "platform": "pc_link",
+        stream_data = livehime_sign({
             "backup_stream": 0,
+        })
+        stream_data.update({
             "csrf_token": cookies_dict["bili_jct"],
             "csrf": cookies_dict["bili_jct"]
-        }
+        })
+        stream_data = order_payload(stream_data)
         response = session.post(stream_url, data=stream_data).json()
         return response["data"]["addr"]["addr"], response["data"]["addr"][
             "code"]
@@ -291,12 +296,14 @@ class StopLiveWorker(BaseWorker):
     @Slot()
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/room/v1/Room/stopLive"
-        stop_data = {
+        stop_data = livehime_sign({
             "room_id": room_info["room_id"],
-            "platform": "pc_link",
+        })
+        stop_data.update({
             "csrf_token": cookies_dict["bili_jct"],
             "csrf": cookies_dict["bili_jct"]
-        }
+        })
+        stop_data = order_payload(stop_data)
         try:
             response = session.post(url, data=stop_data).json()
             if response["code"] != 0:
@@ -381,11 +388,12 @@ class FetchPreLiveWorker(BaseWorker):
         self.parent_window = parent_window
 
     def _fetch_pre_live(self):
-        info_url = "https://api.live.bilibili.com/xlive/web-ucenter/user/live_info"
-        url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/GetInfo"
-        response = session.get(info_url).json()
+        room_info_url = "https://api.live.bilibili.com/xlive/web-ucenter/user/live_info"
+        live_info_url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/GetInfo"
+        response = session.get(room_info_url).json()
         room_info["room_id"] = response["data"]["room_id"]
-        response = session.get(url, params={"platform": "pc"}).json()
+        info_data = livehime_sign({"uId": cookies_dict["DedeUserID"]})
+        response = session.get(live_info_url, params=info_data).json()
         if response["data"]["live_status"] == 1:
             stream_status["live_status"] = True
             addr, code = StartLiveWorker.fetch_upstream()
@@ -404,11 +412,15 @@ class FetchPreLiveWorker(BaseWorker):
     @Slot()
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/PreLive"
-        params = {
-            "platform": "web",
-            "mobi_app": "web",
-            "build": "1",
-        }
+        params = livehime_sign({
+            "area": True,
+            "cover": True,
+            "coverVertical": True,
+            "liveDirectionType": 0,
+            "mobi_app": "pc_link",
+            "schedule": True,
+            "title": True,
+        })
         try:
             response = session.get(url, params=params).json()
             room_info["title"] = response["data"]["title"]
@@ -431,16 +443,16 @@ class TitleUpdateWorker(BaseWorker):
 
     @Slot()
     def run(self, /) -> None:
-        url = "https://api.live.bilibili.com/room/v1/Room/update"
+        url = "https://api.live.bilibili.com/room/v1/Room/updateV2"
         title_data = {
-            "platform": "pc_link",
+            "csrf": cookies_dict["bili_jct"],
+            "csrf_token": cookies_dict["bili_jct"],
             "room_id": room_info["room_id"],
             "title": self.title,
-            "csrf_token": cookies_dict["bili_jct"],
-            "csrf": cookies_dict["bili_jct"]
         }
         try:
-            response = session.post(url, data=title_data).json()
+            response = session.post(url, params=livehime_sign({}),
+                                    data=title_data).json()
             if response["code"] != 0:
                 raise ValueError(response["message"])
         except Exception as e:
@@ -459,14 +471,16 @@ class AreaUpdateWorker(BaseWorker):
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/xlive/app-blink/v2/room/AnchorChangeRoomArea"
         area_data = {
-            "room_id": room_info["room_id"],
             "area_id": area_codes[self.parent_window.child_combo.currentText()],
-            "platform": "pc_link",
+            "build": LIVEHIME_BUILD,
             "csrf_token": cookies_dict["bili_jct"],
             "csrf": cookies_dict["bili_jct"],
+            "platform": "pc_link",
+            "room_id": room_info["room_id"],
         }
         try:
-            response = session.post(url, data=area_data)
+            response = session.post(url, params=livehime_sign({}),
+                                    data=area_data)
             print(response.text)
             response.raise_for_status()
             if (response := response.json())["code"] != 0:
@@ -896,8 +910,8 @@ class MainWindow(QMainWindow):
         if self._managed_workers:
             if len(self._managed_workers) == 1 and len(
                     self._ll_workers) == 1 and any(
-                    isinstance(item, ObsDaemonWorker) for item in
-                    self._managed_workers):
+                isinstance(item, ObsDaemonWorker) for item in
+                self._managed_workers):
                 # Only OBS daemon left, no need to check in high frequency
                 if self._worker_interval < self._max_interval:
                     self._worker_interval = int(
