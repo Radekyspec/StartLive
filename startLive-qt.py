@@ -248,7 +248,7 @@ class StartLiveWorker(BaseWorker):
             live_data = order_payload(live_data)
             response = session.post(live_url, data=live_data)
             response = response.json()
-            print(response)
+            # print(response)
             match response["code"]:
                 case 0:
                     stream_status["stream_addr"] = response["data"]["rtmp"][
@@ -359,12 +359,14 @@ class FetchLoginWorker(LongLiveWorker):
                 result = response.json()
                 match result["data"]["code"]:
                     case 86101:  # Not scanned yet
+                        sleep(1)
                         continue
                     case 86038:  # QR expired
                         scan_status["timeout"] = True
                         break
                     case 86090:  # Scanned but not confirmed
                         scan_status["wait_for_confirm"] = True
+                        sleep(1)
                     case 0:  # Login successful
                         global cookies_dict
                         cookies_dict = response.cookies.get_dict()
@@ -375,7 +377,6 @@ class FetchLoginWorker(LongLiveWorker):
                         break
                     case _:
                         raise RuntimeError(result["message"])
-                sleep(2)  # Wait between polls
         except Exception as e:
             self.exception = e
         finally:
@@ -393,6 +394,7 @@ class FetchPreLiveWorker(BaseWorker):
         response = session.get(room_info_url).json()
         room_info["room_id"] = response["data"]["room_id"]
         info_data = livehime_sign({"uId": cookies_dict["DedeUserID"]})
+        info_data = order_payload(info_data)
         response = session.get(live_info_url, params=info_data).json()
         if response["data"]["live_status"] == 1:
             stream_status["live_status"] = True
@@ -481,7 +483,7 @@ class AreaUpdateWorker(BaseWorker):
         try:
             response = session.post(url, params=livehime_sign({}),
                                     data=area_data)
-            print(response.text)
+            # print(response.text)
             response.raise_for_status()
             if (response := response.json())["code"] != 0:
                 raise ValueError(response["message"])
@@ -866,10 +868,17 @@ class MainWindow(QMainWindow):
     def fetch_qr(self, retry=False):
         # Start fetching QR and begin polling thread
         scan_status["timeout"] = False
-        self.add_thread(QRLoginWorker(self))
         if retry and self.login_worker is not None:
             self.status_label.clicked.disconnect(self.fetch_qr)
             self.login_worker.stop()
+            # Reset status
+            scan_status.update({
+                "qr_key": None, "qr_url": None,
+                "wait_for_confirm": False
+            })
+            self.timer.timeout.connect(self.check_scan_status)
+            self.timer.start(100)
+        self.add_thread(QRLoginWorker(self))
         self.login_worker = FetchLoginWorker(self)
         self.add_thread(self.login_worker)
         self.login_label.setText("请使用手机扫码登录：")
