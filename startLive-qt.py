@@ -3,570 +3,32 @@
 
 # module import
 import sys
-from contextlib import suppress
-from functools import partial
 from ipaddress import ip_address, IPv6Address
-from json import dumps, loads
-from queue import Queue, Empty
-from threading import Lock
-from time import sleep
+from json import dumps
 from typing import Optional
 
 # package import
-from darkdetect import isDark
-from keyring import get_password, set_password
-from obsws_python import ReqClient
 from PIL import ImageQt
-from PySide6.QtCore import Qt, QTimer, Slot, QThreadPool, Signal
+from PySide6.QtCore import Qt, QTimer, QThreadPool
 from PySide6.QtGui import QIntValidator, QPixmap
 from PySide6.QtWidgets import (QApplication,
-                               QCheckBox, QComboBox, QGridLayout, QGroupBox,
+                               QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
                                QLabel, QLineEdit, QMainWindow, QMessageBox,
                                QPushButton,
                                QVBoxLayout, QWidget
                                )
+from darkdetect import isDark
+from keyring import set_password
 from qdarktheme import setup_theme, enable_hi_dpi
 from qrcode import QRCode
-from requests import Session
-from requests.cookies import cookiejar_from_dict
 
 # local package import
+import config
 from constant import *
-from exceptions import CredentialExpiredError
-from models import BaseWorker, LongLiveWorker
-from sign import livehime_sign, order_payload, LIVEHIME_BUILD
-
-dumps = partial(dumps, ensure_ascii=False,
-                separators=(",", ":"))
-
-# Headers used for all requests to simulate a browser environment
-headers = {
-    "Accept": "*/*",
-    "Accept-Encoding": "gzip, deflate",
-    "Accept-Language": "zh-CN,zh;q=0.9,en-CN;q=0.8,en;q=0.7",
-    "Cache-Control": "no-cache",
-    "Dnt": "1",
-    "Pragma": "no-cache",
-    "Priority": "u=1, i",
-    "Origin": "https://live.bilibili.com",
-    "Referer": "https://live.bilibili.com/",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/8902"
-}
-
-# Global session for HTTP requests
-session = Session()
-session.headers.update(headers)
-
-# Queue to communicate with OBS in a separate thread
-obs_req_queue = Queue()
-
-
-class ThreadSafeDict:
-    def __init__(self, value: dict):
-        self._dict: dict = value
-        self._lock = Lock()
-
-    def __bool__(self):
-        return bool(self._dict)
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __setitem__(self, key, value):
-        with self._lock:
-            self._dict[key] = value
-
-    def __delitem__(self, key):
-        with self._lock:
-            del self._dict[key]
-
-    def __contains__(self, key):
-        with self._lock:
-            return key in self._dict
-
-    def get(self, key, default=None):
-        with self._lock:
-            return self._dict.get(key, default)
-
-    def __repr__(self):
-        with self._lock:
-            return repr(self._dict)
-
-    def update(self, value, **kwargs):
-        with self._lock:
-            self._dict.update(value, **kwargs)
-
-    @property
-    def internal(self) -> dict:
-        return self._dict
-
-
-# Scan status flags for login
-scan_status = ThreadSafeDict({
-    "scanned": False, "qr_key": None, "qr_url": None,
-    "timeout": False, "wait_for_confirm": False,
-    "area_updated": False, "room_updated": False
-})
-
-# Stream status stores fetched RTMP info and verification state
-stream_status = ThreadSafeDict({
-    "live_status": False,
-    "required_face": False,
-    "identified_face": False,
-    "face_url": None,
-    "stream_addr": None,
-    "stream_key": None
-})
-
-room_info = ThreadSafeDict({
-    "room_id": "",
-    "title": ""
-})
-
-stream_settings = ThreadSafeDict({})
-
-# Area (category) selections for live stream configuration
-parent_area = ["请选择"]
-area_options = {}
-area_codes = {}
-
-# OBS WebSocket client
-obs_client: Optional[ReqClient] = None
-obs_op = False
-
-# Store cookies after login
-cookies_dict = {}
-
-
-class ClickableLabel(QLabel):
-    clicked = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def mousePressEvent(self, event):
-        self.clicked.emit()
-
-
-class FocusAwareLineEdit(QLineEdit):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setEchoMode(QLineEdit.Password)  # Start with password mode
-
-    def focusInEvent(self, event):
-        super().focusInEvent(event)
-        self.setEchoMode(QLineEdit.Normal)  # Reveal text when focused
-
-    def focusOutEvent(self, event):
-        super().focusOutEvent(event)
-        self.setEchoMode(QLineEdit.Password)  # Hide text when focus is lost
-
-
-class CredentialManagerWorker(BaseWorker):
-    def __init__(self, parent_window: "MainWindow"):
-        super().__init__(name="凭据管理")
-        self.parent_window = parent_window
-
-    @Slot()
-    def run(self, /) -> None:
-        try:
-            if (saved_settings := get_password(KEYRING_SERVICE_NAME,
-                                               KEYRING_SETTINGS)) is not None:
-                stream_settings.update(loads(saved_settings))
-            else:
-                stream_settings.update({
-                    "ip_addr": "localhost",
-                    "port": "4455",
-                    "password": "",
-                    "auto_live": False,
-                })
-            panel = self.parent_window.panel
-            panel.host_input.setText(stream_settings["ip_addr"])
-            panel.port_input.setText(stream_settings["port"])
-            panel.pass_input.setText(stream_settings["password"])
-            panel.obs_auto_start_checkbox.setChecked(
-                stream_settings["auto_live"])
-            if (saved_cookies := get_password(KEYRING_SERVICE_NAME,
-                                              KEYRING_COOKIES)) is not None:
-                saved_cookies = loads(saved_cookies)
-                cookiejar_from_dict(saved_cookies,
-                                    cookiejar=session.cookies)
-                nav_url = "https://api.bilibili.com/x/web-interface/nav"
-                response = session.get(nav_url).json()
-                if response["code"] != 0:
-                    raise CredentialExpiredError("登录凭据过期, 请重新登录")
-                cookies_dict.update(saved_cookies)
-                scan_status["scanned"] = True
-                FetchLoginWorker.post_login(self.parent_window)
-        except Exception as e:
-            self.exception = e
-        finally:
-            self.finished = True
-
-
-class QRLoginWorker(BaseWorker):
-    def __init__(self, parent_window: "MainWindow"):
-        super().__init__(name="登录二维码")
-        self.parent_window = parent_window
-
-    @Slot()
-    def run(self):
-        # logic from run_qr_login()
-        generate_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
-        try:
-            response = session.get(generate_url).json()
-            scan_status["qr_key"] = response["data"]["qrcode_key"]
-            scan_status["qr_url"] = response["data"]["url"]
-            self.parent_window.update_qr_image(response["data"]["url"])
-        except Exception as e:
-            self.exception = e
-        finally:
-            self.finished = True
-
-
-class StartLiveWorker(BaseWorker):
-    def __init__(self, parent_window: "StreamConfigPanel", area):
-        super().__init__(name="开播任务")
-        self.area = area
-        self.parent_window = parent_window
-
-    @Slot()
-    def run(self, /) -> None:
-        live_url = "https://api.live.bilibili.com/room/v1/Room/startLive"
-        try:
-            self.fetch_upstream()
-            live_data = livehime_sign({
-                "room_id": room_info["room_id"],
-                "area_v2": self.area,
-                "type": 2,
-            })
-            live_data.update({
-                "csrf_token": cookies_dict["bili_jct"],
-                "csrf": cookies_dict["bili_jct"]
-            })
-            live_data = order_payload(live_data)
-            response = session.post(live_url, data=live_data)
-            response = response.json()
-            # print(response)
-            match response["code"]:
-                case 0:
-                    stream_status["stream_addr"] = response["data"]["rtmp"][
-                        "addr"]
-                    stream_status["stream_key"] = response["data"]["rtmp"][
-                        "code"]
-                case 60024:
-                    stream_status.update({
-                        "required_face": True,
-                        "face_url": response["data"]["qr"]
-                    })
-                case _:
-                    raise RuntimeError(response["message"])
-        except Exception as e:
-            self.parent_window.start_btn.setEnabled(True)
-            self.parent_window.stop_btn.setEnabled(False)
-            # self.parent_window.parent_combo.setEnabled(True)
-            # self.parent_window.child_combo.setEnabled(True)
-            self.parent_window.save_area_btn.setEnabled(True)
-            self.exception = e
-        finally:
-            self.finished = True
-
-    @staticmethod
-    def fetch_upstream():
-        stream_url = "https://api.live.bilibili.com/xlive/app-blink/v1/live/FetchWebUpStreamAddr"
-        stream_data = livehime_sign({
-            "backup_stream": 0,
-        })
-        stream_data.update({
-            "csrf_token": cookies_dict["bili_jct"],
-            "csrf": cookies_dict["bili_jct"]
-        })
-        stream_data = order_payload(stream_data)
-        response = session.post(stream_url, data=stream_data).json()
-        return response["data"]["addr"]["addr"], response["data"]["addr"][
-            "code"]
-
-
-class StopLiveWorker(BaseWorker):
-    def __init__(self, parent_window: "StreamConfigPanel"):
-        super().__init__(name="停播任务")
-        self.parent_window = parent_window
-
-    @Slot()
-    def run(self, /) -> None:
-        url = "https://api.live.bilibili.com/room/v1/Room/stopLive"
-        stop_data = livehime_sign({
-            "room_id": room_info["room_id"],
-        })
-        stop_data.update({
-            "csrf_token": cookies_dict["bili_jct"],
-            "csrf": cookies_dict["bili_jct"]
-        })
-        stop_data = order_payload(stop_data)
-        try:
-            response = session.post(url, data=stop_data).json()
-            if response["code"] != 0:
-                raise ValueError(response["message"])
-        except Exception as e:
-            self.parent_window.start_btn.setEnabled(False)
-            self.parent_window.stop_btn.setEnabled(True)
-            # self.parent_window.parent_combo.setEnabled(False)
-            # self.parent_window.child_combo.setEnabled(False)
-            self.parent_window.save_area_btn.setEnabled(True)
-            self.exception = e
-        finally:
-            self.finished = True
-
-
-class FetchLoginWorker(LongLiveWorker):
-    def __init__(self, parent_window: "MainWindow"):
-        super().__init__(name="登录")
-        self.parent_window = parent_window
-
-    @staticmethod
-    def _fetch_area_id():
-        url = "https://api.live.bilibili.com/room/v1/Area/getList"
-        response = session.get(url).json()
-        for area_info in response["data"]:
-            parent_area.append(area_info["name"])
-            area_options[area_info["name"]] = []
-            for sub_area in area_info["list"]:
-                area_codes[sub_area["name"]] = sub_area["id"]
-                area_options[area_info["name"]].append(sub_area["name"])
-        scan_status["area_updated"] = True
-
-    @staticmethod
-    def post_login(parent: "MainWindow"):
-        parent.add_thread(FetchPreLiveWorker(parent.panel))
-        FetchLoginWorker._fetch_area_id()
-        set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES,
-                     dumps(cookies_dict))
-
-    @Slot()
-    def run(self, /) -> None:
-        check_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
-        while scan_status["qr_key"] is None and self._is_running:
-            sleep(0.1)
-        params = {
-            "qrcode_key": scan_status["qr_key"],
-            "source": "main-fe-header",
-            "web_location": "333.1007"
-        }
-        try:
-            while not scan_status["scanned"] and self._is_running:
-                response = session.get(check_url, params=params)
-                result = response.json()
-                match result["data"]["code"]:
-                    case 86101:  # Not scanned yet
-                        sleep(1)
-                        continue
-                    case 86038:  # QR expired
-                        scan_status["timeout"] = True
-                        break
-                    case 86090:  # Scanned but not confirmed
-                        scan_status["wait_for_confirm"] = True
-                        sleep(1)
-                    case 0:  # Login successful
-                        global cookies_dict
-                        cookies_dict = response.cookies.get_dict()
-                        # cookies_dict["refresh_token"] = result["data"][
-                        #     "refresh_token"]
-                        scan_status["scanned"] = True
-                        self.post_login(self.parent_window)
-                        break
-                    case _:
-                        raise RuntimeError(result["message"])
-        except Exception as e:
-            self.exception = e
-        finally:
-            self.finished = True
-
-
-class FetchPreLiveWorker(BaseWorker):
-    def __init__(self, parent_window: "StreamConfigPanel"):
-        super().__init__(name="房间信息")
-        self.parent_window = parent_window
-
-    def _fetch_pre_live(self):
-        room_info_url = "https://api.live.bilibili.com/xlive/web-ucenter/user/live_info"
-        live_info_url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/GetInfo"
-        response = session.get(room_info_url).json()
-        room_info["room_id"] = response["data"]["room_id"]
-        info_data = livehime_sign({"uId": cookies_dict["DedeUserID"]})
-        info_data = order_payload(info_data)
-        response = session.get(live_info_url, params=info_data).json()
-        if response["data"]["live_status"] == 1:
-            stream_status["live_status"] = True
-            addr, code = StartLiveWorker.fetch_upstream()
-            self.parent_window.addr_input.setText(addr)
-            self.parent_window.key_input.setText(code)
-            self.parent_window.parent_combo.setCurrentText(
-                response["data"]["parent_name"]
-            )
-            self.parent_window.child_combo.setCurrentText(
-                response["data"]["area_v2_name"]
-            )
-            self.parent_window.start_btn.setEnabled(False)
-            self.parent_window.stop_btn.setEnabled(True)
-        scan_status["room_updated"] = True
-
-    @Slot()
-    def run(self, /) -> None:
-        url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/PreLive"
-        params = livehime_sign({
-            "area": True,
-            "cover": True,
-            "coverVertical": True,
-            "liveDirectionType": 0,
-            "mobi_app": "pc_link",
-            "schedule": True,
-            "title": True,
-        })
-        try:
-            response = session.get(url, params=params).json()
-            room_info["title"] = response["data"]["title"]
-            self.parent_window.title_input.setText(
-                response["data"]["title"])
-            self.parent_window.title_input.textEdited.connect(
-                lambda: self.parent_window.save_title_btn.setEnabled(True))
-            self._fetch_pre_live()
-        except Exception as e:
-            self.exception = e
-        finally:
-            self.finished = True
-
-
-class TitleUpdateWorker(BaseWorker):
-    def __init__(self, parent_window: "StreamConfigPanel", title):
-        super().__init__(name="标题更新")
-        self.parent_window = parent_window
-        self.title = title
-
-    @Slot()
-    def run(self, /) -> None:
-        url = "https://api.live.bilibili.com/room/v1/Room/updateV2"
-        title_data = {
-            "csrf": cookies_dict["bili_jct"],
-            "csrf_token": cookies_dict["bili_jct"],
-            "room_id": room_info["room_id"],
-            "title": self.title,
-        }
-        try:
-            response = session.post(url, params=livehime_sign({}),
-                                    data=title_data).json()
-            if response["code"] != 0:
-                raise ValueError(response["message"])
-        except Exception as e:
-            self.exception = e
-            self.parent_window.save_title_btn.setEnabled(True)
-        finally:
-            self.finished = True
-
-
-class AreaUpdateWorker(BaseWorker):
-    def __init__(self, parent_window: "StreamConfigPanel"):
-        super().__init__(name="标题更新")
-        self.parent_window = parent_window
-
-    @Slot()
-    def run(self, /) -> None:
-        url = "https://api.live.bilibili.com/xlive/app-blink/v2/room/AnchorChangeRoomArea"
-        area_data = {
-            "area_id": area_codes[self.parent_window.child_combo.currentText()],
-            "build": LIVEHIME_BUILD,
-            "csrf_token": cookies_dict["bili_jct"],
-            "csrf": cookies_dict["bili_jct"],
-            "platform": "pc_link",
-            "room_id": room_info["room_id"],
-        }
-        try:
-            response = session.post(url, params=livehime_sign({}),
-                                    data=area_data)
-            # print(response.text)
-            response.raise_for_status()
-            if (response := response.json())["code"] != 0:
-                raise ValueError(response["message"])
-        except Exception as e:
-            self.exception = e
-            self.parent_window.save_area_btn.setEnabled(True)
-        finally:
-            self.finished = True
-
-
-class ObsDaemonWorker(LongLiveWorker):
-    def __init__(self, parent_window: "StreamConfigPanel",
-                 host, port, password):
-        super().__init__(name="OBS通讯")
-        self.parent_window = parent_window
-        self.host = host
-        self.port = port
-        self.password = password
-
-    @Slot()
-    def run(self, /) -> None:
-        global obs_client, obs_op
-        obs_op = True
-        try:
-            obs_client = ReqClient(host=self.host, port=self.port,
-                                   password=self.password,
-                                   timeout=3)
-            obs_op = False
-
-        except Exception as e:
-            self.exception = e
-            obs_op = False
-            self.parent_window.obs_auto_start_checkbox.setEnabled(False)
-        else:
-            self.parent_window.obs_auto_start_checkbox.setEnabled(True)
-            while obs_client is not None and self._is_running:
-                with suppress(Empty):
-                    req, body = obs_req_queue.get(timeout=.2)
-                    obs_client.send(req, body)
-        finally:
-            self.disconnect_obs()
-            self.finished = True
-
-    @staticmethod
-    def disconnect_obs():
-        global obs_op, obs_client
-        obs_op = True
-        if obs_client is not None:
-            obs_client.disconnect()
-        obs_client = None
-        obs_op = False
-
-
-class FaceAuthWorker(LongLiveWorker):
-    def __init__(self, qr_window: "FaceQRWidget"):
-        super().__init__(name="人脸认证")
-        self.qr_window = qr_window
-
-    @Slot()
-    def run(self, /) -> None:
-        try:
-            url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/IsUserIdentifiedByFaceAuth"
-            verify_data = {
-                "room_id": room_info["room_id"],
-                "face_auth_code": "60024",
-                "csrf_token": cookies_dict["bili_jct"],
-                "csrf": cookies_dict["bili_jct"],
-                "visit_id": "",
-            }
-            verified = False
-            while self._is_running and not verified and self.qr_window:
-                response = session.post(url, data=verify_data).json()
-                print(response)
-                for key in response["data"]:
-                    if response["data"][key]:
-                        verified = True
-                sleep(1)
-        except Exception as e:
-            self.exception = e
-        finally:
-            with suppress(RuntimeError):
-                self.qr_window.deleteLater()
-            self.finished = True
+from models.classes import ClickableLabel, FocusAwareLineEdit, CompletionComboBox
+from models.workers import *
+from models.workers.base import *
 
 
 class FaceQRWidget(QWidget):
@@ -600,16 +62,16 @@ class StreamConfigPanel(QWidget):
         self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         def _addr_save():
-            stream_settings["ip_addr"] = self.host_input.text()
+            config.stream_settings["ip_addr"] = self.host_input.text()
 
         def _port_save():
-            stream_settings["port"] = self.port_input.text()
+            config.stream_settings["port"] = self.port_input.text()
 
         def _password_save():
-            stream_settings["password"] = self.pass_input.text()
+            config.stream_settings["password"] = self.pass_input.text()
 
         def _auto_live_save():
-            stream_settings[
+            config.stream_settings[
                 "auto_live"] = self.obs_auto_start_checkbox.isChecked()
 
         # 顶部区域：OBS 连接信息
@@ -688,23 +150,22 @@ class StreamConfigPanel(QWidget):
         self.title_input = QLineEdit()
         area_group_layout.addWidget(self.title_input, 0, 1, 1, 6)
         self.save_title_btn = QPushButton("保存")
-        self.save_title_btn.setEnabled(False)
         self.save_title_btn.clicked.connect(self._save_title)
         area_group_layout.addWidget(self.save_title_btn, 0, 8)
 
         area_group_layout.addWidget(QLabel("分区选择:"), 1, 0, 1, 1)
-        self.parent_combo = QComboBox()
-        self.parent_combo.addItems(parent_area)
+        self.parent_combo = CompletionComboBox(config.parent_area)
+        # self.parent_combo.addItems(config.parent_area)
         area_group_layout.addWidget(self.parent_combo, 1, 1, 1, 3)
 
-        self.child_combo = QComboBox()
+        self.child_combo = CompletionComboBox([])
         self.child_combo.setEnabled(False)
         area_group_layout.addWidget(self.child_combo, 1, 4, 1, 3)
         self.save_area_btn = QPushButton("保存")
         self.save_area_btn.setEnabled(False)
         self.save_area_btn.clicked.connect(self._save_area)
-        self.parent_combo.activated.connect(self._activate_area_save)
-        self.child_combo.activated.connect(self._activate_area_save)
+        self.parent_combo.editTextChanged.connect(self._activate_area_save)
+        self.child_combo.editTextChanged.connect(self._activate_area_save)
         area_group_layout.addWidget(self.save_area_btn, 1, 8)
 
         area_group.setLayout(area_group_layout)
@@ -731,9 +192,9 @@ class StreamConfigPanel(QWidget):
         self.stop_btn.clicked.connect(self._stop_live)
 
     def update_child_combo(self, text):
-        if text in area_options:
+        if text in config.area_options:
             self.child_combo.clear()
-            self.child_combo.addItems(area_options[text])
+            self.child_combo.addItems(config.area_options[text])
             self.child_combo.setEnabled(True)
         else:
             self.child_combo.clear()
@@ -749,14 +210,14 @@ class StreamConfigPanel(QWidget):
         QApplication.clipboard().setText(self.key_input.text())
 
     def _start_live(self):
-        if not self.parent_combo.currentText() or not self.child_combo.currentText():
+        if not self._valid_area():
             return
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         # self.parent_combo.setEnabled(False)
         # self.child_combo.setEnabled(False)
         self.save_area_btn.setEnabled(False)
-        area_code = area_codes[self.child_combo.currentText()]
+        area_code = config.area_codes[self.child_combo.currentText()]
         self.parent_window.add_thread(StartLiveWorker(self, area_code))
         self.parent_window.timer.timeout.connect(
             self.parent_window.fill_stream_info)
@@ -767,17 +228,17 @@ class StreamConfigPanel(QWidget):
         self.stop_btn.setEnabled(False)
         # self.parent_combo.setEnabled(True)
         # self.child_combo.setEnabled(True)
-        stream_status["stream_key"] = None
-        stream_status["stream_addr"] = None
+        config.stream_status["stream_key"] = None
+        config.stream_status["stream_addr"] = None
         self.addr_input.setText("")
         self.key_input.setText("")
-        if obs_client is not None:
+        if config.obs_client is not None:
             if self.obs_auto_start_checkbox.isChecked():
-                obs_req_queue.put(("StopStream", {}))
+                config.obs_req_queue.put(("StopStream", {}))
         self.parent_window.add_thread(StopLiveWorker(self))
 
     def _connect_obs(self):
-        if obs_client is None:
+        if config.obs_client is None:
             obs_host = self.host_input.text()
             try:
                 ip_object = ip_address(obs_host)
@@ -795,9 +256,9 @@ class StreamConfigPanel(QWidget):
         self._obs_timer.start(100)
 
     def _obs_btn_state(self):
-        if not obs_op:
+        if not config.obs_op:
             self.connect_btn.setText(
-                "断开" if obs_client is not None else "连接")
+                "断开" if config.obs_client is not None else "连接")
             self._obs_timer.stop()
 
     def _save_title(self):
@@ -805,9 +266,17 @@ class StreamConfigPanel(QWidget):
         self.parent_window.add_thread(
             TitleUpdateWorker(self, self.title_input.text()))
 
+    def _valid_area(self):
+        parent_choose = self.parent_combo.currentText()
+        if parent_choose == "请选择":
+            return False
+        return parent_choose in config.parent_area and self.child_combo.currentText() in \
+            config.area_options[self.parent_combo.currentText()]
+
     def _save_area(self):
-        self.save_area_btn.setEnabled(False)
-        self.parent_window.add_thread(AreaUpdateWorker(self))
+        if self._valid_area():
+            self.save_area_btn.setEnabled(False)
+            self.parent_window.add_thread(AreaUpdateWorker(self))
 
 
 # Main GUI window
@@ -867,12 +336,12 @@ class MainWindow(QMainWindow):
 
     def fetch_qr(self, retry=False):
         # Start fetching QR and begin polling thread
-        scan_status["timeout"] = False
+        config.scan_status["timeout"] = False
         if retry and self.login_worker is not None:
             self.status_label.clicked.disconnect(self.fetch_qr)
             self.login_worker.stop()
             # Reset status
-            scan_status.update({
+            config.scan_status.update({
                 "qr_key": None, "qr_url": None,
                 "wait_for_confirm": False
             })
@@ -893,7 +362,7 @@ class MainWindow(QMainWindow):
             self.timer.stop()
             self.timer.timeout.connect(self.check_scan_status)
             self.timer.start(100)
-            if not scan_status["scanned"]:
+            if not config.scan_status["scanned"]:
                 # Needs update credential
                 self.fetch_qr()
 
@@ -937,9 +406,9 @@ class MainWindow(QMainWindow):
         # print(f"worker interval: {self._worker_interval}")
 
     def on_exit(self):
-        if stream_settings:
+        if config.stream_settings:
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
-                         dumps(stream_settings.internal))
+                         dumps(config.stream_settings.internal))
         for worker in self._ll_workers:
             worker.stop()
 
@@ -967,55 +436,58 @@ class MainWindow(QMainWindow):
         self.timer.timeout.disconnect(self.check_scan_status)
         self.timer.stop()
         self.panel.parent_combo.clear()
-        self.panel.parent_combo.addItems(parent_area)
+        self.panel.parent_combo.addItems(config.parent_area)
         self.setCentralWidget(self.panel)
 
     def check_scan_status(self):
-        if scan_status["scanned"]:
+        if config.scan_status["scanned"]:
             # Login succeeded, ready to switch to main UI
             self.status_label.setText("登录成功！")
             self.status_label.setStyleSheet("color: green; font-size: 16pt;")
-            if not scan_status["area_updated"] or \
-                    not scan_status["room_updated"]:
+            if not config.scan_status["area_updated"] or \
+                    not config.scan_status["room_updated"]:
                 return
             self.after_login_success()
-        elif scan_status["timeout"]:
+        elif config.scan_status["timeout"]:
             self.status_label.setText("二维码已失效，点击这里刷新")
             self.status_label.setStyleSheet("color: red; font-size: 16pt;")
             self.status_label.clicked.connect(lambda: self.fetch_qr(True))
             self.timer.timeout.disconnect(self.check_scan_status)
             self.timer.stop()
-        elif scan_status["wait_for_confirm"]:
+        elif config.scan_status["wait_for_confirm"]:
             self.status_label.setText("已扫码，等待确认登录...")
 
     def fill_stream_info(self):
-        if stream_status["stream_key"] is not None and stream_status[
-            "stream_addr"] is not None:
-            self.panel.addr_input.setText(str(stream_status["stream_addr"]))
-            self.panel.key_input.setText(str(stream_status["stream_key"]))
-            if obs_client is not None:
-                obs_req_queue.put(("SetStreamServiceSettings", {
+        if config.stream_status["stream_key"] is not None and \
+                config.stream_status[
+                    "stream_addr"] is not None:
+            self.panel.addr_input.setText(
+                str(config.stream_status["stream_addr"]))
+            self.panel.key_input.setText(
+                str(config.stream_status["stream_key"]))
+            if config.obs_client is not None:
+                config.obs_req_queue.put(("SetStreamServiceSettings", {
                     "streamServiceType": "rtmp_custom",
                     "streamServiceSettings": {
                         "bwtest": False,
-                        "server": str(stream_status["stream_addr"]),
-                        "key": str(stream_status["stream_key"]),
+                        "server": str(config.stream_status["stream_addr"]),
+                        "key": str(config.stream_status["stream_key"]),
                         "use_auth": False
                     }
                 }))
                 if self.panel.obs_auto_start_checkbox.isChecked():
-                    obs_req_queue.put(("StartStream", {}))
+                    config.obs_req_queue.put(("StartStream", {}))
             self.timer.timeout.disconnect(self.fill_stream_info)
             self.timer.stop()
-        elif stream_status["required_face"]:
-            stream_status["required_face"] = False
+        elif config.stream_status["required_face"]:
+            config.stream_status["required_face"] = False
             self.panel.start_btn.setEnabled(True)
             self.panel.stop_btn.setEnabled(False)
             self.panel.parent_combo.setEnabled(True)
             self.panel.child_combo.setEnabled(True)
             self.face_window = FaceQRWidget()
             self.face_window.face_qr.setPixmap(self.qpixmap_from_str(
-                stream_status["face_url"]
+                config.stream_status["face_url"]
             ))
             auth_worker = FaceAuthWorker(self.face_window)
             self.face_window.destroyed.connect(auth_worker.stop)

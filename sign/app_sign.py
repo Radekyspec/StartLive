@@ -2,18 +2,13 @@ from hashlib import md5
 from time import time
 from urllib.parse import urlencode
 
-APP_KEY = "aae92bc66f3edfab"
-APP_SECRET = "af125a0d5279fd576c1b4418a3e8276d"
-LIVEHIME_BUILD = "8931"
+from constant import APP_KEY, APP_SECRET
 
 
 def livehime_sign(payload):
     """
     Sign request payload, not include csrf and csrf_token
-    Demo modified from https://github.com/SocialSisterYi/bilibili-API-collect/blob/master/docs/misc/sign/APP.md
-    Thanks for the community!
-    :param payload: original request payload
-    :return: signed payload
+    :param payload:
     """
     signed = base_payload()
     signed.update({'appkey': APP_KEY})

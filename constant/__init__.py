@@ -1,4 +1,7 @@
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"
 KEYRING_COOKIES = "cookies"
 KEYRING_SETTINGS = "settings"
+APP_KEY = "aae92bc66f3edfab"
+APP_SECRET = "af125a0d5279fd576c1b4418a3e8276d"
+LIVEHIME_BUILD = "8931"
 VERSION = "0.2.3"
