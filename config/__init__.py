@@ -31,6 +31,8 @@ headers = {
 session = Session()
 session.headers.update(headers)
 session.cookies.set("appkey", APP_KEY, domain="bilibili.com", path="/")
+session.get = partial(session.get, timeout=5)
+session.post = partial(session.post, timeout=5)
 
 # Queue to communicate with OBS in a separate thread
 obs_req_queue = Queue()
