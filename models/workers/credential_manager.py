@@ -18,6 +18,15 @@ class CredentialManagerWorker(BaseWorker):
         super().__init__(name="凭据管理")
         self.parent_window = parent_window
 
+    @staticmethod
+    def obs_default_settings():
+        config.stream_settings.update({
+            "ip_addr": "localhost",
+            "port": "4455",
+            "password": "",
+            "auto_live": False,
+        })
+
     @Slot()
     def run(self, /) -> None:
         try:
@@ -25,12 +34,7 @@ class CredentialManagerWorker(BaseWorker):
                                                KEYRING_SETTINGS)) is not None:
                 config.stream_settings.update(loads(saved_settings))
             else:
-                config.stream_settings.update({
-                    "ip_addr": "localhost",
-                    "port": "4455",
-                    "password": "",
-                    "auto_live": False,
-                })
+                self.obs_default_settings()
             panel = self.parent_window.panel
             panel.host_input.setText(config.stream_settings["ip_addr"])
             panel.port_input.setText(config.stream_settings["port"])

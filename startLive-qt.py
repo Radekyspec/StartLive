@@ -3,6 +3,7 @@
 
 # module import
 import sys
+from contextlib import suppress
 from ipaddress import ip_address, IPv6Address
 from json import dumps
 from typing import Optional
@@ -10,23 +11,25 @@ from typing import Optional
 # package import
 from PIL import ImageQt
 from PySide6.QtCore import Qt, QTimer, QThreadPool
-from PySide6.QtGui import QIntValidator, QPixmap
+from PySide6.QtGui import QAction, QIntValidator, QPixmap
 from PySide6.QtWidgets import (QApplication,
                                QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
-                               QLabel, QLineEdit, QMainWindow, QMessageBox,
-                               QPushButton,
+                               QLabel, QLineEdit, QMainWindow, QMenu,
+                               QMessageBox, QPushButton,
                                QVBoxLayout, QWidget
                                )
 from darkdetect import isDark
-from keyring import set_password
+from keyring import set_password, delete_password
+from keyring.errors import PasswordDeleteError
 from qdarktheme import setup_theme, enable_hi_dpi
 from qrcode import QRCode
 
 # local package import
 import config
 from constant import *
-from models.classes import ClickableLabel, FocusAwareLineEdit, CompletionComboBox
+from models.classes import ClickableLabel, FocusAwareLineEdit, \
+    CompletionComboBox
 from models.workers import *
 from models.workers.base import *
 
@@ -191,6 +194,12 @@ class StreamConfigPanel(QWidget):
         self.start_btn.clicked.connect(self._start_live)
         self.stop_btn.clicked.connect(self._stop_live)
 
+    def reset_obs_settings(self):
+        CredentialManagerWorker.obs_default_settings()
+        self.host_input.setText(config.stream_settings["ip_addr"])
+        self.port_input.setText(config.stream_settings["port"])
+        self.pass_input.setText(config.stream_settings["password"])
+
     def update_child_combo(self, text):
         if text in config.area_options:
             self.child_combo.clear()
@@ -296,7 +305,19 @@ class MainWindow(QMainWindow):
         # Long live workers
         self._ll_workers = []
         self.setWindowTitle(f"登录器 {VERSION}")
-        self.setGeometry(300, 200, 520, 420)
+        self.setGeometry(300, 200, 520, 430)
+
+        menu_bar = self.menuBar()
+        setting_menu = QMenu("缓存设置", self)
+        menu_bar.addMenu(setting_menu)
+
+        delete_cookies_action = QAction("退出账号登录", self)
+        delete_cookies_action.triggered.connect(self._delete_cookies)
+        setting_menu.addAction(delete_cookies_action)
+
+        delete_settings_action = QAction("清除OBS连接设置", self)
+        delete_settings_action.triggered.connect(self._delete_settings)
+        setting_menu.addAction(delete_settings_action)
 
         # Widgets for login phase
         self.login_label = QLabel("正在获取保存的登录凭证...")
@@ -333,6 +354,19 @@ class MainWindow(QMainWindow):
         self._worker_timer.timeout.connect(self._monitor_exception)
         self._worker_timer.start(self._worker_interval)
         self.face_window: Optional[FaceQRWidget] = None
+
+    def _delete_cookies(self):
+        if not config.scan_status["scanned"]:
+            return
+        with suppress(PasswordDeleteError):
+            delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES)
+        QMessageBox.information(self, "账号退出", "账号退出成功, 重启生效")
+
+    def _delete_settings(self):
+        with suppress(PasswordDeleteError):
+            delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
+        self.panel.reset_obs_settings()
+        QMessageBox.information(self, "设置清空", "OBS连接设置清除成功")
 
     def fetch_qr(self, retry=False):
         # Start fetching QR and begin polling thread
