@@ -18,11 +18,15 @@ class FetchPreLiveWorker(BaseWorker):
     def _fetch_pre_live(self):
         room_info_url = "https://api.live.bilibili.com/xlive/web-ucenter/user/live_info"
         live_info_url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/GetInfo"
-        response = config.session.get(room_info_url).json()
+        response = config.session.get(room_info_url)
+        response.encoding = "utf-8"
+        response = response.json()
         config.room_info["room_id"] = response["data"]["room_id"]
         info_data = livehime_sign({"uId": config.cookies_dict["DedeUserID"]})
         info_data = order_payload(info_data)
-        response = config.session.get(live_info_url, params=info_data).json()
+        response = config.session.get(live_info_url, params=info_data)
+        response.encoding = "utf-8"
+        response = response.json()
         if response["data"]["live_status"] == 1:
             config.stream_status["live_status"] = True
             addr, code = StartLiveWorker.fetch_upstream()
@@ -52,7 +56,9 @@ class FetchPreLiveWorker(BaseWorker):
             "title": True,
         })
         try:
-            response = config.session.get(url, params=params).json()
+            response = config.session.get(url, params=params)
+            response.encoding = "utf-8"
+            response = response.json()
             config.room_info["title"] = response["data"]["title"]
             self.parent_window.title_input.setText(
                 response["data"]["title"])

@@ -27,7 +27,9 @@ class QRLoginWorker(BaseWorker):
             "web_location": "0.0"
         }
         try:
-            response = config.session.get(generate_url, params=gen_data).json()
+            response = config.session.get(generate_url, params=gen_data)
+            response.encoding = "utf-8"
+            response = response.json()
             config.scan_status["qr_key"] = response["data"]["qrcode_key"]
             config.scan_status["qr_url"] = response["data"]["url"]
             self.parent_window.update_qr_image(response["data"]["url"])

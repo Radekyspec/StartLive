@@ -26,7 +26,9 @@ class TitleUpdateWorker(BaseWorker):
         }
         try:
             response = config.session.post(url, params=livehime_sign({}),
-                                           data=title_data).json()
+                                           data=title_data)
+            response.encoding = "utf-8"
+            response = response.json()
             if response["code"] != 0:
                 raise ValueError(response["message"])
         except Exception as e:

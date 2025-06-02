@@ -31,8 +31,8 @@ class StartLiveWorker(BaseWorker):
             })
             live_data = order_payload(live_data)
             response = config.session.post(live_url, data=live_data)
+            response.encoding = "utf-8"
             response = response.json()
-            print(response)
             match response["code"]:
                 case 0:
                     config.stream_status["stream_addr"] = \
@@ -69,6 +69,8 @@ class StartLiveWorker(BaseWorker):
             "csrf": config.cookies_dict["bili_jct"]
         })
         stream_data = order_payload(stream_data)
-        response = config.session.post(stream_url, data=stream_data).json()
+        response = config.session.post(stream_url, data=stream_data)
+        response.encoding = "utf-8"
+        response = response.json()
         return response["data"]["addr"]["addr"], response["data"]["addr"][
             "code"]

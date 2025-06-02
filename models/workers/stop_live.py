@@ -26,7 +26,9 @@ class StopLiveWorker(BaseWorker):
         })
         stop_data = order_payload(stop_data)
         try:
-            response = config.session.post(url, data=stop_data).json()
+            response = config.session.post(url, data=stop_data)
+            response.encoding = "utf-8"
+            response = response.json()
             if response["code"] != 0:
                 raise ValueError(response["message"])
         except Exception as e:

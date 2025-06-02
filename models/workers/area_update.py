@@ -30,6 +30,7 @@ class AreaUpdateWorker(BaseWorker):
         try:
             response = config.session.post(url, params=livehime_sign({}),
                                            data=area_data)
+            response.encoding = "utf-8"
             # print(response.text)
             response.raise_for_status()
             if (response := response.json())["code"] != 0:

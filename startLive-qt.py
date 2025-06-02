@@ -1,5 +1,4 @@
-# PySide6 reimplementation of the Bilibili live stream login app
-# Replaces tkinter with PySide6 and modern GUI patterns
+# -*- coding: utf-8 -*-
 
 # module import
 import sys
@@ -19,6 +18,11 @@ from PySide6.QtWidgets import (QApplication,
                                QMessageBox, QPushButton,
                                QVBoxLayout, QWidget
                                )
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QSystemTrayIcon, QMenu
+)
+from PySide6.QtGui import QIcon
+from PySide6.QtCore import QEvent, Qt
 from darkdetect import isDark
 from keyring import set_password, delete_password
 from keyring.errors import PasswordDeleteError
@@ -304,8 +308,22 @@ class MainWindow(QMainWindow):
         self.timer = QTimer()
         # Long live workers
         self._ll_workers = []
-        self.setWindowTitle(f"登录器 {VERSION}")
+        self.setWindowTitle(f"StartLive 开播器 {VERSION}")
         self.setGeometry(300, 200, 520, 430)
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(QIcon("resources/icon_cr.png"))  # 替换为您的图标路径
+        self.tray_icon.setToolTip("开播器")
+        self.tray_icon.setVisible(True)
+
+        tray_menu = QMenu()
+        restore_action = QAction("显示窗口", self)
+        quit_action = QAction("退出", self)
+        tray_menu.addAction(restore_action)
+        tray_menu.addAction(quit_action)
+        self.tray_icon.setContextMenu(tray_menu)
+        restore_action.triggered.connect(self.show_normal)
+        quit_action.triggered.connect(QApplication.quit)
+        self.tray_icon.activated.connect(self.on_tray_icon_activated)
 
         menu_bar = self.menuBar()
         setting_menu = QMenu("缓存设置", self)
@@ -354,6 +372,25 @@ class MainWindow(QMainWindow):
         self._worker_timer.timeout.connect(self._monitor_exception)
         self._worker_timer.start(self._worker_interval)
         self.face_window: Optional[FaceQRWidget] = None
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.WindowStateChange:
+            if self.isMinimized():
+                QTimer.singleShot(0, self.hide)  # 延迟隐藏窗口
+        super().changeEvent(event)
+
+    def closeEvent(self, event):
+        # 关闭窗口时退出应用
+        self.tray_icon.hide()
+        event.accept()
+
+    def show_normal(self):
+        self.show()
+        self.setWindowState(Qt.WindowActive)
+
+    def on_tray_icon_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self.show_normal()
 
     def _delete_cookies(self):
         if not config.scan_status["scanned"]:
@@ -531,6 +568,7 @@ class MainWindow(QMainWindow):
 
 # Entry point
 if __name__ == '__main__':
+
     enable_hi_dpi()
     app = QApplication(sys.argv)
     setup_theme("auto")

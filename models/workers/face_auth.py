@@ -28,8 +28,9 @@ class FaceAuthWorker(LongLiveWorker):
             }
             verified = False
             while self._is_running and not verified and self.qr_window:
-                response = config.session.post(url, data=verify_data).json()
-                print(response)
+                response = config.session.post(url, data=verify_data)
+                response.encoding = "utf-8"
+                response = response.json()
                 for key in response["data"]:
                     if response["data"][key]:
                         verified = True

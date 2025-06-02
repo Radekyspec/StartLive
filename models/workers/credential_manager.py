@@ -47,7 +47,9 @@ class CredentialManagerWorker(BaseWorker):
                 cookiejar_from_dict(saved_cookies,
                                     cookiejar=config.session.cookies)
                 nav_url = "https://api.bilibili.com/x/web-interface/nav"
-                response = config.session.get(nav_url).json()
+                response = config.session.get(nav_url)
+                response.encoding = "utf-8"
+                response = response.json()
                 if response["code"] != 0:
                     raise CredentialExpiredError("登录凭据过期, 请重新登录")
                 config.cookies_dict.update(saved_cookies)

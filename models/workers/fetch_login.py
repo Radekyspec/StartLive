@@ -21,7 +21,9 @@ class FetchLoginWorker(LongLiveWorker):
     @staticmethod
     def _fetch_area_id():
         url = "https://api.live.bilibili.com/room/v1/Area/getList"
-        response = config.session.get(url).json()
+        response = config.session.get(url)
+        response.encoding = "utf-8"
+        response = response.json()
         for area_info in response["data"]:
             config.parent_area.append(area_info["name"])
             config.area_options[area_info["name"]] = []
@@ -50,6 +52,7 @@ class FetchLoginWorker(LongLiveWorker):
         try:
             while not config.scan_status["scanned"] and self._is_running:
                 response = config.session.get(check_url, params=params)
+                response.encoding = "utf-8"
                 result = response.json()
                 match result["data"]["code"]:
                     case 86101:  # Not scanned yet
