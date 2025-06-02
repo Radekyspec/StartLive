@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import os.path
 # module import
 import sys
 from contextlib import suppress
@@ -9,20 +9,18 @@ from typing import Optional
 
 # package import
 from PIL import ImageQt
-from PySide6.QtCore import Qt, QTimer, QThreadPool
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QTimer, QThreadPool
 from PySide6.QtGui import QAction, QIntValidator, QPixmap
-from PySide6.QtWidgets import (QApplication,
-                               QCheckBox, QGridLayout, QGroupBox,
-                               QHBoxLayout,
-                               QLabel, QLineEdit, QMainWindow, QMenu,
-                               QMessageBox, QPushButton,
-                               QVBoxLayout, QWidget
-                               )
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QSystemTrayIcon, QMenu
 )
-from PySide6.QtGui import QIcon
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
+                               QHBoxLayout,
+                               QLabel, QLineEdit, QMessageBox, QPushButton,
+                               QVBoxLayout, QWidget
+                               )
 from darkdetect import isDark
 from keyring import set_password, delete_password
 from keyring.errors import PasswordDeleteError
@@ -311,7 +309,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
         self.setGeometry(300, 200, 520, 430)
         self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setIcon(QIcon("resources/icon_cr.png"))  # 替换为您的图标路径
+        self.tray_icon.setIcon(QIcon(
+            os.path.join(os.path.dirname(__file__), "resources",
+                         "icon_cr.png")))
         self.tray_icon.setToolTip("开播器")
         self.tray_icon.setVisible(True)
 
@@ -568,7 +568,6 @@ class MainWindow(QMainWindow):
 
 # Entry point
 if __name__ == '__main__':
-
     enable_hi_dpi()
     app = QApplication(sys.argv)
     setup_theme("auto")
