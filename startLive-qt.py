@@ -9,17 +9,13 @@ from typing import Optional
 
 # package import
 from PIL import ImageQt
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtCore import QTimer, QThreadPool
-from PySide6.QtGui import QAction, QIntValidator, QPixmap
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QSystemTrayIcon, QMenu
-)
+from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool)
+from PySide6.QtGui import QAction, QIntValidator, QPixmap, QIcon
 from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
                                QLabel, QLineEdit, QMessageBox, QPushButton,
-                               QVBoxLayout, QWidget
+                               QVBoxLayout, QWidget,
+                               QApplication, QMainWindow, QSystemTrayIcon, QMenu
                                )
 from darkdetect import isDark
 from keyring import set_password, delete_password
@@ -79,6 +75,10 @@ class StreamConfigPanel(QWidget):
             config.stream_settings[
                 "auto_live"] = self.obs_auto_start_checkbox.isChecked()
 
+        def _auto_connect_save():
+            config.stream_settings[
+                "auto_connect"] = self.obs_auto_connect_checkbox.isChecked()
+
         # 顶部区域：OBS 连接信息
         obs_group = QGroupBox("OBS 连接设置")
         obs_layout = QGridLayout()
@@ -113,13 +113,25 @@ class StreamConfigPanel(QWidget):
         obs_layout.addWidget(obs_hint, 0, 0, 1, 7)
 
         obs_auto_start = QWidget()
-        obs_auto_start_layout = QGridLayout()
+        obs_auto_start_layout = QHBoxLayout()
         obs_auto_start_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.obs_auto_start_checkbox = QCheckBox("自动推流")
+        self.obs_auto_start_checkbox.setToolTip(
+            "勾选此项后，软件内点击开播时会自动点击OBS的推流"
+        )
         self.obs_auto_start_checkbox.setChecked(False)
         self.obs_auto_start_checkbox.setEnabled(False)
         self.obs_auto_start_checkbox.checkStateChanged.connect(_auto_live_save)
         obs_auto_start_layout.addWidget(self.obs_auto_start_checkbox)
+        self.obs_auto_connect_checkbox = QCheckBox("自动连接OBS")
+        self.obs_auto_connect_checkbox.setToolTip(
+            "勾选此项后，软件打开时会自动尝试连接OBS"
+        )
+        self.obs_auto_connect_checkbox.checkStateChanged.connect(
+            _auto_connect_save)
+        self.obs_auto_connect_checkbox.setChecked(False)
+        self.obs_auto_connect_checkbox.setEnabled(True)
+        obs_auto_start_layout.addWidget(self.obs_auto_connect_checkbox)
 
         obs_auto_start.setLayout(obs_auto_start_layout)
         obs_layout.addWidget(obs_auto_start, 2, 0, 1, 7)
@@ -228,7 +240,12 @@ class StreamConfigPanel(QWidget):
         # self.parent_combo.setEnabled(False)
         # self.child_combo.setEnabled(False)
         self.save_area_btn.setEnabled(False)
+        if config.stream_settings.get("auto_connect",
+                                      False) and config.obs_client is None:
+            self.connect_btn.click()
         area_code = config.area_codes[self.child_combo.currentText()]
+        config.room_info["parent_area"] = self.parent_combo.currentText()
+        config.room_info["area"] = self.child_combo.currentText()
         self.parent_window.add_thread(StartLiveWorker(self, area_code))
         self.parent_window.timer.timeout.connect(
             self.parent_window.fill_stream_info)
@@ -288,6 +305,8 @@ class StreamConfigPanel(QWidget):
         if self._valid_area():
             self.save_area_btn.setEnabled(False)
             self.parent_window.add_thread(AreaUpdateWorker(self))
+            config.room_info["parent_area"] = self.parent_combo.currentText()
+            config.room_info["area"] = self.child_combo.currentText()
 
 
 # Main GUI window
@@ -312,7 +331,7 @@ class MainWindow(QMainWindow):
         self.tray_icon.setIcon(QIcon(
             os.path.join(os.path.dirname(__file__), "resources",
                          "icon_cr.png")))
-        self.tray_icon.setToolTip("开播器")
+        self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
 
         tray_menu = QMenu()
@@ -382,6 +401,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         # 关闭窗口时退出应用
         self.tray_icon.hide()
+        self.tray_icon.deleteLater()
         event.accept()
 
     def show_normal(self):
@@ -480,6 +500,9 @@ class MainWindow(QMainWindow):
         if config.stream_settings:
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
                          dumps(config.stream_settings.internal))
+        if config.room_info:
+            set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
+                         dumps(config.room_info.internal))
         for worker in self._ll_workers:
             worker.stop()
 
@@ -509,6 +532,12 @@ class MainWindow(QMainWindow):
         self.panel.parent_combo.clear()
         self.panel.parent_combo.addItems(config.parent_area)
         self.setCentralWidget(self.panel)
+        if config.stream_settings.get("auto_connect", False):
+            self.panel.connect_btn.click()
+        self.panel.parent_combo.setCurrentText(
+            config.room_info.get("parent_area", "请选择"))
+        self.panel.child_combo.setCurrentText(
+            config.room_info.get("area", ""))
 
     def check_scan_status(self):
         if config.scan_status["scanned"]:
@@ -568,8 +597,8 @@ class MainWindow(QMainWindow):
 
 # Entry point
 if __name__ == '__main__':
-    enable_hi_dpi()
     app = QApplication(sys.argv)
+    enable_hi_dpi()
     setup_theme("auto")
     window = MainWindow()
     app.aboutToQuit.connect(window.on_exit)

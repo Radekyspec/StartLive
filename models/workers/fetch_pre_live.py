@@ -33,12 +33,14 @@ class FetchPreLiveWorker(BaseWorker):
             self.parent_window.addr_input.setText(addr)
             self.parent_window.key_input.setText(code)
             # Not work?
-            self.parent_window.parent_combo.setCurrentText(
-                response["data"]["parent_name"]
-            )
-            self.parent_window.child_combo.setCurrentText(
-                response["data"]["area_v2_name"]
-            )
+            # self.parent_window.parent_combo.setCurrentText(
+            #     response["data"]["parent_name"]
+            # )
+            # self.parent_window.child_combo.setCurrentText(
+            #     response["data"]["area_v2_name"]
+            # )
+            config.room_info["parent_area"] = response["data"]["parent_name"]
+            config.room_info["area"] = response["data"]["area_v2_name"]
             self.parent_window.start_btn.setEnabled(False)
             self.parent_window.stop_btn.setEnabled(True)
         config.scan_status["room_updated"] = True

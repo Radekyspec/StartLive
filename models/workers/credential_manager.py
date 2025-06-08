@@ -7,10 +7,10 @@ from requests.cookies import cookiejar_from_dict
 
 # local package import
 import config
-from .fetch_login import FetchLoginWorker
 from constant import *
 from exceptions import CredentialExpiredError
 from .base import BaseWorker
+from .fetch_login import FetchLoginWorker
 
 
 class CredentialManagerWorker(BaseWorker):
@@ -25,6 +25,16 @@ class CredentialManagerWorker(BaseWorker):
             "port": "4455",
             "password": "",
             "auto_live": False,
+            "auto_connect": False
+        })
+
+    @staticmethod
+    def room_default_settings():
+        config.room_info.update({
+            "room_id": "",
+            "title": "",
+            "parent_area": "",
+            "area": "",
         })
 
     @Slot()
@@ -35,12 +45,21 @@ class CredentialManagerWorker(BaseWorker):
                 config.stream_settings.update(loads(saved_settings))
             else:
                 self.obs_default_settings()
+            if (room_settings := get_password(KEYRING_SERVICE_NAME,
+                                              KEYRING_ROOM_INFO)) is not None:
+                config.room_info.update(loads(room_settings))
+            else:
+                self.room_default_settings()
+
             panel = self.parent_window.panel
             panel.host_input.setText(config.stream_settings["ip_addr"])
             panel.port_input.setText(config.stream_settings["port"])
             panel.pass_input.setText(config.stream_settings["password"])
             panel.obs_auto_start_checkbox.setChecked(
-                config.stream_settings["auto_live"])
+                config.stream_settings.get("auto_live", False))
+            panel.obs_auto_connect_checkbox.setChecked(
+                config.stream_settings.get("auto_connect", False))
+
             if (saved_cookies := get_password(KEYRING_SERVICE_NAME,
                                               KEYRING_COOKIES)) is not None:
                 saved_cookies = loads(saved_cookies)

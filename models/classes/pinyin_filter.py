@@ -15,10 +15,12 @@ class CompletionComboBox(QComboBox):
         self.completer = QCompleter(items, self)
         self.setCompleter(self.completer)
         self.lineEdit().textEdited.connect(self.update_completer)
+        super().addItems(items)
 
     def addItem(self, text: str, /, userData: Any = ...) -> None:
         self.items.append(text)
         self.model.setStringList(self.items)
+        super().addItem(text, userData)
 
     def addItems(self, texts: Sequence[str], /) -> None:
         super().addItems(texts)

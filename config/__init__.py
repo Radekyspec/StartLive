@@ -55,10 +55,7 @@ stream_status = ThreadSafeDict({
     "stream_key": None
 })
 
-room_info = ThreadSafeDict({
-    "room_id": "",
-    "title": ""
-})
+room_info = ThreadSafeDict({})
 
 stream_settings = ThreadSafeDict({})
 
