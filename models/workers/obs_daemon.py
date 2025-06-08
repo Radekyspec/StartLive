@@ -23,16 +23,18 @@ class ObsDaemonWorker(LongLiveWorker):
     @Slot()
     def run(self, /) -> None:
         config.obs_op = True
+        config.obs_connecting = True
         try:
             config.obs_client = ReqClient(host=self.host, port=self.port,
                                           password=self.password,
                                           timeout=3)
             config.obs_op = False
-
+            config.obs_connecting = False
         except Exception as e:
             self.exception = e
-            config.obs_op = False
             self.parent_window.obs_auto_start_checkbox.setEnabled(False)
+            config.obs_op = False
+            config.obs_connecting = False
         else:
             self.parent_window.obs_auto_start_checkbox.setEnabled(True)
             while config.obs_client is not None and self._is_running:

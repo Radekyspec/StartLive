@@ -67,6 +67,7 @@ area_codes = {}
 # OBS WebSocket client
 obs_client: Optional[ReqClient] = None
 obs_op = False
+obs_connecting = False
 
 # Store cookies after login
 cookies_dict = {}

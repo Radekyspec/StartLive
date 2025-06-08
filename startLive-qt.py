@@ -267,6 +267,7 @@ class StreamConfigPanel(QWidget):
 
     def _connect_obs(self):
         if config.obs_client is None and not config.obs_op:
+            self.connect_btn.setText("连接中")
             obs_host = self.host_input.text()
             try:
                 ip_object = ip_address(obs_host)
@@ -284,6 +285,9 @@ class StreamConfigPanel(QWidget):
         self._obs_timer.start(100)
 
     def _obs_btn_state(self):
+        if config.obs_connecting:
+            self.connect_btn.setText("连接中")
+            return
         if not config.obs_op:
             self.connect_btn.setText(
                 "断开" if config.obs_client is not None else "连接")
