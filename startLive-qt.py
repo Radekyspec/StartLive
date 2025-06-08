@@ -266,7 +266,7 @@ class StreamConfigPanel(QWidget):
         self.parent_window.add_thread(StopLiveWorker(self))
 
     def _connect_obs(self):
-        if config.obs_client is None:
+        if config.obs_client is None and not config.obs_op:
             obs_host = self.host_input.text()
             try:
                 ip_object = ip_address(obs_host)
