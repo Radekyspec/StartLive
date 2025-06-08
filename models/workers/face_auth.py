@@ -31,9 +31,8 @@ class FaceAuthWorker(LongLiveWorker):
                 response = config.session.post(url, data=verify_data)
                 response.encoding = "utf-8"
                 response = response.json()
-                for key in response["data"]:
-                    if response["data"][key]:
-                        verified = True
+                if response["data"] and response["data"]["is_identified"]:
+                    verified = True
                 sleep(1)
         except Exception as e:
             self.exception = e

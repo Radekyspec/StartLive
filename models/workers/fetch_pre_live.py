@@ -27,7 +27,6 @@ class FetchPreLiveWorker(BaseWorker):
         response = config.session.get(live_info_url, params=info_data)
         response.encoding = "utf-8"
         response = response.json()
-        print(response)
         if response["data"]["live_status"] == 1:
             config.stream_status["live_status"] = True
             addr, code = StartLiveWorker.fetch_upstream()
