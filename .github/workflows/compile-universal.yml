@@ -8,7 +8,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest]
+        os: [windows-latest, macos-13, macos-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -18,17 +18,38 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v5
+        if: matrix.os != 'macos-latest'
         with:
           python-version: '3.12.10' # Version range or exact version of a Python version to use, using SemVer's version range syntax
           architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
           cache: 'pip'
           cache-dependency-path: |
             **/requirements*.txt
+      
+      - name: Setup Python for ARM
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.10' # Version range or exact version of a Python version to use, using SemVer's version range syntax
+          architecture: 'arm64' # optional x64 or x86. Defaults to x64 if not specified
+          cache: 'pip'
+          cache-dependency-path: |
+            **/requirements*.txt
+        if: matrix.os == 'macos-latest'
+
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
+          
+      # Remove problematic brew libs if Intel Mac
+      # https://github.com/Nuitka/Nuitka/issues/2853#issuecomment-2119520735
+      - name: Remove problematic brew libs
+        run: |
+          brew remove --force --ignore-dependencies openssl@3
+          brew cleanup openssl@3
+        if: matrix.os == 'macos-13'
 
-      - name: Build Executable
+      - name: Build Executable for Windows
+        if: matrix.os == 'windows-latest'
         uses: Nuitka/Nuitka-Action@main
         with:
           nuitka-version: main
@@ -37,6 +58,20 @@ jobs:
           mode: app
           enable-plugins: pyside6
           windows-console-mode: "disable"
+          noinclude-setuptools-mode: "nofollow"
+          noinclude-pytest-mode: "nofollow"
+          noinclude-unittest-mode: "nofollow"
+          include-data-dir: "resources=resources"
+          deployment: true
+
+      - name: Build Executable for Mac
+        uses: Nuitka/Nuitka-Action@main
+        if: matrix.os != 'windows-latest'
+        with:
+          nuitka-version: main
+          script-name: startLive-qt.py
+          mode: app
+          enable-plugins: pyside6
           noinclude-setuptools-mode: "nofollow"
           noinclude-pytest-mode: "nofollow"
           noinclude-unittest-mode: "nofollow"
