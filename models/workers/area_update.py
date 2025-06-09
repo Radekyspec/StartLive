@@ -6,8 +6,8 @@ from PySide6.QtCore import Slot
 # local package import
 import config
 from constant import *
-from .base import BaseWorker
 from sign import livehime_sign
+from .base import BaseWorker
 
 
 class AreaUpdateWorker(BaseWorker):

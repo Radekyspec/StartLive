@@ -27,7 +27,7 @@ class FaceAuthWorker(LongLiveWorker):
                 "visit_id": "",
             }
             verified = False
-            while self._is_running and not verified and self.qr_window:
+            while self.is_running and not verified and self.qr_window:
                 response = config.session.post(url, data=verify_data)
                 response.encoding = "utf-8"
                 response = response.json()

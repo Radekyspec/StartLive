@@ -42,7 +42,7 @@ class FetchLoginWorker(LongLiveWorker):
     @Slot()
     def run(self, /) -> None:
         check_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
-        while config.scan_status["qr_key"] is None and self._is_running:
+        while config.scan_status["qr_key"] is None and self.is_running:
             sleep(0.1)
         params = {
             "qrcode_key": config.scan_status["qr_key"],
@@ -50,7 +50,7 @@ class FetchLoginWorker(LongLiveWorker):
             "web_location": "0.0"
         }
         try:
-            while not config.scan_status["scanned"] and self._is_running:
+            while not config.scan_status["scanned"] and self.is_running:
                 response = config.session.get(check_url, params=params)
                 response.encoding = "utf-8"
                 result = response.json()

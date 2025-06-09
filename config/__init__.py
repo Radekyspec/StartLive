@@ -9,7 +9,6 @@ from requests import Session
 from constant import APP_KEY
 from models.classes import ThreadSafeDict
 
-
 dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))
 

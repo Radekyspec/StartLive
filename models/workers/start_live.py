@@ -5,8 +5,8 @@ from PySide6.QtCore import Slot
 
 # local package import
 import config
-from .base import BaseWorker
 from sign import livehime_sign, order_payload
+from .base import BaseWorker
 
 
 class StartLiveWorker(BaseWorker):

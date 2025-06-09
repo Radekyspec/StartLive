@@ -5,9 +5,9 @@ from PySide6.QtCore import Slot
 
 # local package import
 import config
-from .start_live import StartLiveWorker
-from .base import BaseWorker
 from sign import livehime_sign, order_payload
+from .base import BaseWorker
+from .start_live import StartLiveWorker
 
 
 class FetchPreLiveWorker(BaseWorker):
@@ -41,8 +41,12 @@ class FetchPreLiveWorker(BaseWorker):
             # )
             self.parent_window.start_btn.setEnabled(False)
             self.parent_window.stop_btn.setEnabled(True)
-        config.room_info["parent_area"] = response["data"]["parent_name"]
-        config.room_info["area"] = response["data"]["area_v2_name"]
+        config.room_info.update(
+            {
+                "parent_area": response["data"]["parent_name"],
+                "area": response["data"]["area_v2_name"],
+            }
+        )
         config.scan_status["room_updated"] = True
 
     @Slot()

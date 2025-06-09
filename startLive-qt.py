@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-import os.path
+
 # module import
+import os.path
 import sys
 from contextlib import suppress
 from ipaddress import ip_address, IPv6Address
@@ -15,7 +16,7 @@ from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
                                QLabel, QLineEdit, QMessageBox, QPushButton,
                                QVBoxLayout, QWidget,
-                               QApplication, QMainWindow, QSystemTrayIcon, QMenu
+                               QApplication, QSystemTrayIcon, QMenu
                                )
 from darkdetect import isDark
 from keyring import set_password, delete_password
@@ -27,7 +28,7 @@ from qrcode import QRCode
 import config
 from constant import *
 from models.classes import ClickableLabel, FocusAwareLineEdit, \
-    CompletionComboBox
+    CompletionComboBox, SingleInstanceWindow
 from models.workers import *
 from models.workers.base import *
 
@@ -96,7 +97,7 @@ class StreamConfigPanel(QWidget):
 
         obs_layout.addWidget(QLabel("服务器密码:"), 1, 4)
         self.pass_input = QLineEdit()
-        self.pass_input.setEchoMode(QLineEdit.Password)
+        self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.pass_input.editingFinished.connect(_password_save)
         obs_layout.addWidget(self.pass_input, 1, 5)
 
@@ -213,6 +214,8 @@ class StreamConfigPanel(QWidget):
         self.host_input.setText(config.stream_settings["ip_addr"])
         self.port_input.setText(config.stream_settings["port"])
         self.pass_input.setText(config.stream_settings["password"])
+        self.obs_auto_connect_checkbox.setChecked(False)
+        self.obs_auto_start_checkbox.setChecked(False)
 
     def update_child_combo(self, text):
         if text in config.area_options:
@@ -314,7 +317,7 @@ class StreamConfigPanel(QWidget):
 
 
 # Main GUI window
-class MainWindow(QMainWindow):
+class MainWindow(SingleInstanceWindow):
     _managed_workers: list[BaseWorker | LongLiveWorker]
     _ll_workers: list[LongLiveWorker]
 
@@ -397,7 +400,7 @@ class MainWindow(QMainWindow):
         self.face_window: Optional[FaceQRWidget] = None
 
     def changeEvent(self, event):
-        if event.type() == QEvent.WindowStateChange:
+        if event.type() == QEvent.Type.WindowStateChange:
             if self.isMinimized():
                 QTimer.singleShot(0, self.hide)  # 延迟隐藏窗口
         super().changeEvent(event)
@@ -410,7 +413,7 @@ class MainWindow(QMainWindow):
 
     def show_normal(self):
         self.show()
-        self.setWindowState(Qt.WindowActive)
+        self.setWindowState(Qt.WindowState.WindowActive)
 
     def on_tray_icon_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -546,8 +549,9 @@ class MainWindow(QMainWindow):
     def check_scan_status(self):
         if config.scan_status["scanned"]:
             # Login succeeded, ready to switch to main UI
-            self.status_label.setText("登录成功！")
-            self.status_label.setStyleSheet("color: green; font-size: 16pt;")
+            if self.status_label.text() != "登录成功！":
+                self.status_label.setText("登录成功！")
+                self.status_label.setStyleSheet("color: green;font-size: 16pt;")
             if not config.scan_status["area_updated"] or \
                     not config.scan_status["room_updated"]:
                 return
@@ -565,10 +569,13 @@ class MainWindow(QMainWindow):
         if config.stream_status["stream_key"] is not None and \
                 config.stream_status[
                     "stream_addr"] is not None:
+            if config.obs_connecting:
+                return
             self.panel.addr_input.setText(
                 str(config.stream_status["stream_addr"]))
             self.panel.key_input.setText(
                 str(config.stream_status["stream_key"]))
+
             if config.obs_client is not None:
                 config.obs_req_queue.put(("SetStreamServiceSettings", {
                     "streamServiceType": "rtmp_custom",
@@ -581,6 +588,7 @@ class MainWindow(QMainWindow):
                 }))
                 if self.panel.obs_auto_start_checkbox.isChecked():
                     config.obs_req_queue.put(("StartStream", {}))
+
             self.timer.timeout.disconnect(self.fill_stream_info)
             self.timer.stop()
         elif config.stream_status["required_face"]:
@@ -601,8 +609,10 @@ class MainWindow(QMainWindow):
 
 # Entry point
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
+    if MainWindow.is_another_instance_running():
+        sys.exit(0)
     enable_hi_dpi()
+    app = QApplication(sys.argv)
     setup_theme("auto")
     window = MainWindow()
     app.aboutToQuit.connect(window.on_exit)
