@@ -25,12 +25,12 @@ jobs:
           cache-dependency-path: |
             **/requirements*.txt
 
-      - name: Install OpenSSL
+      # Remove problematic brew libs if Intel Mac
+      - name: Remove problematic brew libs
         run: |
-          brew install openssl@3
-          export PATH="/usr/local/opt/openssl@3/bin:$PATH"
-          export LDFLAGS="-L/usr/local/opt/openssl@3/lib"
-          export CPPFLAGS="-I/usr/local/opt/openssl@3/include"
+          brew remove --force --ignore-dependencies openssl@3
+          brew cleanup openssl@3
+        if: runner.os == 'macos' && matrix.arch == 'i386'
 
       - name: Install Dependencies
         run: |
