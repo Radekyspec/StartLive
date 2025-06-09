@@ -23,7 +23,15 @@ jobs:
           architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
           cache: 'pip'
           cache-dependency-path: |
-            **/requirements*.txt
+            **/requirements*.txt'
+
+      - name: Install OpenSSL
+        run: |
+          brew install openssl@3
+          export PATH="/usr/local/opt/openssl@3/bin:$PATH"
+          export LDFLAGS="-L/usr/local/opt/openssl@3/lib"
+          export CPPFLAGS="-I/usr/local/opt/openssl@3/include"
+
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
