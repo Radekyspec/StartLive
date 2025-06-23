@@ -35,6 +35,11 @@ class FetchPreLiveWorker(BaseWorker):
         )
         if response["data"]["live_status"] == 1:
             config.stream_status["live_status"] = True
+            # [0.3.4] fix fetch upstream
+            # Here we choose to start live again because as observation of duplicate live
+            # The API only returns a message="重复开播" with streaming address
+            # Which seems like have no other side effect
+            # Subject to change if there is an unknown side effect
             StartLiveWorker.start_live(response["data"]["area_v2_id"])
             self.parent_window.addr_input.setText(
                 config.stream_status["stream_addr"])
