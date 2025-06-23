@@ -17,37 +17,8 @@ class StartLiveWorker(BaseWorker):
 
     @Slot()
     def run(self, /) -> None:
-        live_url = "https://api.live.bilibili.com/room/v1/Room/startLive"
         try:
-            # self.fetch_upstream()
-            live_data = livehime_sign({
-                "room_id": config.room_info["room_id"],
-                "area_v2": self.area,
-                "type": 2,
-            })
-            live_data.update({
-                "csrf_token": config.cookies_dict["bili_jct"],
-                "csrf": config.cookies_dict["bili_jct"]
-            })
-            live_data = order_payload(live_data)
-            response = config.session.post(live_url, data=live_data)
-            response.encoding = "utf-8"
-            response = response.json()
-            match response["code"]:
-                case 0:
-                    config.stream_status["stream_addr"] = \
-                        response["data"]["rtmp"][
-                            "addr"]
-                    config.stream_status["stream_key"] = \
-                        response["data"]["rtmp"][
-                            "code"]
-                case 60024:
-                    config.stream_status.update({
-                        "required_face": True,
-                        "face_url": response["data"]["qr"]
-                    })
-                case _:
-                    raise RuntimeError(response["message"])
+            self.start_live(self.area)
         except Exception as e:
             self.parent_window.start_btn.setEnabled(True)
             self.parent_window.stop_btn.setEnabled(False)
@@ -57,6 +28,39 @@ class StartLiveWorker(BaseWorker):
             self.exception = e
         finally:
             self.finished = True
+
+    @staticmethod
+    def start_live(area):
+        live_url = "https://api.live.bilibili.com/room/v1/Room/startLive"
+        # self.fetch_upstream()
+        live_data = livehime_sign({
+            "room_id": config.room_info["room_id"],
+            "area_v2": area,
+            "type": 2,
+        })
+        live_data.update({
+            "csrf_token": config.cookies_dict["bili_jct"],
+            "csrf": config.cookies_dict["bili_jct"]
+        })
+        live_data = order_payload(live_data)
+        response = config.session.post(live_url, data=live_data)
+        response.encoding = "utf-8"
+        response = response.json()
+        match response["code"]:
+            case 0:
+                config.stream_status["stream_addr"] = \
+                    response["data"]["rtmp"][
+                        "addr"]
+                config.stream_status["stream_key"] = \
+                    response["data"]["rtmp"][
+                        "code"]
+            case 60024:
+                config.stream_status.update({
+                    "required_face": True,
+                    "face_url": response["data"]["qr"]
+                })
+            case _:
+                raise RuntimeError(response["message"])
 
     @staticmethod
     def fetch_upstream():

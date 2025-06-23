@@ -27,11 +27,19 @@ class FetchPreLiveWorker(BaseWorker):
         response = config.session.get(live_info_url, params=info_data)
         response.encoding = "utf-8"
         response = response.json()
+        config.room_info.update(
+            {
+                "parent_area": response["data"]["parent_name"],
+                "area": response["data"]["area_v2_name"],
+            }
+        )
         if response["data"]["live_status"] == 1:
             config.stream_status["live_status"] = True
-            # addr, code = StartLiveWorker.fetch_upstream()
-            # self.parent_window.addr_input.setText(addr)
-            # self.parent_window.key_input.setText(code)
+            StartLiveWorker.start_live(response["data"]["area_v2_id"])
+            self.parent_window.addr_input.setText(
+                config.stream_status["stream_addr"])
+            self.parent_window.key_input.setText(
+                config.stream_status["stream_key"])
             # Not work?
             # self.parent_window.parent_combo.setCurrentText(
             #     response["data"]["parent_name"]
@@ -41,12 +49,6 @@ class FetchPreLiveWorker(BaseWorker):
             # )
             self.parent_window.start_btn.setEnabled(False)
             self.parent_window.stop_btn.setEnabled(True)
-        config.room_info.update(
-            {
-                "parent_area": response["data"]["parent_name"],
-                "area": response["data"]["area_v2_name"],
-            }
-        )
         config.scan_status["room_updated"] = True
 
     @Slot()
