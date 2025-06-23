@@ -29,9 +29,9 @@ class FetchPreLiveWorker(BaseWorker):
         response = response.json()
         if response["data"]["live_status"] == 1:
             config.stream_status["live_status"] = True
-            addr, code = StartLiveWorker.fetch_upstream()
-            self.parent_window.addr_input.setText(addr)
-            self.parent_window.key_input.setText(code)
+            # addr, code = StartLiveWorker.fetch_upstream()
+            # self.parent_window.addr_input.setText(addr)
+            # self.parent_window.key_input.setText(code)
             # Not work?
             # self.parent_window.parent_combo.setCurrentText(
             #     response["data"]["parent_name"]

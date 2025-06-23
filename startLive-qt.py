@@ -5,7 +5,6 @@ import os.path
 import sys
 from contextlib import suppress
 from ipaddress import ip_address, IPv6Address
-from json import dumps
 from typing import Optional
 
 # package import
@@ -28,7 +27,7 @@ from qrcode import QRCode
 import config
 from constant import *
 from models.classes import ClickableLabel, FocusAwareLineEdit, \
-    CompletionComboBox, SingleInstanceWindow
+    CompletionComboBox, SingleInstanceWindow, dumps
 from models.workers import *
 from models.workers.base import *
 
@@ -249,6 +248,8 @@ class StreamConfigPanel(QWidget):
         area_code = config.area_codes[self.child_combo.currentText()]
         config.room_info["parent_area"] = self.parent_combo.currentText()
         config.room_info["area"] = self.child_combo.currentText()
+        set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
+                     dumps(config.room_info.internal))
         self.parent_window.add_thread(StartLiveWorker(self, area_code))
         self.parent_window.timer.timeout.connect(
             self.parent_window.fill_stream_info)
@@ -312,8 +313,6 @@ class StreamConfigPanel(QWidget):
         if self._valid_area():
             self.save_area_btn.setEnabled(False)
             self.parent_window.add_thread(AreaUpdateWorker(self))
-            config.room_info["parent_area"] = self.parent_combo.currentText()
-            config.room_info["area"] = self.child_combo.currentText()
 
 
 # Main GUI window
@@ -362,6 +361,10 @@ class MainWindow(SingleInstanceWindow):
         delete_settings_action = QAction("清除OBS连接设置", self)
         delete_settings_action.triggered.connect(self._delete_settings)
         setting_menu.addAction(delete_settings_action)
+
+        clear_area_cache = QAction("清除分区缓存", self)
+        clear_area_cache.triggered.connect(self._delete_area_cache)
+        setting_menu.addAction(clear_area_cache)
 
         # Widgets for login phase
         self.login_label = QLabel("正在获取保存的登录凭证...")
@@ -431,6 +434,13 @@ class MainWindow(SingleInstanceWindow):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
         self.panel.reset_obs_settings()
         QMessageBox.information(self, "设置清空", "OBS连接设置清除成功")
+
+    def _delete_area_cache(self):
+        del config.room_info["parent_area"]
+        del config.room_info["area"]
+        set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
+                     dumps(config.room_info.internal))
+        QMessageBox.information(self, "分区缓存清空", "分区缓存清除成功")
 
     def fetch_qr(self, retry=False):
         # Start fetching QR and begin polling thread

@@ -19,7 +19,7 @@ class StartLiveWorker(BaseWorker):
     def run(self, /) -> None:
         live_url = "https://api.live.bilibili.com/room/v1/Room/startLive"
         try:
-            self.fetch_upstream()
+            # self.fetch_upstream()
             live_data = livehime_sign({
                 "room_id": config.room_info["room_id"],
                 "area_v2": self.area,
@@ -33,6 +33,7 @@ class StartLiveWorker(BaseWorker):
             response = config.session.post(live_url, data=live_data)
             response.encoding = "utf-8"
             response = response.json()
+            print(response)
             match response["code"]:
                 case 0:
                     config.stream_status["stream_addr"] = \
@@ -72,5 +73,6 @@ class StartLiveWorker(BaseWorker):
         response = config.session.post(stream_url, data=stream_data)
         response.encoding = "utf-8"
         response = response.json()
+        print(response)
         return response["data"]["addr"]["addr"], response["data"]["addr"][
             "code"]
