@@ -33,7 +33,6 @@ class StartLiveWorker(BaseWorker):
             response = config.session.post(live_url, data=live_data)
             response.encoding = "utf-8"
             response = response.json()
-            print(response)
             match response["code"]:
                 case 0:
                     config.stream_status["stream_addr"] = \
@@ -73,6 +72,5 @@ class StartLiveWorker(BaseWorker):
         response = config.session.post(stream_url, data=stream_data)
         response.encoding = "utf-8"
         response = response.json()
-        print(response)
         return response["data"]["addr"]["addr"], response["data"]["addr"][
             "code"]
