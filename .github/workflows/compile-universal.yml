@@ -55,7 +55,7 @@ jobs:
           nuitka-version: main
           script-name: startLive-qt.py
           mingw64: true
-          mode: app
+          mode: standalone
           enable-plugins: pyside6
           windows-console-mode: "disable"
           noinclude-setuptools-mode: "nofollow"
@@ -83,6 +83,7 @@ jobs:
         with:
           name: ${{ runner.os }}-${{ runner.arch }}
           path: |
+            build/**/*
             build/*.exe
             build/*.bin
             build/*.app/**/*
