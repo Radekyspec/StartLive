@@ -342,6 +342,7 @@ class MainWindow(SingleInstanceWindow):
                          "icon_cr.png")))
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
+        self.add_thread(ConstantUpdateWorker())
 
         tray_menu = QMenu()
         restore_action = QAction("显示窗口", self)
@@ -370,7 +371,6 @@ class MainWindow(SingleInstanceWindow):
         setting_menu.addAction(clear_area_cache)
 
         # Widgets for login phase
-        self.add_thread(ConstantUpdateWorker())
         self.login_label = QLabel("正在获取保存的登录凭证...")
         self.status_label = ClickableLabel("等待登录中...")
         self.qr_label = QLabel()
