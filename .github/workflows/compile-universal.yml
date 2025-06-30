@@ -83,7 +83,7 @@ jobs:
         with:
           name: ${{ runner.os }}-${{ runner.arch }}
           path: |
-            build/**/*
+            build/*.dist/**/*
             build/*.exe
             build/*.bin
             build/*.app/**/*
