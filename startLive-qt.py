@@ -632,7 +632,7 @@ if __name__ == '__main__':
     if system() == "Windows":
         try:
             updater_path = os.path.abspath(os.path.join(
-                __compiled__.containing_dir, "..", "Update.exe"))
+                __compiled__.containing_dir, "Update.exe"))
             run([updater_path, "--update=https://startlive.vtbs.ai/"])
         except:
             pass
