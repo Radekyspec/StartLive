@@ -6,7 +6,7 @@ import sys
 from contextlib import suppress
 from ipaddress import ip_address, IPv6Address
 from platform import system
-from subprocess import Popen
+from subprocess import run
 from typing import Optional
 
 # package import
@@ -631,9 +631,9 @@ if __name__ == '__main__':
         sys.exit(0)
     if system() == "Windows":
         try:
-            updater_path = os.path.join(__compiled__.containing_dir, "..",
-                                        "Update.exe")
-            Popen([updater_path, "--update=https://startlive.vtbs.ai/"])
+            updater_path = os.path.abspath(os.path.join(
+                __compiled__.containing_dir, "..", "Update.exe"))
+            run([updater_path, "--update=https://startlive.vtbs.ai/"])
         except:
             pass
     enable_hi_dpi()
