@@ -9,7 +9,7 @@ KEYRING_COOKIES = "cookies"
 KEYRING_SETTINGS = "settings"
 KEYRING_ROOM_INFO = "roomInfo"
 LOCAL_SERVER_NAME = "StartLive|singleInstanceServer"
-VERSION = "0.3.5"
+VERSION = "0.4.0"
 
 # Might change
 _loaded = None

@@ -5,6 +5,7 @@ import os.path
 import sys
 from contextlib import suppress
 from ipaddress import ip_address, IPv6Address
+from subprocess import Popen
 from typing import Optional
 
 # package import
@@ -627,6 +628,12 @@ class MainWindow(SingleInstanceWindow):
 if __name__ == '__main__':
     if MainWindow.is_another_instance_running():
         sys.exit(0)
+    try:
+        updater_path = os.path.join(__compiled__.containing_dir, "..",
+                                    "Update.exe")
+        Popen([updater_path, "--update=https://startlive.vtbs.ai/"])
+    except:
+        pass
     enable_hi_dpi()
     app = QApplication(sys.argv)
     setup_theme("auto")
