@@ -32,11 +32,11 @@ class ObsDaemonWorker(LongLiveWorker):
             config.obs_connecting = False
         except Exception as e:
             self.exception = e
-            self.parent_window.obs_auto_start_checkbox.setEnabled(False)
+            self.parent_window.obs_auto_live_checkbox.setEnabled(False)
             config.obs_op = False
             config.obs_connecting = False
         else:
-            self.parent_window.obs_auto_start_checkbox.setEnabled(True)
+            self.parent_window.obs_auto_live_checkbox.setEnabled(True)
             while config.obs_client is not None and self.is_running:
                 with suppress(Empty):
                     req, body = config.obs_req_queue.get(timeout=.2)

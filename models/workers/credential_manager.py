@@ -55,7 +55,7 @@ class CredentialManagerWorker(BaseWorker):
             panel.host_input.setText(config.stream_settings["ip_addr"])
             panel.port_input.setText(config.stream_settings["port"])
             panel.pass_input.setText(config.stream_settings["password"])
-            panel.obs_auto_start_checkbox.setChecked(
+            panel.obs_auto_live_checkbox.setChecked(
                 config.stream_settings.get("auto_live", False))
             panel.obs_auto_connect_checkbox.setChecked(
                 config.stream_settings.get("auto_connect", False))

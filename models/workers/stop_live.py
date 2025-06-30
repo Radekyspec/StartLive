@@ -5,6 +5,7 @@ from PySide6.QtCore import Slot
 
 # local package import
 import config
+import constant
 from sign import livehime_sign, order_payload
 from .base import BaseWorker
 
@@ -17,14 +18,24 @@ class StopLiveWorker(BaseWorker):
     @Slot()
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/room/v1/Room/stopLive"
-        stop_data = livehime_sign({
-            "room_id": config.room_info["room_id"],
-        })
-        stop_data.update({
-            "csrf_token": config.cookies_dict["bili_jct"],
-            "csrf": config.cookies_dict["bili_jct"]
-        })
-        stop_data = order_payload(stop_data)
+        # [0.3.5]: Watch here because in livehime ver 9240
+        # startLive needs csrf to sign but stopLive not
+        if constant.STOP_LIVE_AUTH_CSRF:
+            stop_data = livehime_sign({
+                "csrf_token": config.cookies_dict["bili_jct"],
+                "csrf": config.cookies_dict["bili_jct"],
+                "room_id": config.room_info["room_id"],
+            })
+        else:
+            stop_data = livehime_sign({
+                "room_id": config.room_info["room_id"],
+            })
+
+            stop_data.update({
+                "csrf_token": config.cookies_dict["bili_jct"],
+                "csrf": config.cookies_dict["bili_jct"]
+            })
+            stop_data = order_payload(stop_data)
         try:
             response = config.session.post(url, data=stop_data)
             response.encoding = "utf-8"

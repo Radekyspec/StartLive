@@ -6,30 +6,16 @@ from typing import Optional
 from obsws_python import ReqClient
 from requests import Session
 
-from constant import APP_KEY
+import constant
 from models.classes import ThreadSafeDict
 
 dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))
 
-# Headers used for all requests to simulate a browser environment
-headers = {
-    "Accept": "*/*",
-    "Accept-Encoding": "gzip, deflate",
-    "Accept-Language": "zh-CN,zh;q=0.9,en-CN;q=0.8,en;q=0.7",
-    "Cache-Control": "no-cache",
-    "Dnt": "1",
-    "Pragma": "no-cache",
-    "Priority": "u=1, i",
-    "Origin": "https://live.bilibili.com",
-    "Referer": "https://live.bilibili.com/",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/8902"
-}
-
 # Global session for HTTP requests
 session = Session()
-session.headers.update(headers)
-session.cookies.set("appkey", APP_KEY, domain="bilibili.com", path="/")
+session.headers.update(constant.HEADERS_WEB)
+session.cookies.set("appkey", constant.APP_KEY, domain="bilibili.com", path="/")
 session.get = partial(session.get, timeout=5)
 session.post = partial(session.post, timeout=5)
 

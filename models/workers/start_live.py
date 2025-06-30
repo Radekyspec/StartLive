@@ -5,6 +5,7 @@ from PySide6.QtCore import Slot
 
 # local package import
 import config
+import constant
 from sign import livehime_sign, order_payload
 from .base import BaseWorker
 
@@ -33,16 +34,25 @@ class StartLiveWorker(BaseWorker):
     def start_live(area):
         live_url = "https://api.live.bilibili.com/room/v1/Room/startLive"
         # self.fetch_upstream()
-        live_data = livehime_sign({
-            "room_id": config.room_info["room_id"],
-            "area_v2": area,
-            "type": 2,
-        })
-        live_data.update({
-            "csrf_token": config.cookies_dict["bili_jct"],
-            "csrf": config.cookies_dict["bili_jct"]
-        })
-        live_data = order_payload(live_data)
+        if constant.START_LIVE_AUTH_CSRF:
+            live_data = livehime_sign({
+                "area_v2": area,
+                "csrf_token": config.cookies_dict["bili_jct"],
+                "csrf": config.cookies_dict["bili_jct"],
+                "room_id": config.room_info["room_id"],
+                "type": 2,
+            })
+        else:
+            live_data = livehime_sign({
+                "room_id": config.room_info["room_id"],
+                "area_v2": area,
+                "type": 2,
+            })
+            live_data.update({
+                "csrf_token": config.cookies_dict["bili_jct"],
+                "csrf": config.cookies_dict["bili_jct"]
+            })
+            live_data = order_payload(live_data)
         response = config.session.post(live_url, data=live_data)
         response.encoding = "utf-8"
         response = response.json()

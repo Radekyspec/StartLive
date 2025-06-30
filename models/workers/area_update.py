@@ -6,8 +6,9 @@ from PySide6.QtCore import Slot
 
 # local package import
 import config
+import constant
+from config import dumps
 from constant import *
-from models.classes import dumps
 from sign import livehime_sign
 from .base import BaseWorker
 
@@ -19,11 +20,12 @@ class AreaUpdateWorker(BaseWorker):
 
     @Slot()
     def run(self, /) -> None:
+        print(config.session.headers)
         url = "https://api.live.bilibili.com/xlive/app-blink/v2/room/AnchorChangeRoomArea"
         area_data = {
             "area_id": config.area_codes[
                 self.parent_window.child_combo.currentText()],
-            "build": LIVEHIME_BUILD,
+            "build": constant.LIVEHIME_BUILD,
             "csrf_token": config.cookies_dict["bili_jct"],
             "csrf": config.cookies_dict["bili_jct"],
             "platform": "pc_link",

@@ -2,7 +2,8 @@ from hashlib import md5
 from time import time
 from urllib.parse import urlencode
 
-from constant import APP_KEY, APP_SECRET
+import constant
+# from constant import APP_KEY, APP_SECRET, LIVEHIME_BUILD, LIVEHIME_VERSION
 
 
 def livehime_sign(payload):
@@ -11,10 +12,10 @@ def livehime_sign(payload):
     :param payload:
     """
     signed = base_payload()
-    signed.update({'appkey': APP_KEY})
+    signed.update({'appkey': constant.APP_KEY})
     signed.update(payload)
     signed = order_payload(signed)  # 按照 key 重排参数
-    sign = md5((urlencode(signed, encoding="utf-8") + APP_SECRET).encode(
+    sign = md5((urlencode(signed, encoding="utf-8") + constant.APP_SECRET).encode(
         encoding="utf-8")).hexdigest()
     signed.update({'sign': sign})
     return signed
@@ -27,8 +28,18 @@ def order_payload(payload):
 def base_payload():
     return {
         "access_key": "",
-        "build": "8931",
+        "build": constant.LIVEHIME_BUILD,
         "platform": "pc_link",
         "ts": str(int(time())),
-        "version": "7.11.3.8931",
+        # "ts": "1751267234",
+        "version": constant.LIVEHIME_VERSION,
     }
+
+
+# if __name__ == '__main__':
+#     p = {
+#         # "csrf": "f835293f3568ddb4093aa8299f5e6c0b",
+#         # "csrf_token": "f835293f3568ddb4093aa8299f5e6c0b",
+#         "room_id": 22593055,
+#     }
+#     print(livehime_sign(p))

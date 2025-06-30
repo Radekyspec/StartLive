@@ -22,5 +22,7 @@
     "Accept-Encoding": "gzip,deflate",
     "Connection": "keep-alive",
     "User-Agent": "LiveHime/7.16.0.9240 os/Windows pc_app/livehime build/9240 osVer/10.0_x86_64"
-  }
+  },
+  "start_ac": true,
+  "stop_ac": false
 }

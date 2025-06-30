@@ -1,1 +1,1 @@
-from .app_sign import base_payload, livehime_sign, order_payload
+from .app_sign import livehime_sign, order_payload

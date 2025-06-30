@@ -8,3 +8,4 @@ from .qr_login import QRLoginWorker
 from .start_live import StartLiveWorker
 from .stop_live import StopLiveWorker
 from .title_update import TitleUpdateWorker
+from .const_update import ConstantUpdateWorker

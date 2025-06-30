@@ -21,13 +21,15 @@ from darkdetect import isDark
 from keyring import set_password, delete_password
 from keyring.errors import PasswordDeleteError
 from qdarktheme import setup_theme, enable_hi_dpi
-from qrcode import QRCode
+from qrcode.main import QRCode
 
 # local package import
 import config
+import constant
+from config import dumps
 from constant import *
 from models.classes import ClickableLabel, FocusAwareLineEdit, \
-    CompletionComboBox, SingleInstanceWindow, dumps
+    CompletionComboBox, SingleInstanceWindow
 from models.workers import *
 from models.workers.base import *
 
@@ -73,7 +75,7 @@ class StreamConfigPanel(QWidget):
 
         def _auto_live_save():
             config.stream_settings[
-                "auto_live"] = self.obs_auto_start_checkbox.isChecked()
+                "auto_live"] = self.obs_auto_live_checkbox.isChecked()
 
         def _auto_connect_save():
             config.stream_settings[
@@ -115,14 +117,14 @@ class StreamConfigPanel(QWidget):
         obs_auto_start = QWidget()
         obs_auto_start_layout = QHBoxLayout()
         obs_auto_start_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.obs_auto_start_checkbox = QCheckBox("自动推流")
-        self.obs_auto_start_checkbox.setToolTip(
+        self.obs_auto_live_checkbox = QCheckBox("自动推流")
+        self.obs_auto_live_checkbox.setToolTip(
             "勾选此项后，软件内点击开播时会自动点击OBS的推流"
         )
-        self.obs_auto_start_checkbox.setChecked(False)
-        self.obs_auto_start_checkbox.setEnabled(False)
-        self.obs_auto_start_checkbox.checkStateChanged.connect(_auto_live_save)
-        obs_auto_start_layout.addWidget(self.obs_auto_start_checkbox)
+        self.obs_auto_live_checkbox.setChecked(False)
+        self.obs_auto_live_checkbox.setEnabled(False)
+        self.obs_auto_live_checkbox.checkStateChanged.connect(_auto_live_save)
+        obs_auto_start_layout.addWidget(self.obs_auto_live_checkbox)
         self.obs_auto_connect_checkbox = QCheckBox("自动连接OBS")
         self.obs_auto_connect_checkbox.setToolTip(
             "勾选此项后，软件打开时会自动尝试连接OBS"
@@ -214,7 +216,7 @@ class StreamConfigPanel(QWidget):
         self.port_input.setText(config.stream_settings["port"])
         self.pass_input.setText(config.stream_settings["password"])
         self.obs_auto_connect_checkbox.setChecked(False)
-        self.obs_auto_start_checkbox.setChecked(False)
+        self.obs_auto_live_checkbox.setChecked(False)
 
     def update_child_combo(self, text):
         if text in config.area_options:
@@ -265,7 +267,7 @@ class StreamConfigPanel(QWidget):
         self.addr_input.setText("")
         self.key_input.setText("")
         if config.obs_client is not None:
-            if self.obs_auto_start_checkbox.isChecked():
+            if self.obs_auto_live_checkbox.isChecked():
                 config.obs_req_queue.put(("StopStream", {}))
         self.parent_window.add_thread(StopLiveWorker(self))
 
@@ -285,7 +287,7 @@ class StreamConfigPanel(QWidget):
                                 password=self.pass_input.text()))
         else:
             ObsDaemonWorker.disconnect_obs()
-            self.obs_auto_start_checkbox.setEnabled(False)
+            self.obs_auto_live_checkbox.setEnabled(False)
         self._obs_timer.start(100)
 
     def _obs_btn_state(self):
@@ -334,6 +336,7 @@ class MainWindow(SingleInstanceWindow):
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
         self.setGeometry(300, 200, 520, 430)
         self.tray_icon = QSystemTrayIcon(self)
+        # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
         self.tray_icon.setIcon(QIcon(
             os.path.join(os.path.dirname(__file__), "resources",
                          "icon_cr.png")))
@@ -367,6 +370,7 @@ class MainWindow(SingleInstanceWindow):
         setting_menu.addAction(clear_area_cache)
 
         # Widgets for login phase
+        self.add_thread(ConstantUpdateWorker())
         self.login_label = QLabel("正在获取保存的登录凭证...")
         self.status_label = ClickableLabel("等待登录中...")
         self.qr_label = QLabel()
@@ -546,6 +550,8 @@ class MainWindow(SingleInstanceWindow):
     def after_login_success(self):
         self.timer.timeout.disconnect(self.check_scan_status)
         self.timer.stop()
+        config.session.headers.clear()
+        config.session.headers.update(constant.HEADERS_APP)
         self.panel.parent_combo.clear()
         self.panel.parent_combo.addItems(config.parent_area)
         self.setCentralWidget(self.panel)
@@ -596,7 +602,7 @@ class MainWindow(SingleInstanceWindow):
                         "use_auth": False
                     }
                 }))
-                if self.panel.obs_auto_start_checkbox.isChecked():
+                if self.panel.obs_auto_live_checkbox.isChecked():
                     config.obs_req_queue.put(("StartStream", {}))
 
             self.timer.timeout.disconnect(self.fill_stream_info)
