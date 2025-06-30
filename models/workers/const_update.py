@@ -16,7 +16,8 @@ class ConstantUpdateWorker(BaseWorker):
     @Slot()
     def run(self, /) -> None:
         try:
-            url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
+            # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
+            url = "https://ghfast.top/https://raw.githubusercontent.com/Radekyspec/StartLive/refs/heads/master/resources/version.json"
             response = config.session.get(url).json()
             constant.APP_KEY = response["ak"]
             constant.APP_SECRET = response["as"]
