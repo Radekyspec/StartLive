@@ -30,4 +30,5 @@ class ConstantUpdateWorker(BaseWorker):
         except Exception:
             pass
         finally:
+            config.scan_status["const_updated"] = True
             self.finished = True

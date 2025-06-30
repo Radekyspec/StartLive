@@ -571,7 +571,8 @@ class MainWindow(SingleInstanceWindow):
                 self.status_label.setText("登录成功！")
                 self.status_label.setStyleSheet("color: green;font-size: 16pt;")
             if not config.scan_status["area_updated"] or \
-                    not config.scan_status["room_updated"]:
+                    not config.scan_status["room_updated"] or \
+                    not config.scan_status["const_updated"]:
                 return
             self.after_login_success()
         elif config.scan_status["timeout"]:

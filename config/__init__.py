@@ -27,7 +27,8 @@ obs_req_queue = Queue()
 scan_status = ThreadSafeDict({
     "scanned": False, "qr_key": None, "qr_url": None,
     "timeout": False, "wait_for_confirm": False,
-    "area_updated": False, "room_updated": False
+    "area_updated": False, "room_updated": False,
+    "const_updated": False
 })
 
 # Stream status stores fetched RTMP info and verification state
@@ -40,8 +41,8 @@ stream_status = ThreadSafeDict({
     "stream_key": None
 })
 
+# Managed by models.workers.credential_manager
 room_info = ThreadSafeDict({})
-
 stream_settings = ThreadSafeDict({})
 
 # Area (category) selections for live stream configuration
