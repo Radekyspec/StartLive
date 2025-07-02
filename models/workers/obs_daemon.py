@@ -8,7 +8,8 @@ from obsws_python import ReqClient
 
 # local package import
 import config
-from .base import LongLiveWorker
+from models.log import get_logger
+from models.workers.base import LongLiveWorker
 
 
 class ObsDaemonWorker(LongLiveWorker):
@@ -19,23 +20,27 @@ class ObsDaemonWorker(LongLiveWorker):
         self.host = host
         self.port = port
         self.password = password
+        self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
     def run(self, /) -> None:
         config.obs_op = True
         config.obs_connecting = True
         try:
+            self.logger.info("OBS connecting")
             config.obs_client = ReqClient(host=self.host, port=self.port,
                                           password=self.password,
                                           timeout=5)
             config.obs_op = False
             config.obs_connecting = False
         except Exception as e:
+            self.logger.error(f"OBS connect failed.")
             self.exception = e
             self.parent_window.obs_auto_live_checkbox.setEnabled(False)
             config.obs_op = False
             config.obs_connecting = False
         else:
+            self.logger.info("OBS connected")
             self.parent_window.obs_auto_live_checkbox.setEnabled(True)
             while config.obs_client is not None and self.is_running:
                 with suppress(Empty):
@@ -45,10 +50,13 @@ class ObsDaemonWorker(LongLiveWorker):
             self.disconnect_obs()
             self.finished = True
 
-    @staticmethod
-    def disconnect_obs():
+    @classmethod
+    def disconnect_obs(cls):
+        logger = get_logger(cls.__name__)
+        logger.info("OBS disconnecting")
         config.obs_op = True
         if config.obs_client is not None:
             config.obs_client.disconnect()
+        logger.info("OBS disconnected")
         config.obs_client = None
         config.obs_op = False

@@ -2,13 +2,14 @@ import os
 from json import loads
 
 __all__ = ["KEYRING_SERVICE_NAME", "KEYRING_COOKIES", "KEYRING_SETTINGS",
-           "KEYRING_ROOM_INFO", "LOCAL_SERVER_NAME", "VERSION"]
+           "KEYRING_ROOM_INFO", "LOCAL_SERVER_NAME", "LOGGER_NAME", "VERSION"]
 
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"
 KEYRING_COOKIES = "cookies"
 KEYRING_SETTINGS = "settings"
 KEYRING_ROOM_INFO = "roomInfo"
 LOCAL_SERVER_NAME = "StartLive|singleInstanceServer"
+LOGGER_NAME = "StartLiveLogger"
 VERSION = "0.4.1"
 
 APP_KEY = "aae92bc66f3edfab"

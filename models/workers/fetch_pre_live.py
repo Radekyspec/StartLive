@@ -6,7 +6,8 @@ from PySide6.QtCore import Slot
 # local package import
 import config
 from sign import livehime_sign, order_payload
-from .base import BaseWorker
+from models.log import get_logger
+from models.workers.base import BaseWorker
 from .start_live import StartLiveWorker
 
 
@@ -14,18 +15,24 @@ class FetchPreLiveWorker(BaseWorker):
     def __init__(self, parent_window: "StreamConfigPanel"):
         super().__init__(name="房间信息")
         self.parent_window = parent_window
+        self.logger = get_logger(self.__class__.__name__)
 
     def _fetch_pre_live(self):
         room_info_url = "https://api.live.bilibili.com/xlive/web-ucenter/user/live_info"
         live_info_url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/GetInfo"
+        self.logger.info("room_info Request")
         response = config.session.get(room_info_url)
         response.encoding = "utf-8"
+        self.logger.info("room_info Response")
         response = response.json()
+        self.logger.info(f"room_info Result: {response}")
         config.room_info["room_id"] = response["data"]["room_id"]
         info_data = livehime_sign({"uId": config.cookies_dict["DedeUserID"]})
         info_data = order_payload(info_data)
+        self.logger.info("live_info Request")
         response = config.session.get(live_info_url, params=info_data)
         response.encoding = "utf-8"
+        self.logger.info("live_info Response")
         response = response.json()
         config.room_info.update(
             {
@@ -69,9 +76,12 @@ class FetchPreLiveWorker(BaseWorker):
             "title": True,
         })
         try:
+            self.logger.info("PreLive Request")
             response = config.session.get(url, params=params)
             response.encoding = "utf-8"
+            self.logger.info("PreLive Response")
             response = response.json()
+            self.logger.info(f"PreLive Result: {response}")
             config.room_info["title"] = response["data"]["title"]
             self.parent_window.title_input.setText(
                 response["data"]["title"])

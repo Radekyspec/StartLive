@@ -5,8 +5,10 @@ from PySide6.QtCore import Slot
 
 # local package import
 import config
+from exceptions import TitleUpdateError
 from sign import livehime_sign
-from .base import BaseWorker
+from models.log import get_logger
+from models.workers.base import BaseWorker
 
 
 class TitleUpdateWorker(BaseWorker):
@@ -14,6 +16,7 @@ class TitleUpdateWorker(BaseWorker):
         super().__init__(name="标题更新")
         self.parent_window = parent_window
         self.title = title
+        self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
     def run(self, /) -> None:
@@ -24,13 +27,16 @@ class TitleUpdateWorker(BaseWorker):
             "room_id": config.room_info["room_id"],
             "title": self.title,
         }
+        self.logger.info(f"updateV2 Request")
         try:
             response = config.session.post(url, params=livehime_sign({}),
                                            data=title_data)
             response.encoding = "utf-8"
+            self.logger.info("updateV2 Response")
             response = response.json()
+            self.logger.info(f"updateV2 Result: {response}")
             if response["code"] != 0:
-                raise ValueError(response["message"])
+                raise TitleUpdateError(response["message"])
         except Exception as e:
             self.exception = e
             self.parent_window.save_title_btn.setEnabled(True)

@@ -9,7 +9,9 @@ from keyring import set_password
 # local package import
 import config
 from constant import *
-from .base import LongLiveWorker
+from exceptions import LoginError
+from models.log import get_logger
+from models.workers.base import LongLiveWorker
 from .fetch_pre_live import FetchPreLiveWorker
 
 
@@ -17,12 +19,16 @@ class FetchLoginWorker(LongLiveWorker):
     def __init__(self, parent_window: "MainWindow"):
         super().__init__(name="登录")
         self.parent_window = parent_window
+        self.logger = get_logger(self.__class__.__name__)
 
-    @staticmethod
-    def _fetch_area_id():
+    @classmethod
+    def _fetch_area_id(cls):
+        logger = get_logger(cls.__name__)
         url = "https://api.live.bilibili.com/room/v1/Area/getList"
+        logger.info(f"Area/getList Request")
         response = config.session.get(url)
         response.encoding = "utf-8"
+        logger.info("Area/getList Response")
         response = response.json()
         for area_info in response["data"]:
             config.parent_area.append(area_info["name"])
@@ -51,9 +57,12 @@ class FetchLoginWorker(LongLiveWorker):
         }
         try:
             while not config.scan_status["scanned"] and self.is_running:
+                self.logger.info("QR poll Request")
                 response = config.session.get(check_url, params=params)
                 response.encoding = "utf-8"
+                self.logger.info("QR poll Response")
                 result = response.json()
+                self.logger.info(f"QR poll Result: {result}")
                 match result["data"]["code"]:
                     case 86101:  # Not scanned yet
                         sleep(1)
@@ -72,7 +81,7 @@ class FetchLoginWorker(LongLiveWorker):
                         self.post_login(self.parent_window)
                         break
                     case _:
-                        raise RuntimeError(result["message"])
+                        raise LoginError(result["message"])
         except Exception as e:
             self.exception = e
         finally:

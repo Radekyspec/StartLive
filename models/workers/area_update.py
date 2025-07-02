@@ -9,14 +9,17 @@ import config
 import constant
 from config import dumps
 from constant import *
+from exceptions import AreaUpdateError
+from models.workers.base import BaseWorker
+from models.log import get_logger
 from sign import livehime_sign
-from .base import BaseWorker
 
 
 class AreaUpdateWorker(BaseWorker):
     def __init__(self, parent_window: "StreamConfigPanel"):
         super().__init__(name="分区更新")
         self.parent_window = parent_window
+        self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
     def run(self, /) -> None:
@@ -31,14 +34,18 @@ class AreaUpdateWorker(BaseWorker):
             "platform": "pc_link",
             "room_id": config.room_info["room_id"],
         }
+        self.logger.info(f"AnchorChangeRoomArea Request")
         try:
             response = config.session.post(url, params=livehime_sign({}),
                                            data=area_data)
             response.encoding = "utf-8"
+            self.logger.info("AnchorChangeRoomArea Response")
             # print(response.text)
             response.raise_for_status()
-            if (response := response.json())["code"] != 0:
-                raise ValueError(response["message"])
+            response = response.json()
+            self.logger.info(f"AnchorChangeRoomArea Result: {response}")
+            if response["code"] != 0:
+                raise AreaUpdateError(response["message"])
             config.room_info[
                 "parent_area"] = self.parent_window.parent_combo.currentText()
             config.room_info[

@@ -6,19 +6,26 @@ from PySide6.QtCore import Slot
 # local package import
 import config
 import constant
-from .base import BaseWorker
+from models.log import get_logger
+from models.workers.base import BaseWorker
 
 
 class ConstantUpdateWorker(BaseWorker):
     def __init__(self):
         super().__init__(name="配置更新")
+        self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
     def run(self, /) -> None:
         try:
             # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
             url = "https://ghfast.top/https://raw.githubusercontent.com/Radekyspec/StartLive/refs/heads/master/resources/version.json"
-            response = config.session.get(url).json()
+            self.logger.info(f"version.json Request")
+            response = config.session.get(url)
+            response.encoding = "utf-8"
+            self.logger.info("version.json Response")
+            response = response.json()
+            self.logger.info(f"version.json Result: {response}")
             constant.APP_KEY = response["ak"]
             constant.APP_SECRET = response["as"]
             constant.LIVEHIME_BUILD = response["b"]

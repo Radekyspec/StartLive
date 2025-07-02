@@ -4,19 +4,16 @@
 import os.path
 import sys
 from contextlib import suppress
-from ipaddress import ip_address, IPv6Address
 from platform import system
 from subprocess import Popen
+from traceback import format_exception
 from typing import Optional
 
 # package import
 from PIL import ImageQt
 from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool)
-from PySide6.QtGui import QAction, QIntValidator, QPixmap, QIcon
-from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
-                               QHBoxLayout,
-                               QLabel, QLineEdit, QMessageBox, QPushButton,
-                               QVBoxLayout, QWidget,
+from PySide6.QtGui import QAction, QPixmap, QIcon
+from PySide6.QtWidgets import (QLabel, QMessageBox, QVBoxLayout, QWidget,
                                QApplication, QSystemTrayIcon, QMenu
                                )
 from darkdetect import isDark
@@ -30,293 +27,11 @@ import config
 import constant
 from config import dumps
 from constant import *
-from models.classes import ClickableLabel, FocusAwareLineEdit, \
-    CompletionComboBox, SingleInstanceWindow
+from models.classes import ClickableLabel, SingleInstanceWindow
+from models.log import init_logger, get_logger
+from models.widgets import *
 from models.workers import *
 from models.workers.base import *
-
-
-class FaceQRWidget(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("人脸认证")
-        self.setWindowFlags(
-            Qt.WindowType.Window | Qt.WindowType.WindowCloseButtonHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        layout = QVBoxLayout()
-
-        self.face_hint = QLabel("目标分区需要人脸认证")
-        self.face_hint.setStyleSheet("color: red; font-size: 16pt;")
-        self.face_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.face_qr = QLabel()
-        self.face_qr.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.face_hint)
-        layout.addWidget(self.face_qr)
-        self.setLayout(layout)
-
-
-class StreamConfigPanel(QWidget):
-    def __init__(self, parent_window):
-        super().__init__()
-        self.parent_window = parent_window
-
-        self._obs_timer = QTimer()
-        self.main_layout = QVBoxLayout()
-        self.setLayout(self.main_layout)
-        self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-
-        def _addr_save():
-            config.stream_settings["ip_addr"] = self.host_input.text()
-
-        def _port_save():
-            config.stream_settings["port"] = self.port_input.text()
-
-        def _password_save():
-            config.stream_settings["password"] = self.pass_input.text()
-
-        def _auto_live_save():
-            config.stream_settings[
-                "auto_live"] = self.obs_auto_live_checkbox.isChecked()
-
-        def _auto_connect_save():
-            config.stream_settings[
-                "auto_connect"] = self.obs_auto_connect_checkbox.isChecked()
-
-        # 顶部区域：OBS 连接信息
-        obs_group = QGroupBox("OBS 连接设置")
-        obs_layout = QGridLayout()
-
-        obs_layout.addWidget(QLabel("服务器IP:"), 1, 0)
-        self.host_input = QLineEdit("localhost")
-        self.host_input.editingFinished.connect(_addr_save)
-        obs_layout.addWidget(self.host_input, 1, 1)
-
-        obs_layout.addWidget(QLabel("端口:"), 1, 2)
-        self.port_input = QLineEdit("4455")
-        self.port_input.setValidator(QIntValidator(1, 65535))
-        self.port_input.editingFinished.connect(_port_save)
-        obs_layout.addWidget(self.port_input, 1, 3)
-
-        obs_layout.addWidget(QLabel("服务器密码:"), 1, 4)
-        self.pass_input = QLineEdit()
-        self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.pass_input.editingFinished.connect(_password_save)
-        obs_layout.addWidget(self.pass_input, 1, 5)
-
-        self.connect_btn = QPushButton("连接")
-        self.connect_btn.clicked.connect(self._connect_obs)
-        obs_layout.addWidget(self.connect_btn, 1, 6)
-        self._obs_timer.timeout.connect(self._obs_btn_state)
-
-        obs_hint = QLabel(
-            "在 OBS 中打开 WebSocket服务器 功能，在下方填写信息以自动导入推流地址到OBS\n未连接 OBS 时自动推流将不会生效")
-        obs_hint.setStyleSheet("color: red")
-        obs_hint.setWordWrap(True)
-        obs_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        obs_layout.addWidget(obs_hint, 0, 0, 1, 7)
-
-        obs_auto_start = QWidget()
-        obs_auto_start_layout = QHBoxLayout()
-        obs_auto_start_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.obs_auto_live_checkbox = QCheckBox("自动推流")
-        self.obs_auto_live_checkbox.setToolTip(
-            "勾选此项后，软件内点击开播时会自动点击OBS的推流"
-        )
-        self.obs_auto_live_checkbox.setChecked(False)
-        self.obs_auto_live_checkbox.setEnabled(False)
-        self.obs_auto_live_checkbox.checkStateChanged.connect(_auto_live_save)
-        obs_auto_start_layout.addWidget(self.obs_auto_live_checkbox)
-        self.obs_auto_connect_checkbox = QCheckBox("自动连接OBS")
-        self.obs_auto_connect_checkbox.setToolTip(
-            "勾选此项后，软件打开时会自动尝试连接OBS"
-        )
-        self.obs_auto_connect_checkbox.checkStateChanged.connect(
-            _auto_connect_save)
-        self.obs_auto_connect_checkbox.setChecked(False)
-        self.obs_auto_connect_checkbox.setEnabled(True)
-        obs_auto_start_layout.addWidget(self.obs_auto_connect_checkbox)
-
-        obs_auto_start.setLayout(obs_auto_start_layout)
-        obs_layout.addWidget(obs_auto_start, 2, 0, 1, 7)
-
-        obs_group.setLayout(obs_layout)
-        self.main_layout.addWidget(obs_group, stretch=1)
-
-        # 中部区域：推流地址与密钥
-        stream_group = QGroupBox("推流信息 (自动生成)")
-        stream_layout = QGridLayout()
-
-        stream_layout.addWidget(QLabel("串流地址:"), 0, 0, 1, 1)
-        self.addr_input = QLineEdit()
-        self.addr_input.setReadOnly(True)
-        stream_layout.addWidget(self.addr_input, 0, 1, 1, 6)
-        self.copy_addr_btn = QPushButton("复制")
-        stream_layout.addWidget(self.copy_addr_btn, 0, 8)
-
-        stream_layout.addWidget(QLabel("串流密钥:"), 1, 0, 1, 1)
-        self.key_input = FocusAwareLineEdit()
-        self.key_input.setReadOnly(True)
-        stream_layout.addWidget(self.key_input, 1, 1, 1, 6)
-        self.copy_key_btn = QPushButton("复制")
-        stream_layout.addWidget(self.copy_key_btn, 1, 8)
-
-        stream_group.setLayout(stream_layout)
-        self.main_layout.addWidget(stream_group, stretch=1)
-
-        # 分区选择
-        area_group = QGroupBox("直播信息")
-        area_group_layout = QGridLayout()
-        area_group_layout.addWidget(QLabel("房间标题:"), 0, 0, 1, 1)
-        self.title_input = QLineEdit()
-        area_group_layout.addWidget(self.title_input, 0, 1, 1, 6)
-        self.save_title_btn = QPushButton("保存")
-        self.save_title_btn.clicked.connect(self._save_title)
-        area_group_layout.addWidget(self.save_title_btn, 0, 8)
-
-        area_group_layout.addWidget(QLabel("分区选择:"), 1, 0, 1, 1)
-        self.parent_combo = CompletionComboBox(config.parent_area)
-        # self.parent_combo.addItems(config.parent_area)
-        area_group_layout.addWidget(self.parent_combo, 1, 1, 1, 3)
-
-        self.child_combo = CompletionComboBox([])
-        self.child_combo.setEnabled(False)
-        area_group_layout.addWidget(self.child_combo, 1, 4, 1, 3)
-        self.save_area_btn = QPushButton("保存")
-        self.save_area_btn.setEnabled(False)
-        self.save_area_btn.clicked.connect(self._save_area)
-        self.parent_combo.editTextChanged.connect(self._activate_area_save)
-        self.child_combo.editTextChanged.connect(self._activate_area_save)
-        area_group_layout.addWidget(self.save_area_btn, 1, 8)
-
-        area_group.setLayout(area_group_layout)
-        self.main_layout.addWidget(area_group, stretch=1)
-
-        # 底部：控制按钮
-        control_layout = QHBoxLayout()
-        self.start_btn = QPushButton("开始直播")
-        self.stop_btn = QPushButton("停止直播")
-        self.stop_btn.setEnabled(False)
-
-        control_layout.addStretch()
-        control_layout.addWidget(self.start_btn)
-        control_layout.addWidget(self.stop_btn)
-        control_layout.addStretch()
-
-        self.main_layout.addLayout(control_layout, stretch=1)
-
-        # 绑定逻辑
-        self.parent_combo.currentTextChanged.connect(self.update_child_combo)
-        self.copy_addr_btn.clicked.connect(self.copy_address)
-        self.copy_key_btn.clicked.connect(self.copy_key)
-        self.start_btn.clicked.connect(self._start_live)
-        self.stop_btn.clicked.connect(self._stop_live)
-
-    def reset_obs_settings(self):
-        CredentialManagerWorker.obs_default_settings()
-        self.host_input.setText(config.stream_settings["ip_addr"])
-        self.port_input.setText(config.stream_settings["port"])
-        self.pass_input.setText(config.stream_settings["password"])
-        self.obs_auto_connect_checkbox.setChecked(False)
-        self.obs_auto_live_checkbox.setChecked(False)
-
-    def update_child_combo(self, text):
-        if text in config.area_options:
-            self.child_combo.clear()
-            self.child_combo.addItems(config.area_options[text])
-            self.child_combo.setEnabled(True)
-        else:
-            self.child_combo.clear()
-            self.child_combo.setEnabled(False)
-
-    def _activate_area_save(self):
-        self.save_area_btn.setEnabled(True)
-
-    def copy_address(self):
-        QApplication.clipboard().setText(self.addr_input.text())
-
-    def copy_key(self):
-        QApplication.clipboard().setText(self.key_input.text())
-
-    def _start_live(self):
-        if not self._valid_area():
-            return
-        self.start_btn.setEnabled(False)
-        self.stop_btn.setEnabled(True)
-        # self.parent_combo.setEnabled(False)
-        # self.child_combo.setEnabled(False)
-        self.save_area_btn.setEnabled(False)
-        if config.stream_settings.get("auto_connect",
-                                      False) and config.obs_client is None:
-            self.connect_btn.click()
-        area_code = config.area_codes[self.child_combo.currentText()]
-        config.room_info["parent_area"] = self.parent_combo.currentText()
-        config.room_info["area"] = self.child_combo.currentText()
-        set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
-                     dumps(config.room_info.internal))
-        self.parent_window.add_thread(StartLiveWorker(self, area_code))
-        self.parent_window.timer.timeout.connect(
-            self.parent_window.fill_stream_info)
-        self.parent_window.timer.start(100)
-
-    def _stop_live(self):
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        # self.parent_combo.setEnabled(True)
-        # self.child_combo.setEnabled(True)
-        config.stream_status["stream_key"] = None
-        config.stream_status["stream_addr"] = None
-        self.addr_input.setText("")
-        self.key_input.setText("")
-        if config.obs_client is not None:
-            if self.obs_auto_live_checkbox.isChecked():
-                config.obs_req_queue.put(("StopStream", {}))
-        self.parent_window.add_thread(StopLiveWorker(self))
-
-    def _connect_obs(self):
-        if config.obs_client is None and not config.obs_op:
-            self.connect_btn.setText("连接中")
-            obs_host = self.host_input.text()
-            try:
-                ip_object = ip_address(obs_host)
-                if isinstance(ip_object, IPv6Address):
-                    obs_host = f"[{obs_host}]"
-            except ValueError:
-                pass
-            self.parent_window.add_thread(
-                ObsDaemonWorker(self, host=obs_host,
-                                port=self.port_input.text(),
-                                password=self.pass_input.text()))
-        else:
-            ObsDaemonWorker.disconnect_obs()
-            self.obs_auto_live_checkbox.setEnabled(False)
-        self._obs_timer.start(100)
-
-    def _obs_btn_state(self):
-        if config.obs_connecting:
-            self.connect_btn.setText("连接中")
-            return
-        if not config.obs_op:
-            self.connect_btn.setText(
-                "断开" if config.obs_client is not None else "连接")
-            self._obs_timer.stop()
-
-    def _save_title(self):
-        self.save_title_btn.setEnabled(False)
-        self.parent_window.add_thread(
-            TitleUpdateWorker(self, self.title_input.text()))
-
-    def _valid_area(self):
-        parent_choose = self.parent_combo.currentText()
-        if parent_choose == "请选择":
-            return False
-        return parent_choose in config.parent_area and self.child_combo.currentText() in \
-            config.area_options[self.parent_combo.currentText()]
-
-    def _save_area(self):
-        if self._valid_area():
-            self.save_area_btn.setEnabled(False)
-            self.parent_window.add_thread(AreaUpdateWorker(self))
 
 
 # Main GUI window
@@ -326,6 +41,9 @@ class MainWindow(SingleInstanceWindow):
 
     def __init__(self):
         super().__init__()
+        init_logger()
+        self.logger = get_logger(self.__class__.__name__)
+        self.logger.info("App created.")
         self._base_interval = 200
         self._worker_interval = 200
         self._max_interval = 10000
@@ -335,6 +53,7 @@ class MainWindow(SingleInstanceWindow):
         self.timer = QTimer()
         # Long live workers
         self._ll_workers = []
+        self.logger.info("Thread Pool initialized.")
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
         self.setGeometry(300, 200, 520, 430)
         self.tray_icon = QSystemTrayIcon(self)
@@ -344,6 +63,7 @@ class MainWindow(SingleInstanceWindow):
                          "icon_cr.png")))
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
+        self.logger.info("System tray icon initialized.")
         self.add_thread(ConstantUpdateWorker())
 
         tray_menu = QMenu()
@@ -355,6 +75,7 @@ class MainWindow(SingleInstanceWindow):
         restore_action.triggered.connect(self.show_normal)
         quit_action.triggered.connect(QApplication.quit)
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
+        self.logger.info("Tray menu initialized.")
 
         menu_bar = self.menuBar()
         setting_menu = QMenu("缓存设置", self)
@@ -372,11 +93,14 @@ class MainWindow(SingleInstanceWindow):
         clear_area_cache.triggered.connect(self._delete_area_cache)
         setting_menu.addAction(clear_area_cache)
 
+        self.logger.info("Menu bar initialized.")
+
         # Widgets for login phase
         self.login_label = QLabel("正在获取保存的登录凭证...")
         self.status_label = ClickableLabel("等待登录中...")
         self.qr_label = QLabel()
         self.panel = StreamConfigPanel(self)
+        self.logger.info("StreamConfig initialized.")
 
         # Styling and alignment
         for label in [self.login_label, self.status_label]:
@@ -395,6 +119,7 @@ class MainWindow(SingleInstanceWindow):
         central = QWidget()
         central.setLayout(layout)
         self.setCentralWidget(central)
+        self.logger.info("Main QR layout initialized.")
 
         # Start fetching QR and begin polling thread
         self.credential_worker = CredentialManagerWorker(self)
@@ -450,6 +175,7 @@ class MainWindow(SingleInstanceWindow):
 
     def fetch_qr(self, retry=False):
         # Start fetching QR and begin polling thread
+        self.logger.info("Starting login flow.")
         config.scan_status["timeout"] = False
         if retry and self.login_worker is not None:
             self.status_label.clicked.disconnect(self.fetch_qr)
@@ -481,6 +207,7 @@ class MainWindow(SingleInstanceWindow):
                 self.fetch_qr()
 
     def add_thread(self, worker: BaseWorker | LongLiveWorker):
+        self.logger.info(f"{worker.__class__.__name__} added to thread pool")
         self._managed_workers.append(worker)
         if isinstance(worker, LongLiveWorker):
             self._ll_workers.append(worker)
@@ -491,9 +218,11 @@ class MainWindow(SingleInstanceWindow):
         for worker in self._managed_workers:
             if worker.finished:
                 done.append(worker)
-                if worker.exception is not None:
+                if (e := worker.exception) is not None:
+                    self.logger.error(
+                        format_exception(type(e), e, e.__traceback__))
                     QMessageBox.critical(self, f"{worker.name}线程错误",
-                                         repr(worker.exception))
+                                         repr(e))
         for dead_worker in done:
             self._managed_workers.remove(dead_worker)
             if dead_worker in self._ll_workers:

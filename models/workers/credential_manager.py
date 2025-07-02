@@ -9,7 +9,8 @@ from requests.cookies import cookiejar_from_dict
 import config
 from constant import *
 from exceptions import CredentialExpiredError
-from .base import BaseWorker
+from models.log import get_logger
+from models.workers.base import BaseWorker
 from .fetch_login import FetchLoginWorker
 
 
@@ -17,6 +18,7 @@ class CredentialManagerWorker(BaseWorker):
     def __init__(self, parent_window: "MainWindow"):
         super().__init__(name="凭据管理")
         self.parent_window = parent_window
+        self.logger = get_logger(self.__class__.__name__)
 
     @staticmethod
     def obs_default_settings():
@@ -43,13 +45,17 @@ class CredentialManagerWorker(BaseWorker):
             if (saved_settings := get_password(KEYRING_SERVICE_NAME,
                                                KEYRING_SETTINGS)) is not None:
                 config.stream_settings.update(loads(saved_settings))
+                self.logger.info(f"stream_settings loaded: {saved_settings}")
             else:
                 self.obs_default_settings()
+                self.logger.info(f"obs_default_settings loaded")
             if (room_settings := get_password(KEYRING_SERVICE_NAME,
                                               KEYRING_ROOM_INFO)) is not None:
                 config.room_info.update(loads(room_settings))
+                self.logger.info(f"room_info loaded: {room_settings}")
             else:
                 self.room_default_settings()
+                self.logger.info(f"room_default_settings loaded")
 
             panel = self.parent_window.panel
             panel.host_input.setText(config.stream_settings["ip_addr"])
@@ -62,13 +68,17 @@ class CredentialManagerWorker(BaseWorker):
 
             if (saved_cookies := get_password(KEYRING_SERVICE_NAME,
                                               KEYRING_COOKIES)) is not None:
+                self.logger.info(f"cookies loaded")
                 saved_cookies = loads(saved_cookies)
                 cookiejar_from_dict(saved_cookies,
                                     cookiejar=config.session.cookies)
                 nav_url = "https://api.bilibili.com/x/web-interface/nav"
+                self.logger.info(f"nav Request")
                 response = config.session.get(nav_url)
                 response.encoding = "utf-8"
+                self.logger.info("nav Response")
                 response = response.json()
+                self.logger.info(f"nav Result: {response}")
                 if response["code"] != 0:
                     raise CredentialExpiredError("登录凭据过期, 请重新登录")
                 config.cookies_dict.update(saved_cookies)
