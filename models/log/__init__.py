@@ -44,7 +44,7 @@ def init_logger(name: str = LOGGER_NAME) -> Logger:
     fh.extMatch = fh.extMatch
     fh.namer = lambda name: name.replace(".log.", ".")
     formatter = ThreadClassFormatter(
-        "%(asctime)s [%(threadClassName)s] - %(message)s",
+        "%(asctime)s.%(msecs)03d [%(threadClassName)s] - %(message)s",
         "%Y-%m-%d %H:%M:%S")
     fh.setFormatter(formatter)
     logger.addHandler(fh)
