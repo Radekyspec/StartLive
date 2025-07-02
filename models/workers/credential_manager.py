@@ -78,7 +78,6 @@ class CredentialManagerWorker(BaseWorker):
                 response.encoding = "utf-8"
                 self.logger.info("nav Response")
                 response = response.json()
-                self.logger.info(f"nav Result: {response}")
                 if response["code"] != 0:
                     raise CredentialExpiredError("登录凭据过期, 请重新登录")
                 config.cookies_dict.update(saved_cookies)
