@@ -38,7 +38,7 @@ def init_logger(name: str = LOGGER_NAME) -> Logger:
     else:
         raise ValueError("Unsupported system")
     fh = TimedRotatingFileHandler(
-        log_path, when="midnight", interval=1, backupCount=0, encoding="utf-8"
+        log_path, when="midnight", interval=1, backupCount=30, encoding="utf-8"
     )
     fh.suffix = "%Y-%m-%d.log"
     fh.extMatch = fh.extMatch
