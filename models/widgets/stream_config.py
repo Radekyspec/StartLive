@@ -2,6 +2,7 @@
 
 # module import
 from ipaddress import ip_address, IPv6Address
+from typing import Optional
 
 # package import
 from PySide6.QtCore import (Qt, QTimer)
@@ -20,10 +21,13 @@ from constant import *
 from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
 from models.workers import *
+from web_server import HttpServerWorker
 
 
 class StreamConfigPanel(QWidget):
-    def __init__(self, parent_window):
+    _server_thread: Optional[HttpServerWorker]
+
+    def __init__(self, parent_window, web_host: Optional[str], web_port: Optional[int]):
         super().__init__()
         self.parent_window = parent_window
 
@@ -178,6 +182,29 @@ class StreamConfigPanel(QWidget):
         self.start_btn.clicked.connect(self._start_live)
         self.stop_btn.clicked.connect(self._stop_live)
 
+        self._server_started = False
+        if web_host is not None and web_port is not None:
+            self._server_thread = HttpServerWorker(web_host, web_port)
+            self._server_thread.signals.startLive.connect(self._start_live)
+            self._server_thread.signals.stopLive.connect(self._stop_live)
+        else:
+            self._server_thread = None
+
+    def start_server(self):
+        if self._server_thread is not None and not self._server_started:
+            self._server_thread.start()
+            self.parent_window.setWindowTitle(
+                self.parent_window.windowTitle() + " - Web服务已开启")
+            self._server_started = True
+
+    def stop_server(self):
+        """This function should only be called once
+        when the program is shutting down."""
+        if self._server_thread is not None and self._server_started:
+            self._server_thread.stop()
+            self._server_thread.quit()
+            self._server_started = False
+
     def reset_obs_settings(self):
         CredentialManagerWorker.obs_default_settings()
         self.host_input.setText(config.stream_settings["ip_addr"])
@@ -205,7 +232,8 @@ class StreamConfigPanel(QWidget):
         QApplication.clipboard().setText(self.key_input.text())
 
     def _start_live(self):
-        if not self._valid_area():
+        if not self._valid_area() or not self.start_btn.isEnabled():
+            print("command ignored")
             return
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
@@ -226,6 +254,8 @@ class StreamConfigPanel(QWidget):
         self.parent_window.timer.start(100)
 
     def _stop_live(self):
+        if not self.stop_btn.isEnabled():
+            return
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         # self.parent_combo.setEnabled(True)

@@ -3,6 +3,7 @@
 # module import
 import os.path
 import sys
+from argparse import ArgumentParser
 from contextlib import suppress
 from platform import system
 from subprocess import Popen
@@ -39,11 +40,11 @@ class MainWindow(SingleInstanceWindow):
     _managed_workers: list[BaseWorker | LongLiveWorker]
     _ll_workers: list[LongLiveWorker]
 
-    def __init__(self):
+    def __init__(self, host, port):
         super().__init__()
         init_logger()
         self.logger = get_logger(self.__class__.__name__)
-        self.logger.info("App created.")
+        self.logger.info(f"App created with host={host}, port={port}")
         self._base_interval = 200
         self._worker_interval = 200
         self._max_interval = 10000
@@ -55,6 +56,7 @@ class MainWindow(SingleInstanceWindow):
         self._ll_workers = []
         self.logger.info("Thread Pool initialized.")
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
+        self.windowTitle()
         self.setGeometry(300, 200, 520, 430)
         self.tray_icon = QSystemTrayIcon(self)
         # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
@@ -99,7 +101,7 @@ class MainWindow(SingleInstanceWindow):
         self.login_label = QLabel("正在获取保存的登录凭证...")
         self.status_label = ClickableLabel("等待登录中...")
         self.qr_label = QLabel()
-        self.panel = StreamConfigPanel(self)
+        self.panel = StreamConfigPanel(self, host, port)
         self.logger.info("StreamConfig initialized.")
 
         # Styling and alignment
@@ -141,6 +143,7 @@ class MainWindow(SingleInstanceWindow):
 
     def closeEvent(self, event):
         # 关闭窗口时退出应用
+        self.panel.stop_server()
         self.tray_icon.hide()
         self.tray_icon.deleteLater()
         event.accept()
@@ -292,6 +295,7 @@ class MainWindow(SingleInstanceWindow):
             config.room_info.get("parent_area", "请选择"))
         self.panel.child_combo.setCurrentText(
             config.room_info.get("area", ""))
+        self.panel.start_server()
 
     def check_scan_status(self):
         if config.scan_status["scanned"]:
@@ -366,10 +370,19 @@ if __name__ == '__main__':
             Popen([updater_path, "--update=https://startlive.vtbs.ai/"])
         except:
             pass
+    parser = ArgumentParser()
+
+    parser.add_argument("--web.host", dest="web_host", default=None,
+                        help="Web服务绑定的主机地址")
+
+    parser.add_argument("--web.port", dest="web_port", type=int, default=None,
+                        help="Web服务绑定的端口")
+
+    args, qt_args = parser.parse_known_args()
     enable_hi_dpi()
-    app = QApplication(sys.argv)
+    app = QApplication(qt_args)
     setup_theme("auto")
-    window = MainWindow()
+    window = MainWindow(args.web_host, args.web_port)
     app.aboutToQuit.connect(window.on_exit)
     window.show()
     sys.exit(app.exec())
