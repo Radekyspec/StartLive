@@ -9,6 +9,7 @@ from PySide6.QtCore import (Qt, QTimer)
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
+                               QMessageBox,
                                QLabel, QLineEdit, QPushButton,
                                QVBoxLayout, QWidget,
                                QApplication)
@@ -27,7 +28,8 @@ from web_server import HttpServerWorker
 class StreamConfigPanel(QWidget):
     _server_thread: Optional[HttpServerWorker]
 
-    def __init__(self, parent_window, web_host: Optional[str], web_port: Optional[int]):
+    def __init__(self, parent_window, web_host: Optional[str],
+                 web_port: Optional[int]):
         super().__init__()
         self.parent_window = parent_window
 
@@ -187,6 +189,7 @@ class StreamConfigPanel(QWidget):
             self._server_thread = HttpServerWorker(web_host, web_port)
             self._server_thread.signals.startLive.connect(self._start_live)
             self._server_thread.signals.stopLive.connect(self._stop_live)
+            self._server_thread.signals.exception.connect(self.http_server_error)
         else:
             self._server_thread = None
 
@@ -204,6 +207,12 @@ class StreamConfigPanel(QWidget):
             self._server_thread.stop()
             self._server_thread.quit()
             self._server_started = False
+
+    def http_server_error(self, e: Exception):
+        QMessageBox.critical(self.parent_window, f"Web服务线程错误",
+                             repr(e))
+        self.parent_window.setWindowTitle(f"StartLive 开播器 {VERSION}")
+        self.stop_server()
 
     def reset_obs_settings(self):
         CredentialManagerWorker.obs_default_settings()
