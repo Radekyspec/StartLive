@@ -53,7 +53,7 @@ jobs:
         uses: Nuitka/Nuitka-Action@main
         with:
           nuitka-version: main
-          script-name: startLive-qt.py
+          script-name: StartLive.py
           mingw64: true
           mode: app
           enable-plugins: pyside6
@@ -69,7 +69,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         with:
           nuitka-version: main
-          script-name: startLive-qt.py
+          script-name: StartLive.py
           mode: app
           enable-plugins: pyside6
           noinclude-setuptools-mode: "nofollow"
