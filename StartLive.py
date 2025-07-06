@@ -174,6 +174,8 @@ class MainWindow(SingleInstanceWindow):
         QMessageBox.information(self, "设置清空", "OBS连接设置清除成功")
 
     def _delete_area_cache(self):
+        if not config.scan_status["scanned"]:
+            return
         del config.room_info["parent_area"]
         del config.room_info["area"]
         set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
@@ -188,6 +190,8 @@ class MainWindow(SingleInstanceWindow):
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
         QMessageBox.information(self, "凭据清空", "已清空全部凭据, 程序即将退出")
+        for worker in self._ll_workers:
+            worker.stop()
         sys.exit(0)
 
     def fetch_qr(self, retry=False):
