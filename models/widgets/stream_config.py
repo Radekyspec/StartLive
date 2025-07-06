@@ -255,12 +255,12 @@ class StreamConfigPanel(QWidget):
         area_code = config.area_codes[self.child_combo.currentText()]
         config.room_info["parent_area"] = self.parent_combo.currentText()
         config.room_info["area"] = self.child_combo.currentText()
-        set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
-                     dumps(config.room_info.internal))
         self.parent_window.add_thread(StartLiveWorker(self, area_code))
         self.parent_window.timer.timeout.connect(
             self.parent_window.fill_stream_info)
         self.parent_window.timer.start(100)
+        set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
+                     dumps(config.room_info.internal))
 
     def _stop_live(self):
         if not self.stop_btn.isEnabled():
