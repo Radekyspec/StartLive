@@ -95,6 +95,10 @@ class MainWindow(SingleInstanceWindow):
         clear_area_cache.triggered.connect(self._delete_area_cache)
         setting_menu.addAction(clear_area_cache)
 
+        delete_cred = QAction("清空所有凭据", self)
+        delete_cred.triggered.connect(self._delete_cred)
+        setting_menu.addAction(delete_cred)
+
         self.logger.info("Menu bar initialized.")
 
         # Widgets for login phase
@@ -175,6 +179,16 @@ class MainWindow(SingleInstanceWindow):
         set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
                      dumps(config.room_info.internal))
         QMessageBox.information(self, "分区缓存清空", "分区缓存清除成功")
+
+    def _delete_cred(self):
+        with suppress(PasswordDeleteError):
+            delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES)
+        with suppress(PasswordDeleteError):
+            delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
+        with suppress(PasswordDeleteError):
+            delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
+        QMessageBox.information(self, "凭据清空", "已清空全部凭据, 程序即将退出")
+        sys.exit(0)
 
     def fetch_qr(self, retry=False):
         # Start fetching QR and begin polling thread
