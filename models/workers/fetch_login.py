@@ -62,15 +62,17 @@ class FetchLoginWorker(LongLiveWorker):
                 response.encoding = "utf-8"
                 self.logger.info("QR poll Response")
                 result = response.json()
-                self.logger.info(f"QR poll Result: {result}")
                 match result["data"]["code"]:
                     case 86101:  # Not scanned yet
+                        self.logger.info(f"QR poll Result: {result}")
                         sleep(1)
                         continue
                     case 86038:  # QR expired
+                        self.logger.info(f"QR poll Result: {result}")
                         config.scan_status["timeout"] = True
                         break
                     case 86090:  # Scanned but not confirmed
+                        self.logger.info(f"QR poll Result: {result}")
                         config.scan_status["wait_for_confirm"] = True
                         sleep(1)
                     case 0:  # Login successful
