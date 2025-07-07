@@ -10,3 +10,32 @@
 
 ## 使用方法
 [点我查看教程](https://github.com/Radekyspec/StartLive/blob/master/GETTING_STARTED.md)
+
+## 从源代码运行/开发
+
+### 前置要求
+* `3.10 <= Python <= 3.12`
+* `Python 3.13` 及之后的版本未经测试, 推荐使用`3.12.10`
+* 桌面端环境
+
+### 安装依赖
+* 创建虚拟环境
+
+```shell
+python -m venv venv
+```
+
+* `Windows`: 可以直接双击运行 `install-requirements.bat`
+
+* `MacOS` / `Linux`:
+
+```shell
+./venv/bin/pip install -r ./requirements.txt
+./venv/bin/pip install git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
+```
+
+### 运行app
+
+```shell
+python StartLive.py
+```
