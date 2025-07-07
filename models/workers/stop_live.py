@@ -9,16 +9,16 @@ import constant
 from exceptions import StopLiveError
 from sign import livehime_sign, order_payload
 from models.log import get_logger
-from models.workers.base import BaseWorker
+from models.workers.base import BaseWorker, run_wrapper
 
 
 class StopLiveWorker(BaseWorker):
-    def __init__(self, parent_window: "StreamConfigPanel"):
+    def __init__(self):
         super().__init__(name="停播任务")
-        self.parent_window = parent_window
         self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
+    @run_wrapper
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/room/v1/Room/stopLive"
         # [0.3.5]: Watch here because in livehime ver 9240
@@ -42,20 +42,18 @@ class StopLiveWorker(BaseWorker):
             })
             stop_data = order_payload(stop_data)
         self.logger.info(f"stopLive Request")
-        try:
-            response = config.session.post(url, data=stop_data)
-            response.encoding = "utf-8"
-            self.logger.info("stopLive Response")
-            response = response.json()
-            self.logger.info(f"stopLive Result: {response}")
-            if response["code"] != 0:
-                raise StopLiveError(response["message"])
-        except Exception as e:
-            self.parent_window.start_btn.setEnabled(False)
-            self.parent_window.stop_btn.setEnabled(True)
-            # self.parent_window.parent_combo.setEnabled(False)
-            # self.parent_window.child_combo.setEnabled(False)
-            self.parent_window.save_area_btn.setEnabled(True)
-            self.exception = e
-        finally:
-            self.finished = True
+        response = config.session.post(url, data=stop_data)
+        response.encoding = "utf-8"
+        self.logger.info("stopLive Response")
+        response = response.json()
+        self.logger.info(f"stopLive Result: {response}")
+        if response["code"] != 0:
+            raise StopLiveError(response["message"])
+
+    @staticmethod
+    def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
+        parent_window.start_btn.setEnabled(False)
+        parent_window.stop_btn.setEnabled(True)
+        # parent_window.parent_combo.setEnabled(False)
+        # parent_window.child_combo.setEnabled(False)
+        parent_window.save_area_btn.setEnabled(True)

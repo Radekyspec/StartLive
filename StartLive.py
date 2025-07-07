@@ -5,10 +5,11 @@ import os.path
 import sys
 from argparse import ArgumentParser
 from contextlib import suppress
+from functools import partial
 from platform import system
 from subprocess import Popen
 from traceback import format_exception
-from typing import Optional
+from typing import Optional, Callable
 
 # package import
 from PIL import ImageQt
@@ -50,7 +51,6 @@ class MainWindow(SingleInstanceWindow):
         self._max_interval = 10000
         self._thread_pool = QThreadPool()
         self._managed_workers = []
-        self._worker_timer = QTimer()
         self.timer = QTimer()
         # Long live workers
         self._ll_workers = []
@@ -66,7 +66,7 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
         self.logger.info("System tray icon initialized.")
-        self.add_thread(ConstantUpdateWorker())
+        self.add_thread(ConstantUpdateWorker(), on_finished=ConstantUpdateWorker.on_finished)
 
         tray_menu = QMenu()
         restore_action = QAction("显示窗口", self)
@@ -128,15 +128,11 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("Main QR layout initialized.")
 
         # Start fetching QR and begin polling thread
-        self.credential_worker = CredentialManagerWorker(self)
+        self.credential_worker = CredentialManagerWorker()
         self.login_worker = None
-        self.add_thread(self.credential_worker)
-        self.timer.timeout.connect(self.load_credentials)
-        self.timer.start(50)
+        self.add_thread(self.credential_worker,
+                        on_finished=partial(self.credential_worker.on_finished, self))
 
-        # monitor worker health
-        self._worker_timer.timeout.connect(self._monitor_exception)
-        self._worker_timer.start(self._worker_interval)
         self.face_window: Optional[FaceQRWidget] = None
 
     def changeEvent(self, event):
@@ -189,7 +185,8 @@ class MainWindow(SingleInstanceWindow):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
-        QMessageBox.information(self, "凭据清空", "已清空全部凭据, 程序即将退出")
+        QMessageBox.information(self, "凭据清空",
+                                "已清空全部凭据, 程序即将退出")
         for worker in self._ll_workers:
             worker.stop()
         sys.exit(0)
@@ -207,67 +204,53 @@ class MainWindow(SingleInstanceWindow):
                 "wait_for_confirm": False
             })
             self.timer.timeout.connect(self.check_scan_status)
-            self.timer.start(100)
-        self.add_thread(QRLoginWorker(self))
-        self.login_worker = FetchLoginWorker(self)
-        self.add_thread(self.login_worker)
+            self.timer.start(50)
+        qr_login_worker = QRLoginWorker()
+        self.add_thread(qr_login_worker,
+                        on_finished=partial(qr_login_worker.on_finished, self))
+        self.login_worker = FetchLoginWorker()
+        self.add_thread(self.login_worker,
+                        on_finished=partial(self.login_worker.on_finished, self))
         self.login_label.setText("请使用手机扫码登录：")
         self.status_label.setText("等待扫码中...")
         self.status_label.setStyleSheet("color: blue; font-size: 16pt;")
         # Timer checks the login state and updates UI
 
     def load_credentials(self):
-        if self.credential_worker.finished:
-            # stop check
-            self.timer.timeout.disconnect(self.load_credentials)
-            self.timer.stop()
-            self.timer.timeout.connect(self.check_scan_status)
-            self.timer.start(100)
-            if not config.scan_status["scanned"]:
-                # Needs update credential
-                self.fetch_qr()
+        self.timer.timeout.connect(self.check_scan_status)
+        self.timer.start(50)
+        if not config.scan_status["scanned"]:
+            # Needs update credential
+            self.fetch_qr()
 
-    def add_thread(self, worker: BaseWorker | LongLiveWorker):
+    def add_thread(self, worker: BaseWorker | LongLiveWorker, *,
+                   on_finished: Callable | None = None,
+                   on_exception: Callable | None = None):
+        if on_finished is not None:
+            worker.signals.finished.connect(on_finished)
+        worker.signals.finished.connect(partial(self._remove_worker, worker))
+        if on_exception is not None:
+            worker.signals.exception.connect(on_exception)
+        worker.signals.exception.connect(partial(self._worker_exception, worker))
         self.logger.info(f"{worker.__class__.__name__} added to thread pool")
         self._managed_workers.append(worker)
         if isinstance(worker, LongLiveWorker):
             self._ll_workers.append(worker)
         self._thread_pool.start(worker)
 
-    def _monitor_exception(self):
-        done = []
-        for worker in self._managed_workers:
-            if worker.finished:
-                done.append(worker)
-                if (e := worker.exception) is not None:
-                    self.logger.error(
-                        format_exception(type(e), e, e.__traceback__))
-                    QMessageBox.critical(self, f"{worker.name}线程错误",
-                                         repr(e))
-        for dead_worker in done:
-            self._managed_workers.remove(dead_worker)
-            if dead_worker in self._ll_workers:
-                self._ll_workers.remove(dead_worker)
+    def _remove_worker(self, dead_worker: BaseWorker | LongLiveWorker):
+        self.logger.info(
+            f"{dead_worker.__class__.__name__} removed from thread pool")
+        self._managed_workers.remove(dead_worker)
+        if dead_worker in self._ll_workers:
+            self._ll_workers.remove(dead_worker)
 
-        if self._managed_workers:
-            if len(self._managed_workers) == 1 and len(
-                    self._ll_workers) == 1 and any(
-                isinstance(item, ObsDaemonWorker) for item in
-                self._managed_workers):
-                # Only OBS daemon left, no need to check in high frequency
-                if self._worker_interval < self._max_interval:
-                    self._worker_interval = int(
-                        min(self._worker_interval * 1.025,
-                            self._max_interval))
-            elif self._worker_interval != self._base_interval:
-                self._worker_interval = self._base_interval
-            self._worker_timer.setInterval(self._worker_interval)
-        else:
-            if self._worker_interval < self._max_interval:
-                self._worker_interval = int(min(self._worker_interval * 1.025,
-                                                self._max_interval))
-            self._worker_timer.setInterval(self._worker_interval)
-        # print(f"worker interval: {self._worker_interval}")
+    def _worker_exception(self, worker: BaseWorker | LongLiveWorker,
+                          e: Exception):
+        self.logger.error(
+            format_exception(type(e), e, e.__traceback__))
+        QMessageBox.critical(self, f"{worker.name}线程错误",
+                             repr(e))
 
     def on_exit(self):
         if config.stream_settings:
@@ -321,6 +304,20 @@ class MainWindow(SingleInstanceWindow):
             if self.status_label.text() != "登录成功！":
                 self.status_label.setText("登录成功！")
                 self.status_label.setStyleSheet("color: green;font-size: 16pt;")
+            if config.scan_status["area_updated"]:
+                login_hint1 = "分区已更新！"
+            else:
+                login_hint1 = "正在更新分区..."
+            if config.scan_status["room_updated"]:
+                login_hint2 = "房间信息已更新！"
+            else:
+                login_hint2 = "正在更新房间信息..."
+            if config.scan_status["const_updated"]:
+                login_hint3 = "请求参数已更新！"
+            else:
+                login_hint3 = "正在更新请求参数..."
+            login_hint = f"{login_hint1}\n{login_hint2}\n{login_hint3}"
+            self.login_label.setText(login_hint)
             if not config.scan_status["area_updated"] or \
                     not config.scan_status["room_updated"] or \
                     not config.scan_status["const_updated"]:
@@ -373,7 +370,8 @@ class MainWindow(SingleInstanceWindow):
             ))
             auth_worker = FaceAuthWorker(self.face_window)
             self.face_window.destroyed.connect(auth_worker.stop)
-            self.add_thread(auth_worker)
+            self.add_thread(auth_worker,
+                            on_finished=partial(auth_worker.on_finished, self.face_window))
             self.face_window.show()
 
 

@@ -9,28 +9,18 @@ import constant
 from exceptions import StartLiveError
 from sign import livehime_sign, order_payload
 from models.log import get_logger
-from models.workers.base import BaseWorker
+from models.workers.base import BaseWorker, run_wrapper
 
 
 class StartLiveWorker(BaseWorker):
-    def __init__(self, parent_window: "StreamConfigPanel", area):
+    def __init__(self, area):
         super().__init__(name="开播任务")
         self.area = area
-        self.parent_window = parent_window
 
     @Slot()
+    @run_wrapper
     def run(self, /) -> None:
-        try:
-            self.start_live(self.area)
-        except Exception as e:
-            self.parent_window.start_btn.setEnabled(True)
-            self.parent_window.stop_btn.setEnabled(False)
-            # self.parent_window.parent_combo.setEnabled(True)
-            # self.parent_window.child_combo.setEnabled(True)
-            self.parent_window.save_area_btn.setEnabled(True)
-            self.exception = e
-        finally:
-            self.finished = True
+        self.start_live(self.area)
 
     @classmethod
     def start_live(cls, area):
@@ -65,12 +55,10 @@ class StartLiveWorker(BaseWorker):
         response = response.json()
         match response["code"]:
             case 0:
-                config.stream_status["stream_addr"] = \
-                    response["data"]["rtmp"][
-                        "addr"]
-                config.stream_status["stream_key"] = \
-                    response["data"]["rtmp"][
-                        "code"]
+                config.stream_status.update({
+                    "stream_addr": response["data"]["rtmp"]["addr"],
+                    "stream_key": response["data"]["rtmp"]["code"]
+                })
             case 60024:
                 logger.warning(f"startLive Response face auth: {response}")
                 config.stream_status.update({
@@ -83,6 +71,7 @@ class StartLiveWorker(BaseWorker):
 
     @staticmethod
     def fetch_upstream():
+        raise DeprecationWarning("fetch_upstream is deprecated")
         stream_url = "https://api.live.bilibili.com/xlive/app-blink/v1/live/FetchWebUpStreamAddr"
         stream_data = livehime_sign({
             "backup_stream": 0,
@@ -97,3 +86,11 @@ class StartLiveWorker(BaseWorker):
         response = response.json()
         return response["data"]["addr"]["addr"], response["data"]["addr"][
             "code"]
+
+    @staticmethod
+    def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
+        parent_window.start_btn.setEnabled(True)
+        parent_window.stop_btn.setEnabled(False)
+        # parent_window.parent_combo.setEnabled(True)
+        # parent_window.child_combo.setEnabled(True)
+        parent_window.save_area_btn.setEnabled(True)

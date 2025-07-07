@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # module import
+from functools import partial
 from ipaddress import ip_address, IPv6Address
 from typing import Optional
 
@@ -242,7 +243,6 @@ class StreamConfigPanel(QWidget):
 
     def _start_live(self):
         if not self._valid_area() or not self.start_btn.isEnabled():
-            print("command ignored")
             return
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
@@ -255,7 +255,10 @@ class StreamConfigPanel(QWidget):
         area_code = config.area_codes[self.child_combo.currentText()]
         config.room_info["parent_area"] = self.parent_combo.currentText()
         config.room_info["area"] = self.child_combo.currentText()
-        self.parent_window.add_thread(StartLiveWorker(self, area_code))
+        self.parent_window.add_thread(
+            StartLiveWorker(area_code),
+            on_exception=partial(StartLiveWorker.on_exception, self)
+        )
         self.parent_window.timer.timeout.connect(
             self.parent_window.fill_stream_info)
         self.parent_window.timer.start(100)
@@ -276,7 +279,10 @@ class StreamConfigPanel(QWidget):
         if config.obs_client is not None:
             if self.obs_auto_live_checkbox.isChecked():
                 config.obs_req_queue.put(("StopStream", {}))
-        self.parent_window.add_thread(StopLiveWorker(self))
+        self.parent_window.add_thread(
+            StopLiveWorker(),
+            on_exception=partial(StopLiveWorker.on_exception, self)
+        )
 
     def _connect_obs(self):
         if config.obs_client is None and not config.obs_op:
@@ -288,10 +294,14 @@ class StreamConfigPanel(QWidget):
                     obs_host = f"[{obs_host}]"
             except ValueError:
                 pass
+            connector = ObsConnectorWorker(host=obs_host,
+                                   port=self.port_input.text(),
+                                   password=self.pass_input.text())
+            connector.on_else = partial(connector.on_else, self)
             self.parent_window.add_thread(
-                ObsDaemonWorker(self, host=obs_host,
-                                port=self.port_input.text(),
-                                password=self.pass_input.text()))
+                connector,
+                on_exception=partial(connector.on_exception, self)
+            )
         else:
             ObsDaemonWorker.disconnect_obs()
             self.obs_auto_live_checkbox.setEnabled(False)
@@ -309,7 +319,9 @@ class StreamConfigPanel(QWidget):
     def _save_title(self):
         self.save_title_btn.setEnabled(False)
         self.parent_window.add_thread(
-            TitleUpdateWorker(self, self.title_input.text()))
+            TitleUpdateWorker(self.title_input.text()),
+            on_exception=partial(TitleUpdateWorker.on_exception, self)
+        )
 
     def _valid_area(self):
         parent_choose = self.parent_combo.currentText()
@@ -321,4 +333,8 @@ class StreamConfigPanel(QWidget):
     def _save_area(self):
         if self._valid_area():
             self.save_area_btn.setEnabled(False)
-            self.parent_window.add_thread(AreaUpdateWorker(self))
+            self.parent_window.add_thread(
+                AreaUpdateWorker(self.child_combo.currentText()),
+                on_finished=partial(AreaUpdateWorker.on_finished, self),
+                on_exception=partial(AreaUpdateWorker.on_exception, self)
+            )

@@ -8,17 +8,17 @@ import config
 from exceptions import TitleUpdateError
 from sign import livehime_sign
 from models.log import get_logger
-from models.workers.base import BaseWorker
+from models.workers.base import BaseWorker, run_wrapper
 
 
 class TitleUpdateWorker(BaseWorker):
-    def __init__(self, parent_window: "StreamConfigPanel", title):
+    def __init__(self, title):
         super().__init__(name="标题更新")
-        self.parent_window = parent_window
         self.title = title
         self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
+    @run_wrapper
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/room/v1/Room/updateV2"
         title_data = {
@@ -28,17 +28,15 @@ class TitleUpdateWorker(BaseWorker):
             "title": self.title,
         }
         self.logger.info(f"updateV2 Request")
-        try:
-            response = config.session.post(url, params=livehime_sign({}),
-                                           data=title_data)
-            response.encoding = "utf-8"
-            self.logger.info("updateV2 Response")
-            response = response.json()
-            self.logger.info(f"updateV2 Result: {response}")
-            if response["code"] != 0:
-                raise TitleUpdateError(response["message"])
-        except Exception as e:
-            self.exception = e
-            self.parent_window.save_title_btn.setEnabled(True)
-        finally:
-            self.finished = True
+        response = config.session.post(url, params=livehime_sign({}),
+                                       data=title_data)
+        response.encoding = "utf-8"
+        self.logger.info("updateV2 Response")
+        response = response.json()
+        self.logger.info(f"updateV2 Result: {response}")
+        if response["code"] != 0:
+            raise TitleUpdateError(response["message"])
+
+    @staticmethod
+    def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
+        parent_window.save_title_btn.setEnabled(True)

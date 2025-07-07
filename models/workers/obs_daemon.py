@@ -9,46 +9,20 @@ from obsws_python import ReqClient
 # local package import
 import config
 from models.log import get_logger
-from models.workers.base import LongLiveWorker
+from models.workers.base import LongLiveWorker, run_wrapper
 
 
 class ObsDaemonWorker(LongLiveWorker):
-    def __init__(self, parent_window: "StreamConfigPanel",
-                 host, port, password):
-        super().__init__(name="OBS通讯")
-        self.parent_window = parent_window
-        self.host = host
-        self.port = port
-        self.password = password
-        self.logger = get_logger(self.__class__.__name__)
+    def __init__(self):
+        super().__init__(name="OBS交互")
 
     @Slot()
-    def run(self, /) -> None:
-        config.obs_op = True
-        config.obs_connecting = True
-        try:
-            self.logger.info("OBS connecting")
-            config.obs_client = ReqClient(host=self.host, port=self.port,
-                                          password=self.password,
-                                          timeout=5)
-            config.obs_op = False
-            config.obs_connecting = False
-        except Exception as e:
-            self.logger.error(f"OBS connect failed.")
-            self.exception = e
-            self.parent_window.obs_auto_live_checkbox.setEnabled(False)
-            config.obs_op = False
-            config.obs_connecting = False
-        else:
-            self.logger.info("OBS connected")
-            self.parent_window.obs_auto_live_checkbox.setEnabled(True)
-            while config.obs_client is not None and self.is_running:
-                with suppress(Empty):
-                    req, body = config.obs_req_queue.get(timeout=.2)
-                    config.obs_client.send(req, body)
-        finally:
-            self.disconnect_obs()
-            self.finished = True
+    @run_wrapper
+    def run(self, /):
+        while config.obs_client is not None and self.is_running:
+            with suppress(Empty):
+                req, body = config.obs_req_queue.get(timeout=.2)
+                config.obs_client.send(req, body)
 
     @classmethod
     def disconnect_obs(cls):
@@ -60,3 +34,7 @@ class ObsDaemonWorker(LongLiveWorker):
         logger.info("OBS disconnected")
         config.obs_client = None
         config.obs_op = False
+
+    @classmethod
+    def on_finished(cls):
+        cls.disconnect_obs()

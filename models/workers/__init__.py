@@ -3,6 +3,7 @@ from .credential_manager import CredentialManagerWorker
 from .face_auth import FaceAuthWorker
 from .fetch_login import FetchLoginWorker
 from .fetch_pre_live import FetchPreLiveWorker
+from .obs_connector import ObsConnectorWorker
 from .obs_daemon import ObsDaemonWorker
 from .qr_login import QRLoginWorker
 from .start_live import StartLiveWorker

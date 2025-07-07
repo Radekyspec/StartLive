@@ -7,16 +7,16 @@ from PySide6.QtCore import Slot
 # local package import
 import config
 from models.log import get_logger
-from models.workers.base import BaseWorker
+from models.workers.base import BaseWorker, run_wrapper
 
 
 class QRLoginWorker(BaseWorker):
-    def __init__(self, parent_window: "MainWindow"):
+    def __init__(self):
         super().__init__(name="登录二维码")
-        self.parent_window = parent_window
         self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
+    @run_wrapper
     def run(self):
         # logic from run_qr_login()
         generate_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
@@ -29,16 +29,14 @@ class QRLoginWorker(BaseWorker):
             "web_location": "0.0"
         }
         self.logger.info(f"QRGenerate Request")
-        try:
-            response = config.session.get(generate_url, params=gen_data)
-            response.encoding = "utf-8"
-            self.logger.info("QRGenerate Response")
-            response = response.json()
-            self.logger.info(f"QRGenerate Result: {response}")
-            config.scan_status["qr_key"] = response["data"]["qrcode_key"]
-            config.scan_status["qr_url"] = response["data"]["url"]
-            self.parent_window.update_qr_image(response["data"]["url"])
-        except Exception as e:
-            self.exception = e
-        finally:
-            self.finished = True
+        response = config.session.get(generate_url, params=gen_data)
+        response.encoding = "utf-8"
+        self.logger.info("QRGenerate Response")
+        response = response.json()
+        self.logger.info(f"QRGenerate Result: {response}")
+        config.scan_status["qr_key"] = response["data"]["qrcode_key"]
+        config.scan_status["qr_url"] = response["data"]["url"]
+
+    @staticmethod
+    def on_finished(parent_window: "MainWindow"):
+        parent_window.update_qr_image(config.scan_status["qr_url"])
