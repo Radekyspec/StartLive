@@ -383,7 +383,8 @@ if __name__ == '__main__':
         try:
             updater_path = os.path.abspath(os.path.join(
                 __compiled__.containing_dir, "Update.exe"))
-            Popen([updater_path, "--update=https://startlive.vtbs.ai/"])
+            if os.path.exists(updater_path):
+                Popen([updater_path, "--update=https://startlive.vtbs.ai/"])
         except:
             pass
     parser = ArgumentParser()
