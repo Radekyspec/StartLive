@@ -1,9 +1,5 @@
-# module import
-from contextlib import suppress
-from queue import Empty
-
-from PySide6.QtCore import Slot
 # package import
+from PySide6.QtCore import Slot
 from obsws_python import ReqClient
 
 # local package import

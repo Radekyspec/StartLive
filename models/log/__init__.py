@@ -1,6 +1,6 @@
 import os
 from logging import DEBUG
-from logging import Formatter, Logger, LoggerAdapter, StreamHandler
+from logging import Formatter, Logger, LoggerAdapter
 from logging import getLogger
 from logging.handlers import TimedRotatingFileHandler
 from platform import system
@@ -31,7 +31,8 @@ def init_logger(name: str = LOGGER_NAME) -> Logger:
         log_dir = base_dir
         log_path = os.path.join(log_dir, "StartLive.log")
     elif system() == "Darwin":
-        base_dir = os.path.join(os.path.expanduser("~"), "Library", "Logs", "StartLive")
+        base_dir = os.path.join(os.path.expanduser("~"), "Library", "Logs",
+                                "StartLive")
         os.makedirs(base_dir, exist_ok=True)
         log_dir = base_dir
         log_path = os.path.join(log_dir, "StartLive.log")
@@ -53,6 +54,7 @@ def init_logger(name: str = LOGGER_NAME) -> Logger:
     # ch.setFormatter(formatter)
     # logger.addHandler(ch)
     return logger
+
 
 def get_logger(thread_name: str, name: str = LOGGER_NAME) -> LoggerAdapter:
     logger = getLogger(name)

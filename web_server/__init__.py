@@ -1,8 +1,6 @@
-import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from traceback import format_exception
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget
 from PySide6.QtCore import QThread, Signal, QObject
 
 from models.log import get_logger
@@ -27,7 +25,8 @@ class HttpServerWorker(QThread):
         try:
             handler = self.make_handler()
             self.httpd = HTTPServer((self.host, self.port), handler)
-            self.logger.info(f"HTTP Server running on http://{self.host}:{self.port}")
+            self.logger.info(
+                f"HTTP Server running on http://{self.host}:{self.port}")
             self.httpd.serve_forever()
         except Exception as e:
             self.logger.error(f"HTTP Server failed to start")

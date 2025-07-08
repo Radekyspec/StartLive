@@ -1,5 +1,3 @@
-# module import
-
 # package import
 from PySide6.QtCore import Slot
 

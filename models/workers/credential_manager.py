@@ -16,7 +16,7 @@ from .fetch_login import FetchLoginWorker
 
 
 class CredentialManagerWorker(BaseWorker):
-    def __init__(self, cookie_index: int | None = None, is_new: bool = False):
+    def __init__(self, cookie_index: int, is_new: bool = False):
         super().__init__(name="凭据管理")
         self.cookie_index = cookie_index
         self.is_new = is_new
@@ -109,14 +109,16 @@ class CredentialManagerWorker(BaseWorker):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
         self._room_info_default()
         self.logger.info(f"room_default_settings loaded")
+
         if self.is_new:
             self.logger.info(f"new credentials created, exiting")
             return
+
+        # Old version cookie storage, change to index
         if (saved_cookies := get_password(KEYRING_SERVICE_NAME,
                                           KEYRING_COOKIES)) is not None and \
                 get_password(KEYRING_SERVICE_NAME,
                              KEYRING_COOKIES_INDEX) is None:
-            # Old version cookie storage, change to index
             saved_cookies = loads(saved_cookies)
             uid = saved_cookies["DedeUserID"]
             delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES)
@@ -125,31 +127,30 @@ class CredentialManagerWorker(BaseWorker):
             set_password(KEYRING_SERVICE_NAME, f"cookies|{uid}",
                          dumps(saved_cookies))
             self.logger.info(f"cookies index created")
+
         cookies_index = self.get_cookies_index()
         self.logger.info(f"cookies index loaded: {cookies_index}")
-        if cookies_index:
-            if self.cookie_index is None:
-                cookie_index = cookies_index[0]
-            else:
-                cookie_index = cookies_index[self.cookie_index]
-            if (saved_cookies := get_password(KEYRING_SERVICE_NAME,
-                                              cookie_index)) is None:
-                return
-            saved_cookies = loads(saved_cookies)
-            config.session.cookies.clear()
-            cookiejar_from_dict(saved_cookies,
-                                cookiejar=config.session.cookies)
-            nav_url = "https://api.bilibili.com/x/web-interface/nav"
-            self.logger.info(f"nav Request")
-            response = config.session.get(nav_url)
-            response.encoding = "utf-8"
-            self.logger.info("nav Response")
-            response = response.json()
-            if response["code"] != 0:
-                raise CredentialExpiredError("登录凭据过期, 请重新登录")
-            config.cookies_dict.clear()
-            config.cookies_dict.update(saved_cookies)
-            config.scan_status["scanned"] = True
+        if not cookies_index or (
+                saved_cookies := get_password(
+                    KEYRING_SERVICE_NAME,
+                    cookies_index[
+                        self.cookie_index])) is None:
+            return
+        saved_cookies = loads(saved_cookies)
+        config.session.cookies.clear()
+        cookiejar_from_dict(saved_cookies,
+                            cookiejar=config.session.cookies)
+        nav_url = "https://api.bilibili.com/x/web-interface/nav"
+        self.logger.info(f"nav Request")
+        response = config.session.get(nav_url)
+        response.encoding = "utf-8"
+        self.logger.info("nav Response")
+        response = response.json()
+        if response["code"] != 0:
+            raise CredentialExpiredError("登录凭据过期, 请重新登录")
+        config.cookies_dict.clear()
+        config.cookies_dict.update(saved_cookies)
+        config.scan_status["scanned"] = True
 
     @staticmethod
     def on_finished(parent_window: "MainWindow"):

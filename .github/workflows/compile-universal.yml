@@ -8,7 +8,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, macos-13, macos-latest]
+        os: [ windows-latest, macos-13, macos-latest ]
 
     runs-on: ${{ matrix.os }}
 
@@ -25,7 +25,7 @@ jobs:
           cache: 'pip'
           cache-dependency-path: |
             **/requirements*.txt
-      
+
       - name: Setup Python for ARM
         uses: actions/setup-python@v5
         with:
@@ -39,7 +39,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
-          
+
       # Remove problematic brew libs if Intel Mac
       # https://github.com/Nuitka/Nuitka/issues/2853#issuecomment-2119520735
       - name: Remove problematic brew libs
@@ -77,7 +77,7 @@ jobs:
           noinclude-unittest-mode: "nofollow"
           include-data-dir: "resources=resources"
           deployment: true
-        
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:

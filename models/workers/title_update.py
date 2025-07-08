@@ -1,14 +1,12 @@
-# module import
-
 # package import
 from PySide6.QtCore import Slot
 
 # local package import
 import config
 from exceptions import TitleUpdateError
-from sign import livehime_sign
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
+from sign import livehime_sign
 
 
 class TitleUpdateWorker(BaseWorker):

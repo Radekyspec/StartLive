@@ -31,7 +31,8 @@
 
 ## 自动推流
 
-* 软件提供了一种选项来自动化填写推流码的过程，首先需要在`OBS`中打开`WebSocket服务器`插件
+* 软件提供了一种选项来自动化填写推流码的过程，首先需要在`OBS`中打开`WebSocket服务器`
+  插件
 
 ![image](https://github.com/user-attachments/assets/4bbc6baa-81ef-44e8-a6e2-f6ff5ca730a5)
 

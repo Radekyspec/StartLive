@@ -2,14 +2,16 @@
 from contextlib import suppress
 from queue import Empty
 
-from PySide6.QtCore import Slot
 # package import
-from obsws_python import ReqClient
+from PySide6.QtCore import Slot
 
 # local package import
 import config
 from models.log import get_logger
 from models.workers.base import LongLiveWorker, run_wrapper
+
+
+# package import
 
 
 class ObsDaemonWorker(LongLiveWorker):

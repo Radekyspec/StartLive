@@ -1,17 +1,14 @@
 # module import
 
 # package import
-from keyring import set_password
 from PySide6.QtCore import Slot
 
 # local package import
 import config
 import constant
-from config import dumps
-from constant import *
 from exceptions import AreaUpdateError
-from models.workers.base import BaseWorker, run_wrapper
 from models.log import get_logger
+from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign
 
 
@@ -55,4 +52,3 @@ class AreaUpdateWorker(BaseWorker):
     @staticmethod
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
         parent_window.save_area_btn.setEnabled(True)
-

@@ -3,6 +3,8 @@ from time import time
 from urllib.parse import urlencode
 
 import constant
+
+
 # from constant import APP_KEY, APP_SECRET, LIVEHIME_BUILD, LIVEHIME_VERSION
 
 
@@ -15,8 +17,9 @@ def livehime_sign(payload):
     signed.update({'appkey': constant.APP_KEY})
     signed.update(payload)
     signed = order_payload(signed)  # 按照 key 重排参数
-    sign = md5((urlencode(signed, encoding="utf-8") + constant.APP_SECRET).encode(
-        encoding="utf-8")).hexdigest()
+    sign = md5(
+        (urlencode(signed, encoding="utf-8") + constant.APP_SECRET).encode(
+            encoding="utf-8")).hexdigest()
     signed.update({'sign': sign})
     return signed
 
@@ -34,7 +37,6 @@ def base_payload():
         # "ts": "1751267234",
         "version": constant.LIVEHIME_VERSION,
     }
-
 
 # if __name__ == '__main__':
 #     p = {

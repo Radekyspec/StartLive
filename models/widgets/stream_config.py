@@ -3,27 +3,21 @@
 # module import
 from functools import partial
 from ipaddress import ip_address, IPv6Address
-from typing import Optional
 
 # package import
 from PySide6.QtCore import (Qt, QTimer)
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
-                               QMessageBox,
                                QLabel, QLineEdit, QPushButton,
                                QVBoxLayout, QWidget,
                                QApplication)
-from keyring import set_password
 
 # local package import
 import config
-from config import dumps
-from constant import *
 from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
 from models.workers import *
-from web_server import HttpServerWorker
 
 
 class StreamConfigPanel(QWidget):
@@ -267,8 +261,8 @@ class StreamConfigPanel(QWidget):
             except ValueError:
                 pass
             connector = ObsConnectorWorker(host=obs_host,
-                                   port=self.port_input.text(),
-                                   password=self.pass_input.text())
+                                           port=self.port_input.text(),
+                                           password=self.pass_input.text())
             self.parent_window.add_thread(
                 connector,
                 on_finished=partial(connector.on_finished, self),

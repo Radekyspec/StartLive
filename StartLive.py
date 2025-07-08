@@ -227,7 +227,8 @@ class MainWindow(SingleInstanceWindow):
             return
         cookie_index = CredentialManagerWorker.get_cookies_index()
         with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, cookie_index[self._current_cookie_idx])
+            delete_password(KEYRING_SERVICE_NAME,
+                            cookie_index[self._current_cookie_idx])
         cookie_index.remove(cookie_index[self._current_cookie_idx])
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
                      dumps(cookie_index))

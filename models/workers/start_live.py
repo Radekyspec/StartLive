@@ -1,5 +1,3 @@
-# module import
-
 # package import
 from PySide6.QtCore import Slot
 
@@ -7,9 +5,9 @@ from PySide6.QtCore import Slot
 import config
 import constant
 from exceptions import StartLiveError
-from sign import livehime_sign, order_payload
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
+from sign import livehime_sign, order_payload
 
 
 class StartLiveWorker(BaseWorker):

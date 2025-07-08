@@ -1,8 +1,5 @@
 # module import
-from time import sleep
-
 from PySide6.QtCore import Slot
-# package import
 
 # local package import
 import config

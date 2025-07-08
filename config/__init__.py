@@ -22,7 +22,6 @@ session.post = partial(session.post, timeout=5)
 # Queue to communicate with OBS in a separate thread
 obs_req_queue = Queue()
 
-
 # Scan status flags for login
 scan_status = ThreadSafeDict({
     "scanned": False, "qr_key": None, "qr_url": None,

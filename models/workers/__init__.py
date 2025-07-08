@@ -1,4 +1,5 @@
 from .area_update import AreaUpdateWorker
+from .const_update import ConstantUpdateWorker
 from .credential_manager import CredentialManagerWorker
 from .face_auth import FaceAuthWorker
 from .fetch_login import FetchLoginWorker
@@ -9,4 +10,3 @@ from .qr_login import QRLoginWorker
 from .start_live import StartLiveWorker
 from .stop_live import StopLiveWorker
 from .title_update import TitleUpdateWorker
-from .const_update import ConstantUpdateWorker
