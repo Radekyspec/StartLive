@@ -42,7 +42,7 @@ class ObsConnectorWorker(BaseWorker):
         config.obs_connecting = False
 
     @classmethod
-    def on_else(cls, parent_window):
+    def on_finished(cls, parent_window):
         logger = get_logger(cls.__name__)
         logger.info("OBS connected")
         parent_window.obs_auto_live_checkbox.setEnabled(True)

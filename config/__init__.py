@@ -43,7 +43,7 @@ stream_status = ThreadSafeDict({
 
 # Managed by models.workers.credential_manager
 room_info = ThreadSafeDict({})
-stream_settings = ThreadSafeDict({})
+obs_settings = ThreadSafeDict({})
 
 # Area (category) selections for live stream configuration
 parent_area = ["请选择"]

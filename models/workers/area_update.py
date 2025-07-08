@@ -51,8 +51,6 @@ class AreaUpdateWorker(BaseWorker):
             "parent_area"] = parent_window.parent_combo.currentText()
         config.room_info[
             "area"] = parent_window.child_combo.currentText()
-        set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
-                     dumps(config.room_info.internal))
 
     @staticmethod
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):

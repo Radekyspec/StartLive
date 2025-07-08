@@ -33,8 +33,6 @@ class BaseWorker(QRunnable):
                 func(self, *args, **kwargs)
             except Exception as e:
                 self.signals.exception.emit(e)
-            else:
-                self.on_else()
             finally:
                 self.signals.finished.emit()
 
@@ -43,8 +41,3 @@ class BaseWorker(QRunnable):
     @staticmethod
     def on_finished(*args, **kwargs):
         raise NotImplementedError
-
-    @classmethod
-    def on_else(cls, *args, **kwargs):
-        pass
-

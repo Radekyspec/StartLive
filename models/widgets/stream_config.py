@@ -27,10 +27,8 @@ from web_server import HttpServerWorker
 
 
 class StreamConfigPanel(QWidget):
-    _server_thread: Optional[HttpServerWorker]
 
-    def __init__(self, parent_window, web_host: Optional[str],
-                 web_port: Optional[int]):
+    def __init__(self, parent_window):
         super().__init__()
         self.parent_window = parent_window
 
@@ -40,20 +38,20 @@ class StreamConfigPanel(QWidget):
         self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         def _addr_save():
-            config.stream_settings["ip_addr"] = self.host_input.text()
+            config.obs_settings["ip_addr"] = self.host_input.text()
 
         def _port_save():
-            config.stream_settings["port"] = self.port_input.text()
+            config.obs_settings["port"] = self.port_input.text()
 
         def _password_save():
-            config.stream_settings["password"] = self.pass_input.text()
+            config.obs_settings["password"] = self.pass_input.text()
 
         def _auto_live_save():
-            config.stream_settings[
+            config.obs_settings[
                 "auto_live"] = self.obs_auto_live_checkbox.isChecked()
 
         def _auto_connect_save():
-            config.stream_settings[
+            config.obs_settings[
                 "auto_connect"] = self.obs_auto_connect_checkbox.isChecked()
 
         # 顶部区域：OBS 连接信息
@@ -185,41 +183,11 @@ class StreamConfigPanel(QWidget):
         self.start_btn.clicked.connect(self._start_live)
         self.stop_btn.clicked.connect(self._stop_live)
 
-        self._server_started = False
-        if web_host is not None and web_port is not None:
-            self._server_thread = HttpServerWorker(web_host, web_port)
-            self._server_thread.signals.startLive.connect(self._start_live)
-            self._server_thread.signals.stopLive.connect(self._stop_live)
-            self._server_thread.signals.exception.connect(self.http_server_error)
-        else:
-            self._server_thread = None
-
-    def start_server(self):
-        if self._server_thread is not None and not self._server_started:
-            self._server_thread.start()
-            self.parent_window.setWindowTitle(
-                self.parent_window.windowTitle() + " - Web服务已开启")
-            self._server_started = True
-
-    def stop_server(self):
-        """This function should only be called once
-        when the program is shutting down."""
-        if self._server_thread is not None and self._server_started:
-            self._server_thread.stop()
-            self._server_thread.quit()
-            self._server_started = False
-
-    def http_server_error(self, e: Exception):
-        QMessageBox.critical(self.parent_window, f"Web服务线程错误",
-                             repr(e))
-        self.parent_window.setWindowTitle(f"StartLive 开播器 {VERSION}")
-        self.stop_server()
-
     def reset_obs_settings(self):
-        CredentialManagerWorker.obs_default_settings()
-        self.host_input.setText(config.stream_settings["ip_addr"])
-        self.port_input.setText(config.stream_settings["port"])
-        self.pass_input.setText(config.stream_settings["password"])
+        CredentialManagerWorker.obs_settings_default()
+        self.host_input.setText(config.obs_settings["ip_addr"])
+        self.port_input.setText(config.obs_settings["port"])
+        self.pass_input.setText(config.obs_settings["password"])
         self.obs_auto_connect_checkbox.setChecked(False)
         self.obs_auto_live_checkbox.setChecked(False)
 
@@ -241,6 +209,12 @@ class StreamConfigPanel(QWidget):
     def copy_key(self):
         QApplication.clipboard().setText(self.key_input.text())
 
+    def start_live(self):
+        self._start_live()
+
+    def stop_live(self):
+        self._stop_live()
+
     def _start_live(self):
         if not self._valid_area() or not self.start_btn.isEnabled():
             return
@@ -249,8 +223,8 @@ class StreamConfigPanel(QWidget):
         # self.parent_combo.setEnabled(False)
         # self.child_combo.setEnabled(False)
         self.save_area_btn.setEnabled(False)
-        if config.stream_settings.get("auto_connect",
-                                      False) and config.obs_client is None:
+        if config.obs_settings.get("auto_connect",
+                                   False) and config.obs_client is None:
             self.connect_btn.click()
         area_code = config.area_codes[self.child_combo.currentText()]
         config.room_info["parent_area"] = self.parent_combo.currentText()
@@ -262,8 +236,6 @@ class StreamConfigPanel(QWidget):
         self.parent_window.timer.timeout.connect(
             self.parent_window.fill_stream_info)
         self.parent_window.timer.start(100)
-        set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
-                     dumps(config.room_info.internal))
 
     def _stop_live(self):
         if not self.stop_btn.isEnabled():
@@ -297,12 +269,12 @@ class StreamConfigPanel(QWidget):
             connector = ObsConnectorWorker(host=obs_host,
                                    port=self.port_input.text(),
                                    password=self.pass_input.text())
-            connector.on_else = partial(connector.on_else, self)
             self.parent_window.add_thread(
                 connector,
+                on_finished=partial(connector.on_finished, self),
                 on_exception=partial(connector.on_exception, self)
             )
-        else:
+        elif config.obs_client is not None:
             ObsDaemonWorker.disconnect_obs()
             self.obs_auto_live_checkbox.setEnabled(False)
         self._obs_timer.start(100)

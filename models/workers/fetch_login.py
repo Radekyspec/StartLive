@@ -4,12 +4,9 @@ from time import sleep
 
 # package import
 from PySide6.QtCore import Slot
-from keyring import set_password
 
 # local package import
 import config
-from config import dumps
-from constant import *
 from exceptions import LoginError
 from models.log import get_logger
 from models.workers.base import LongLiveWorker, run_wrapper
@@ -44,10 +41,10 @@ class FetchLoginWorker(LongLiveWorker):
         if config.scan_status["scanned"]:
             parent.add_thread(
                 FetchPreLiveWorker(),
-                on_finished=partial(FetchPreLiveWorker.on_finished, parent.panel)
+                on_finished=partial(FetchPreLiveWorker.on_finished,
+                                    parent.panel)
             )
             parent.add_thread(FetchAreaWorker())
-
 
     @Slot()
     @run_wrapper
@@ -85,8 +82,8 @@ class FetchLoginWorker(LongLiveWorker):
                     # config.cookies_dict["refresh_token"] = result["data"][
                     #     "refresh_token"]
                     config.scan_status["scanned"] = True
-                    set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES,
-                                 dumps(config.cookies_dict))
+                    from .credential_manager import CredentialManagerWorker
+                    CredentialManagerWorker.add_cookie()
                     break
                 case _:
                     raise LoginError(result["message"])

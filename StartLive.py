@@ -14,7 +14,7 @@ from typing import Optional, Callable
 # package import
 from PIL import ImageQt
 from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool)
-from PySide6.QtGui import QAction, QPixmap, QIcon
+from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup
 from PySide6.QtWidgets import (QLabel, QMessageBox, QVBoxLayout, QWidget,
                                QApplication, QSystemTrayIcon, QMenu
                                )
@@ -34,26 +34,46 @@ from models.log import init_logger, get_logger
 from models.widgets import *
 from models.workers import *
 from models.workers.base import *
+from web_server import HttpServerWorker
 
 
 # Main GUI window
 class MainWindow(SingleInstanceWindow):
     _managed_workers: list[BaseWorker | LongLiveWorker]
+    _worker_typeset: set[str]
     _ll_workers: list[LongLiveWorker]
+    _thread_pool: QThreadPool
+    _host: str
+    _port: int
+    _server_started: bool
+    _server_thread: Optional[HttpServerWorker]
+    _current_cookie_idx: int
+    _cookie_index_len: int
+    account_group: QActionGroup
+    account_menu: QMenu
+    login_label: QLabel
+    status_label: ClickableLabel
+    qr_label: QLabel
+    panel: StreamConfigPanel
+    timer: QTimer
+    credential_worker: CredentialManagerWorker
+    login_worker: Optional[FetchLoginWorker]
+    face_window: Optional[FaceQRWidget]
 
     def __init__(self, host, port):
         super().__init__()
         init_logger()
         self.logger = get_logger(self.__class__.__name__)
         self.logger.info(f"App created with host={host}, port={port}")
-        self._base_interval = 200
-        self._worker_interval = 200
-        self._max_interval = 10000
+        self._host = host
+        self._port = port
         self._thread_pool = QThreadPool()
+        self._current_cookie_idx = 0
         self._managed_workers = []
         self.timer = QTimer()
         # Long live workers
         self._ll_workers = []
+        self._worker_typeset = set()
         self.logger.info("Thread Pool initialized.")
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
         self.windowTitle()
@@ -66,7 +86,8 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
         self.logger.info("System tray icon initialized.")
-        self.add_thread(ConstantUpdateWorker(), on_finished=ConstantUpdateWorker.on_finished)
+        self.add_thread(ConstantUpdateWorker(),
+                        on_finished=ConstantUpdateWorker.on_finished)
 
         tray_menu = QMenu()
         restore_action = QAction("显示窗口", self)
@@ -91,23 +112,34 @@ class MainWindow(SingleInstanceWindow):
         delete_settings_action.triggered.connect(self._delete_settings)
         setting_menu.addAction(delete_settings_action)
 
-        clear_area_cache = QAction("清除分区缓存", self)
-        clear_area_cache.triggered.connect(self._delete_area_cache)
-        setting_menu.addAction(clear_area_cache)
-
         delete_cred = QAction("清空所有凭据", self)
         delete_cred.triggered.connect(self._delete_cred)
         setting_menu.addAction(delete_cred)
 
+        self.account_menu = QMenu("账号切换", self)
+        menu_bar.addMenu(self.account_menu)
+        self.account_menu.aboutToShow.connect(self._populate_account_menu)
         self.logger.info("Menu bar initialized.")
-
         # Widgets for login phase
+        self.setup_ui()
+        self.init_server()
+
+    def setup_ui(self, *, is_new: bool = False):
+        for worker in self._ll_workers:
+            worker.stop()
+        ObsDaemonWorker.disconnect_obs()
+        self.timer.deleteLater()
+        with suppress(AttributeError):
+            self.panel.deleteLater()
+        self.timer = QTimer()
+        self.panel = StreamConfigPanel(self)
+        config.session.headers.clear()
+        config.session.headers.update(constant.HEADERS_WEB)
         self.login_label = QLabel("正在获取保存的登录凭证...")
         self.status_label = ClickableLabel("等待登录中...")
         self.qr_label = QLabel()
-        self.panel = StreamConfigPanel(self, host, port)
-        self.logger.info("StreamConfig initialized.")
 
+        self.logger.info("StreamConfig initialized.")
         # Styling and alignment
         for label in [self.login_label, self.status_label]:
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -128,12 +160,46 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("Main QR layout initialized.")
 
         # Start fetching QR and begin polling thread
-        self.credential_worker = CredentialManagerWorker()
+        self.credential_worker = CredentialManagerWorker(
+            self._current_cookie_idx, is_new)
         self.login_worker = None
         self.add_thread(self.credential_worker,
-                        on_finished=partial(self.credential_worker.on_finished, self))
+                        on_finished=partial(self.credential_worker.on_finished,
+                                            self))
 
         self.face_window: Optional[FaceQRWidget] = None
+
+    def init_server(self):
+        self._server_started = False
+        if self._host is not None and self._port is not None:
+            self._server_thread = HttpServerWorker(self._host, self._port)
+            self._server_thread.signals.startLive.connect(self.panel.start_live)
+            self._server_thread.signals.stopLive.connect(self.panel.stop_live)
+            self._server_thread.signals.exception.connect(
+                self.http_server_error)
+        else:
+            self._server_thread = None
+
+    def start_server(self):
+        if self._server_thread is not None and not self._server_started:
+            self._server_thread.start()
+            self.setWindowTitle(
+                self.windowTitle() + " - Web服务已开启")
+            self._server_started = True
+
+    def stop_server(self):
+        """This function should only be called once
+        when the program is shutting down."""
+        if self._server_thread is not None and self._server_started:
+            self._server_thread.stop()
+            self._server_thread.quit()
+            self._server_started = False
+
+    def http_server_error(self, e: Exception):
+        QMessageBox.critical(self, f"Web服务线程错误",
+                             repr(e))
+        self.setWindowTitle(f"StartLive 开播器 {VERSION}")
+        self.stop_server()
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.WindowStateChange:
@@ -143,7 +209,7 @@ class MainWindow(SingleInstanceWindow):
 
     def closeEvent(self, event):
         # 关闭窗口时退出应用
-        self.panel.stop_server()
+        self.stop_server()
         self.tray_icon.hide()
         self.tray_icon.deleteLater()
         event.accept()
@@ -159,9 +225,19 @@ class MainWindow(SingleInstanceWindow):
     def _delete_cookies(self):
         if not config.scan_status["scanned"]:
             return
+        cookie_index = CredentialManagerWorker.get_cookies_index()
         with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES)
-        QMessageBox.information(self, "账号退出", "账号退出成功, 重启生效")
+            delete_password(KEYRING_SERVICE_NAME, cookie_index[self._current_cookie_idx])
+        cookie_index.remove(cookie_index[self._current_cookie_idx])
+        set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
+                     dumps(cookie_index))
+        self._current_cookie_idx = max(0, self._current_cookie_idx - 1)
+        self._populate_account_menu()
+        CredentialManagerWorker.room_info_default()
+        CredentialManagerWorker.scan_settings_default()
+        CredentialManagerWorker.stream_status_default()
+        QMessageBox.information(self, "账号退出", "账号退出成功")
+        self.setup_ui(is_new=self._cookie_index_len == 0)
 
     def _delete_settings(self):
         with suppress(PasswordDeleteError):
@@ -169,29 +245,64 @@ class MainWindow(SingleInstanceWindow):
         self.panel.reset_obs_settings()
         QMessageBox.information(self, "设置清空", "OBS连接设置清除成功")
 
-    def _delete_area_cache(self):
-        if not config.scan_status["scanned"]:
-            return
-        del config.room_info["parent_area"]
-        del config.room_info["area"]
-        set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
-                     dumps(config.room_info.internal))
-        QMessageBox.information(self, "分区缓存清空", "分区缓存清除成功")
-
     def _delete_cred(self):
         with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES)
-        with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
+        for cookie in CredentialManagerWorker.get_cookies_index():
+            with suppress(PasswordDeleteError):
+                delete_password(KEYRING_SERVICE_NAME, cookie)
         with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
+            delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX)
         QMessageBox.information(self, "凭据清空",
                                 "已清空全部凭据, 程序即将退出")
         for worker in self._ll_workers:
             worker.stop()
-        sys.exit(0)
+        QApplication.quit()
 
-    def fetch_qr(self, retry=False):
+    def _switch_account(self, action: QAction):
+        idx = action.data()
+        self.logger.info(f"select account index: {idx}")
+        if idx == self._cookie_index_len:
+            return
+        elif idx != self._current_cookie_idx:
+            self._current_cookie_idx = idx
+            CredentialManagerWorker.room_info_default()
+            CredentialManagerWorker.scan_settings_default()
+            CredentialManagerWorker.stream_status_default()
+            self.setup_ui()
+
+    def _populate_account_menu(self):
+        self.account_menu.clear()
+        self.account_group = QActionGroup(self,
+                                          exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
+        self.account_group.triggered.connect(self._switch_account)
+
+        cookie_indices = CredentialManagerWorker.get_cookies_index()
+        self._cookie_index_len = len(cookie_indices)
+        self.logger.info(f"cookie index length: {self._cookie_index_len}")
+        print(self._current_cookie_idx)
+        for idx, cookie_index in enumerate(cookie_indices):
+            act = QAction(cookie_index, self, checkable=True)
+            act.setData(idx)
+            self.account_group.addAction(act)
+            self.account_menu.addAction(act)
+            if idx == self._current_cookie_idx:
+                act.setChecked(True)
+        self.account_menu.addSeparator()
+        add_new_account = QAction("添加新账号", self)
+        add_new_account.triggered.connect(self._add_new_account)
+        self.account_menu.addAction(add_new_account)
+
+    def _add_new_account(self):
+        if self._cookie_index_len == 0:
+            return
+        self._current_cookie_idx = self._cookie_index_len
+        CredentialManagerWorker.room_info_default()
+        CredentialManagerWorker.scan_settings_default()
+        CredentialManagerWorker.stream_status_default()
+        self.setup_ui(is_new=True)
+
+    def fetch_qr(self, retry: bool = False):
         # Start fetching QR and begin polling thread
         self.logger.info("Starting login flow.")
         config.scan_status["timeout"] = False
@@ -210,7 +321,8 @@ class MainWindow(SingleInstanceWindow):
                         on_finished=partial(qr_login_worker.on_finished, self))
         self.login_worker = FetchLoginWorker()
         self.add_thread(self.login_worker,
-                        on_finished=partial(self.login_worker.on_finished, self))
+                        on_finished=partial(self.login_worker.on_finished,
+                                            self))
         self.login_label.setText("请使用手机扫码登录：")
         self.status_label.setText("等待扫码中...")
         self.status_label.setStyleSheet("color: blue; font-size: 16pt;")
@@ -226,14 +338,18 @@ class MainWindow(SingleInstanceWindow):
     def add_thread(self, worker: BaseWorker | LongLiveWorker, *,
                    on_finished: Callable | None = None,
                    on_exception: Callable | None = None):
+        if worker.__class__.__name__ in self._worker_typeset:
+            return
         if on_finished is not None:
             worker.signals.finished.connect(on_finished)
         worker.signals.finished.connect(partial(self._remove_worker, worker))
         if on_exception is not None:
             worker.signals.exception.connect(on_exception)
-        worker.signals.exception.connect(partial(self._worker_exception, worker))
+        worker.signals.exception.connect(
+            partial(self._worker_exception, worker))
         self.logger.info(f"{worker.__class__.__name__} added to thread pool")
         self._managed_workers.append(worker)
+        self._worker_typeset.add(worker.__class__.__name__)
         if isinstance(worker, LongLiveWorker):
             self._ll_workers.append(worker)
         self._thread_pool.start(worker)
@@ -242,6 +358,7 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info(
             f"{dead_worker.__class__.__name__} removed from thread pool")
         self._managed_workers.remove(dead_worker)
+        self._worker_typeset.remove(dead_worker.__class__.__name__)
         if dead_worker in self._ll_workers:
             self._ll_workers.remove(dead_worker)
 
@@ -253,12 +370,9 @@ class MainWindow(SingleInstanceWindow):
                              repr(e))
 
     def on_exit(self):
-        if config.stream_settings:
+        if config.obs_settings:
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
-                         dumps(config.stream_settings.internal))
-        if config.room_info:
-            set_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO,
-                         dumps(config.room_info.internal))
+                         dumps(config.obs_settings.internal))
         for worker in self._ll_workers:
             worker.stop()
 
@@ -290,13 +404,13 @@ class MainWindow(SingleInstanceWindow):
         self.panel.parent_combo.clear()
         self.panel.parent_combo.addItems(config.parent_area)
         self.setCentralWidget(self.panel)
-        if config.stream_settings.get("auto_connect", False):
+        if config.obs_settings.get("auto_connect", False):
             self.panel.connect_btn.click()
         self.panel.parent_combo.setCurrentText(
             config.room_info.get("parent_area", "请选择"))
         self.panel.child_combo.setCurrentText(
             config.room_info.get("area", ""))
-        self.panel.start_server()
+        self.start_server()
 
     def check_scan_status(self):
         if config.scan_status["scanned"]:
@@ -371,7 +485,8 @@ class MainWindow(SingleInstanceWindow):
             auth_worker = FaceAuthWorker(self.face_window)
             self.face_window.destroyed.connect(auth_worker.stop)
             self.add_thread(auth_worker,
-                            on_finished=partial(auth_worker.on_finished, self.face_window))
+                            on_finished=partial(auth_worker.on_finished,
+                                                self.face_window))
             self.face_window.show()
 
 
