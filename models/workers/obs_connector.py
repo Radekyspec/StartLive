@@ -44,9 +44,10 @@ class ObsConnectorWorker(BaseWorker):
     @classmethod
     def on_finished(cls, parent_window):
         logger = get_logger(cls.__name__)
-        logger.info("OBS connected")
-        parent_window.obs_auto_live_checkbox.setEnabled(True)
-        parent_window.parent_window.add_thread(
-            ObsDaemonWorker(),
-            on_finished=ObsDaemonWorker.on_finished
-        )
+        if config.obs_client is not None:
+            logger.info("OBS connected")
+            parent_window.obs_auto_live_checkbox.setEnabled(True)
+            parent_window.parent_window.add_thread(
+                ObsDaemonWorker(),
+                on_finished=ObsDaemonWorker.on_finished
+            )

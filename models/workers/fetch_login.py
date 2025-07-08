@@ -81,9 +81,9 @@ class FetchLoginWorker(LongLiveWorker):
                     config.cookies_dict = response.cookies.get_dict()
                     # config.cookies_dict["refresh_token"] = result["data"][
                     #     "refresh_token"]
-                    config.scan_status["scanned"] = True
                     from .credential_manager import CredentialManagerWorker
                     CredentialManagerWorker.add_cookie()
+                    config.scan_status["scanned"] = True
                     break
                 case _:
                     raise LoginError(result["message"])

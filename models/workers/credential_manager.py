@@ -9,7 +9,7 @@ from requests.cookies import cookiejar_from_dict
 import config
 from config import dumps
 from constant import *
-from exceptions import CredentialExpiredError
+from exceptions import CredentialExpiredError, CredentialDuplicatedError
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 from .fetch_login import FetchLoginWorker
@@ -76,10 +76,13 @@ class CredentialManagerWorker(BaseWorker):
         :return:
         """
         uid = config.cookies_dict["DedeUserID"]
-        set_password(KEYRING_SERVICE_NAME, f"cookies|{uid}",
-                     dumps(config.cookies_dict))
+        cookie_key = f"cookies|{uid}"
         cookies_index = CredentialManagerWorker.get_cookies_index()
-        cookies_index.append(f"cookies|{uid}")
+        if cookie_key in cookies_index:
+            raise CredentialDuplicatedError(cookie_key)
+        cookies_index.append(cookie_key)
+        set_password(KEYRING_SERVICE_NAME, cookie_key,
+                     dumps(config.cookies_dict))
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
                      dumps(cookies_index))
 

@@ -280,7 +280,6 @@ class MainWindow(SingleInstanceWindow):
         cookie_indices = CredentialManagerWorker.get_cookies_index()
         self._cookie_index_len = len(cookie_indices)
         self.logger.info(f"cookie index length: {self._cookie_index_len}")
-        print(self._current_cookie_idx)
         for idx, cookie_index in enumerate(cookie_indices):
             act = QAction(cookie_index, self, checkable=True)
             act.setData(idx)
@@ -294,7 +293,7 @@ class MainWindow(SingleInstanceWindow):
         self.account_menu.addAction(add_new_account)
 
     def _add_new_account(self):
-        if self._cookie_index_len == 0:
+        if self._cookie_index_len == 0 or self._current_cookie_idx == self._cookie_index_len:
             return
         self._current_cookie_idx = self._cookie_index_len
         CredentialManagerWorker.room_info_default()
