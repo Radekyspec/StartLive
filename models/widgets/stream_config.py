@@ -274,10 +274,11 @@ class StreamConfigPanel(QWidget):
                 on_finished=partial(connector.on_finished, self),
                 on_exception=partial(connector.on_exception, self)
             )
-        elif config.obs_client is not None:
+            self._obs_timer.start(100)
+        elif config.obs_client is not None and not config.obs_op:
             ObsDaemonWorker.disconnect_obs()
             self.obs_auto_live_checkbox.setEnabled(False)
-        self._obs_timer.start(100)
+            self._obs_timer.start(100)
 
     def _obs_btn_state(self):
         if config.obs_connecting:

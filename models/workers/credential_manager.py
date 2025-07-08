@@ -41,7 +41,7 @@ class CredentialManagerWorker(BaseWorker):
         return []
 
     @staticmethod
-    def room_info_default():
+    def _room_info_default():
         config.room_info.update({
             "room_id": "",
             "title": "",
@@ -50,7 +50,7 @@ class CredentialManagerWorker(BaseWorker):
         })
 
     @staticmethod
-    def scan_settings_default():
+    def _scan_settings_default():
         config.scan_status.update({
             "scanned": False, "qr_key": None, "qr_url": None,
             "timeout": False, "wait_for_confirm": False,
@@ -59,7 +59,7 @@ class CredentialManagerWorker(BaseWorker):
         })
 
     @staticmethod
-    def stream_status_default():
+    def _stream_status_default():
         config.stream_status.update({
             "live_status": False,
             "required_face": False,
@@ -68,6 +68,12 @@ class CredentialManagerWorker(BaseWorker):
             "stream_addr": None,
             "stream_key": None
         })
+
+    @staticmethod
+    def reset_default():
+        CredentialManagerWorker._room_info_default()
+        CredentialManagerWorker._scan_settings_default()
+        CredentialManagerWorker._stream_status_default()
 
     @staticmethod
     def add_cookie():
@@ -101,7 +107,7 @@ class CredentialManagerWorker(BaseWorker):
             self.logger.info(f"obs_default_settings loaded")
         if get_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO) is not None:
             delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
-        self.room_info_default()
+        self._room_info_default()
         self.logger.info(f"room_default_settings loaded")
         if self.is_new:
             self.logger.info(f"new credentials created, exiting")

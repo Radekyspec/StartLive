@@ -25,18 +25,17 @@ class ObsDaemonWorker(LongLiveWorker):
                 config.obs_client.send(req, body)
 
     @classmethod
-    def disconnect_obs(cls, log=True):
+    def disconnect_obs(cls):
         logger = get_logger(cls.__name__)
-        if log:
-            logger.info("OBS disconnecting")
+        logger.info("OBS disconnecting")
         config.obs_op = True
         if config.obs_client is not None:
             config.obs_client.disconnect()
-        if log:
-            logger.info("OBS disconnected")
+        logger.info("OBS disconnected")
         config.obs_client = None
         config.obs_op = False
 
     @classmethod
     def on_finished(cls):
-        cls.disconnect_obs(False)
+        if config.obs_client is not None:
+            cls.disconnect_obs()

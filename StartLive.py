@@ -95,9 +95,9 @@ class MainWindow(SingleInstanceWindow):
         tray_menu.addAction(restore_action)
         tray_menu.addAction(quit_action)
         self.tray_icon.setContextMenu(tray_menu)
-        restore_action.triggered.connect(self.show_normal)
+        restore_action.triggered.connect(self._show_normal)
         quit_action.triggered.connect(QApplication.quit)
-        self.tray_icon.activated.connect(self.on_tray_icon_activated)
+        self.tray_icon.activated.connect(self._on_tray_icon_activated)
         self.logger.info("Tray menu initialized.")
 
         menu_bar = self.menuBar()
@@ -122,7 +122,7 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("Menu bar initialized.")
         # Widgets for login phase
         self.setup_ui()
-        self.init_server()
+        self._init_http_server()
 
     def setup_ui(self, *, is_new: bool = False):
         for worker in self._ll_workers:
@@ -169,25 +169,25 @@ class MainWindow(SingleInstanceWindow):
 
         self.face_window: Optional[FaceQRWidget] = None
 
-    def init_server(self):
+    def _init_http_server(self):
         self._server_started = False
         if self._host is not None and self._port is not None:
             self._server_thread = HttpServerWorker(self._host, self._port)
             self._server_thread.signals.startLive.connect(self.panel.start_live)
             self._server_thread.signals.stopLive.connect(self.panel.stop_live)
             self._server_thread.signals.exception.connect(
-                self.http_server_error)
+                self._http_error_handler)
         else:
             self._server_thread = None
 
-    def start_server(self):
+    def _start_http_server(self):
         if self._server_thread is not None and not self._server_started:
             self._server_thread.start()
             self.setWindowTitle(
                 self.windowTitle() + " - Web服务已开启")
             self._server_started = True
 
-    def stop_server(self):
+    def _stop_http_server(self):
         """This function should only be called once
         when the program is shutting down."""
         if self._server_thread is not None and self._server_started:
@@ -195,11 +195,11 @@ class MainWindow(SingleInstanceWindow):
             self._server_thread.quit()
             self._server_started = False
 
-    def http_server_error(self, e: Exception):
+    def _http_error_handler(self, e: Exception):
         QMessageBox.critical(self, f"Web服务线程错误",
                              repr(e))
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
-        self.stop_server()
+        self._stop_http_server()
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.WindowStateChange:
@@ -209,18 +209,18 @@ class MainWindow(SingleInstanceWindow):
 
     def closeEvent(self, event):
         # 关闭窗口时退出应用
-        self.stop_server()
+        self._stop_http_server()
         self.tray_icon.hide()
         self.tray_icon.deleteLater()
         event.accept()
 
-    def show_normal(self):
+    def _show_normal(self):
         self.show()
         self.setWindowState(Qt.WindowState.WindowActive)
 
-    def on_tray_icon_activated(self, reason):
+    def _on_tray_icon_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
-            self.show_normal()
+            self._show_normal()
 
     def _delete_cookies(self):
         if not config.scan_status["scanned"]:
@@ -233,9 +233,7 @@ class MainWindow(SingleInstanceWindow):
                      dumps(cookie_index))
         self._current_cookie_idx = max(0, self._current_cookie_idx - 1)
         self._populate_account_menu()
-        CredentialManagerWorker.room_info_default()
-        CredentialManagerWorker.scan_settings_default()
-        CredentialManagerWorker.stream_status_default()
+        CredentialManagerWorker.reset_default()
         QMessageBox.information(self, "账号退出", "账号退出成功")
         self.setup_ui(is_new=self._cookie_index_len == 0)
 
@@ -266,9 +264,7 @@ class MainWindow(SingleInstanceWindow):
             return
         elif idx != self._current_cookie_idx:
             self._current_cookie_idx = idx
-            CredentialManagerWorker.room_info_default()
-            CredentialManagerWorker.scan_settings_default()
-            CredentialManagerWorker.stream_status_default()
+            CredentialManagerWorker.reset_default()
             self.setup_ui()
 
     def _populate_account_menu(self):
@@ -296,24 +292,22 @@ class MainWindow(SingleInstanceWindow):
         if self._cookie_index_len == 0 or self._current_cookie_idx == self._cookie_index_len:
             return
         self._current_cookie_idx = self._cookie_index_len
-        CredentialManagerWorker.room_info_default()
-        CredentialManagerWorker.scan_settings_default()
-        CredentialManagerWorker.stream_status_default()
+        CredentialManagerWorker.reset_default()
         self.setup_ui(is_new=True)
 
-    def fetch_qr(self, retry: bool = False):
+    def _fetch_qr(self, retry: bool = False):
         # Start fetching QR and begin polling thread
         self.logger.info("Starting login flow.")
         config.scan_status["timeout"] = False
         if retry and self.login_worker is not None:
-            self.status_label.clicked.disconnect(self.fetch_qr)
+            self.status_label.clicked.disconnect(self._fetch_qr)
             self.login_worker.stop()
             # Reset status
             config.scan_status.update({
                 "qr_key": None, "qr_url": None,
                 "wait_for_confirm": False
             })
-            self.timer.timeout.connect(self.check_scan_status)
+            self.timer.timeout.connect(self._check_scan_status)
             self.timer.start(50)
         qr_login_worker = QRLoginWorker()
         self.add_thread(qr_login_worker,
@@ -328,16 +322,17 @@ class MainWindow(SingleInstanceWindow):
         # Timer checks the login state and updates UI
 
     def load_credentials(self):
-        self.timer.timeout.connect(self.check_scan_status)
+        self.timer.timeout.connect(self._check_scan_status)
         self.timer.start(50)
         if not config.scan_status["scanned"]:
             # Needs update credential
-            self.fetch_qr()
+            self._fetch_qr()
 
     def add_thread(self, worker: BaseWorker | LongLiveWorker, *,
                    on_finished: Callable | None = None,
                    on_exception: Callable | None = None):
         if worker.__class__.__name__ in self._worker_typeset:
+            # Only one same-typed worker should run concurrently
             return
         if on_finished is not None:
             worker.signals.finished.connect(on_finished)
@@ -389,14 +384,14 @@ class MainWindow(SingleInstanceWindow):
 
     @classmethod
     # Helper: Convert a PIL image to QPixmap for display in QLabel
-    def qpixmap_from_str(cls, data: str):
+    def _qpixmap_from_str(cls, data: str):
         return QPixmap.fromImage(ImageQt.ImageQt(cls.generate_qr_code(data)))
 
     def update_qr_image(self, qr_url: str):
-        self.qr_label.setPixmap(self.qpixmap_from_str(qr_url))  # Show in UI
+        self.qr_label.setPixmap(self._qpixmap_from_str(qr_url))  # Show in UI
 
-    def after_login_success(self):
-        self.timer.timeout.disconnect(self.check_scan_status)
+    def _after_login_success(self):
+        self.timer.timeout.disconnect(self._check_scan_status)
         self.timer.stop()
         config.session.headers.clear()
         config.session.headers.update(constant.HEADERS_APP)
@@ -409,9 +404,9 @@ class MainWindow(SingleInstanceWindow):
             config.room_info.get("parent_area", "请选择"))
         self.panel.child_combo.setCurrentText(
             config.room_info.get("area", ""))
-        self.start_server()
+        self._start_http_server()
 
-    def check_scan_status(self):
+    def _check_scan_status(self):
         if config.scan_status["scanned"]:
             # Login succeeded, ready to switch to main UI
             if self.status_label.text() != "登录成功！":
@@ -435,12 +430,12 @@ class MainWindow(SingleInstanceWindow):
                     not config.scan_status["room_updated"] or \
                     not config.scan_status["const_updated"]:
                 return
-            self.after_login_success()
+            self._after_login_success()
         elif config.scan_status["timeout"]:
             self.status_label.setText("二维码已失效，点击这里刷新")
             self.status_label.setStyleSheet("color: red; font-size: 16pt;")
-            self.status_label.clicked.connect(lambda: self.fetch_qr(True))
-            self.timer.timeout.disconnect(self.check_scan_status)
+            self.status_label.clicked.connect(lambda: self._fetch_qr(True))
+            self.timer.timeout.disconnect(self._check_scan_status)
             self.timer.stop()
         elif config.scan_status["wait_for_confirm"]:
             self.status_label.setText("已扫码，等待确认登录...")
@@ -478,7 +473,7 @@ class MainWindow(SingleInstanceWindow):
             self.panel.parent_combo.setEnabled(True)
             self.panel.child_combo.setEnabled(True)
             self.face_window = FaceQRWidget()
-            self.face_window.face_qr.setPixmap(self.qpixmap_from_str(
+            self.face_window.face_qr.setPixmap(self._qpixmap_from_str(
                 config.stream_status["face_url"]
             ))
             auth_worker = FaceAuthWorker(self.face_window)
