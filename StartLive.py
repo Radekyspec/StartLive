@@ -60,7 +60,7 @@ class MainWindow(SingleInstanceWindow):
     login_worker: Optional[FetchLoginWorker]
     face_window: Optional[FaceQRWidget]
 
-    def __init__(self, host, port):
+    def __init__(self, host, port, first_run):
         super().__init__()
         init_logger()
         self.logger = get_logger(self.__class__.__name__)
@@ -120,6 +120,10 @@ class MainWindow(SingleInstanceWindow):
         menu_bar.addMenu(self.account_menu)
         self.account_menu.aboutToShow.connect(self._populate_account_menu)
         self.logger.info("Menu bar initialized.")
+        if first_run:
+            QMessageBox.information(self, "安装完成",
+                                    "StartLive开播器 安装成功\n"
+                                    "之后再运行请使用桌面或开始菜单里的快捷方式。")
         # Widgets for login phase
         self.setup_ui()
         self._init_http_server()
@@ -501,15 +505,17 @@ if __name__ == '__main__':
 
     parser.add_argument("--web.host", dest="web_host", default=None,
                         help="Web服务绑定的主机地址")
-
     parser.add_argument("--web.port", dest="web_port", type=int, default=None,
                         help="Web服务绑定的端口")
+    parser.add_argument("--squirrel-firstrun", dest="first_run",
+                        action="store_true",)
+
 
     args, qt_args = parser.parse_known_args()
     enable_hi_dpi()
     app = QApplication(qt_args)
     setup_theme("auto")
-    window = MainWindow(args.web_host, args.web_port)
+    window = MainWindow(args.web_host, args.web_port, args.first_run)
     app.aboutToQuit.connect(window.on_exit)
     window.show()
     sys.exit(app.exec())
