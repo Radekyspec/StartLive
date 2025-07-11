@@ -122,7 +122,7 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("Menu bar initialized.")
         if first_run:
             QMessageBox.information(self, "安装完成",
-                                    "StartLive开播器 安装成功\n"
+                                    f"StartLive开播器 版本{VERSION} 安装成功\n"
                                     "之后再运行请使用桌面或开始菜单里的快捷方式。")
         # Widgets for login phase
         self.setup_ui()
