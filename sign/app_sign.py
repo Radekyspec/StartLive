@@ -5,15 +5,19 @@ from urllib.parse import urlencode
 import constant
 
 
-# from constant import APP_KEY, APP_SECRET, LIVEHIME_BUILD, LIVEHIME_VERSION
-
-
-def livehime_sign(payload):
+def livehime_sign(payload, *, access_key: bool = True, build: bool = True,
+                  platform: bool = True, ts: bool = True, version: bool = True):
     """
     Sign request payload, not include csrf and csrf_token
-    :param payload:
+    :param payload: raw payload
+    :param access_key: whether to include access_key
+    :param build: whether to include build
+    :param platform: whether to include platform
+    :param ts: whether to include ts
+    :param version: whether to include version
     """
-    signed = base_payload()
+    signed = base_payload(access_key=access_key, build=build, platform=platform,
+                          ts=ts, version=version)
     signed.update({'appkey': constant.APP_KEY})
     signed.update(payload)
     signed = order_payload(signed)  # 按照 key 重排参数
@@ -28,20 +32,22 @@ def order_payload(payload):
     return dict(sorted(payload.items()))
 
 
-def base_payload():
-    return {
-        "access_key": "",
-        "build": constant.LIVEHIME_BUILD,
-        "platform": "pc_link",
-        "ts": str(int(time())),
-        # "ts": "1751267234",
-        "version": constant.LIVEHIME_VERSION,
-    }
+def base_payload(*, access_key: bool = True, build: bool = True,
+                 platform: bool = True, ts: bool = True, version: bool = True):
+    res = {}
+    if access_key:
+        res["access_key"] = ""
+    if build:
+        res["build"] = constant.LIVEHIME_BUILD
+    if platform:
+        res["platform"] = "pc_link"
+    if ts:
+        res["ts"] = str(int(time()))
+    if version:
+        res["version"] = constant.LIVEHIME_VERSION
+    return res
 
 # if __name__ == '__main__':
 #     p = {
-#         # "csrf": "f835293f3568ddb4093aa8299f5e6c0b",
-#         # "csrf_token": "f835293f3568ddb4093aa8299f5e6c0b",
-#         "room_id": 22593055,
 #     }
 #     print(livehime_sign(p))

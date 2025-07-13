@@ -60,7 +60,7 @@ class MainWindow(SingleInstanceWindow):
     login_worker: Optional[FetchLoginWorker]
     face_window: Optional[FaceQRWidget]
 
-    def __init__(self, host, port, first_run):
+    def __init__(self, host, port, first_run, no_const_update):
         super().__init__()
         init_logger()
         self.logger = get_logger(self.__class__.__name__)
@@ -86,8 +86,12 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
         self.logger.info("System tray icon initialized.")
-        self.add_thread(ConstantUpdateWorker(),
-                        on_finished=ConstantUpdateWorker.on_finished)
+        if no_const_update:
+            self.logger.info("Constant update disabled.")
+            config.scan_status["const_updated"] = True
+        else:
+            self.add_thread(ConstantUpdateWorker(),
+                            on_finished=ConstantUpdateWorker.on_finished)
 
         tray_menu = QMenu()
         restore_action = QAction("显示窗口", self)
@@ -119,7 +123,29 @@ class MainWindow(SingleInstanceWindow):
         self.account_menu = QMenu("账号切换", self)
         menu_bar.addMenu(self.account_menu)
         self.account_menu.aboutToShow.connect(self._populate_account_menu)
+
+        self.proxy_menu = QMenu("代理设置", self)
+        menu_bar.addMenu(self.proxy_menu)
+        # self.proxy_menu.aboutToShow.connect(self._populate_proxy_menu)
+        proxy_group = QActionGroup(
+            self,
+            exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive
+        )
+        proxy_group.triggered.connect(self._switch_proxy)
+        no_proxy = QAction("不使用代理", self, checkable=True)
+        no_proxy.setData(False)
+        proxy_group.addAction(no_proxy)
+        self.proxy_menu.addAction(no_proxy)
+        system_proxy = QAction("使用系统代理", self, checkable=True)
+        system_proxy.setData(True)
+        proxy_group.addAction(system_proxy)
+        self.proxy_menu.addAction(system_proxy)
+        if config.app_settings["use_proxy"]:
+            system_proxy.setChecked(True)
+        else:
+            no_proxy.setChecked(True)
         self.logger.info("Menu bar initialized.")
+
         if first_run:
             QMessageBox.information(self, "安装完成",
                                     f"StartLive开播器 版本{VERSION} 安装成功\n"
@@ -131,10 +157,11 @@ class MainWindow(SingleInstanceWindow):
     def setup_ui(self, *, is_new: bool = False):
         for worker in self._ll_workers:
             worker.stop()
-        ObsDaemonWorker.disconnect_obs()
-        self.timer.deleteLater()
-        with suppress(AttributeError):
-            self.panel.deleteLater()
+        if config.obs_client is not None:
+            ObsDaemonWorker.disconnect_obs()
+        # self.timer.deleteLater()
+        # with suppress(AttributeError):
+        #     self.panel.deleteLater()
         self.timer = QTimer()
         self.panel = StreamConfigPanel(self)
         config.session.headers.clear()
@@ -256,6 +283,8 @@ class MainWindow(SingleInstanceWindow):
                 delete_password(KEYRING_SERVICE_NAME, cookie)
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX)
+        with suppress(PasswordDeleteError):
+            delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
         QMessageBox.information(self, "凭据清空",
                                 "已清空全部凭据, 程序即将退出")
         for worker in self._ll_workers:
@@ -300,6 +329,19 @@ class MainWindow(SingleInstanceWindow):
         CredentialManagerWorker.reset_default()
         self.setup_ui(is_new=True)
 
+    @staticmethod
+    def _switch_proxy(action: QAction):
+        use_proxy = action.data()
+        config.app_settings["use_proxy"] = use_proxy
+        if use_proxy:
+            config.session.get = partial(config.session.get, verify=False)
+            config.session.post = partial(config.session.post, verify=False)
+            config.session.trust_env = True
+        else:
+            config.session.get = partial(config.session.get, verify=True)
+            config.session.post = partial(config.session.post, verify=True)
+            config.session.trust_env = False
+
     def _fetch_qr(self, retry: bool = False):
         # Start fetching QR and begin polling thread
         self.logger.info("Starting login flow.")
@@ -338,6 +380,8 @@ class MainWindow(SingleInstanceWindow):
                    on_exception: Callable | None = None):
         if worker.__class__.__name__ in self._worker_typeset:
             # Only one same-typed worker should run concurrently
+            self.logger.warning(f"Attempting to add {worker.__class__.__name__}"
+                                f" but one already exists.")
             return
         if on_finished is not None:
             worker.signals.finished.connect(on_finished)
@@ -369,9 +413,12 @@ class MainWindow(SingleInstanceWindow):
                              repr(e))
 
     def on_exit(self):
-        if config.obs_settings:
+        if config.obs_settings.internal:
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
                          dumps(config.obs_settings.internal))
+        if config.app_settings.internal:
+            set_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS,
+                         dumps(config.app_settings.internal))
         for worker in self._ll_workers:
             worker.stop()
 
@@ -508,14 +555,16 @@ if __name__ == '__main__':
     parser.add_argument("--web.port", dest="web_port", type=int, default=None,
                         help="Web服务绑定的端口")
     parser.add_argument("--squirrel-firstrun", dest="first_run",
-                        action="store_true",)
-
+                        action="store_true")
+    parser.add_argument("--noupdate", dest="no_update",
+                        action="store_true")
 
     args, qt_args = parser.parse_known_args()
     enable_hi_dpi()
     app = QApplication(qt_args)
     setup_theme("auto")
-    window = MainWindow(args.web_host, args.web_port, args.first_run)
+    window = MainWindow(args.web_host, args.web_port, args.first_run,
+                        args.no_update)
     app.aboutToQuit.connect(window.on_exit)
     window.show()
     sys.exit(app.exec())

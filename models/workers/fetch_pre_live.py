@@ -45,13 +45,13 @@ class FetchPreLiveWorker(BaseWorker):
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/PreLive"
         params = livehime_sign({
-            "area": True,
-            "cover": True,
-            "coverVertical": True,
+            "area": "true",
+            "cover": "true",
+            "coverVertical": "true",
             "liveDirectionType": 0,
             "mobi_app": "pc_link",
-            "schedule": True,
-            "title": True,
+            "schedule": "true",
+            "title": "true",
         })
         self.logger.info("PreLive Request")
         response = config.session.get(url, params=params)

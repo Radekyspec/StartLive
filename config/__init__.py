@@ -1,12 +1,14 @@
 from functools import partial
-from json import dumps
+from json import dumps, loads
 from queue import Queue
 from typing import Optional
 
+from keyring import get_password
 from obsws_python import ReqClient
 from requests import Session
 
 import constant
+from constant import *
 from models.classes import ThreadSafeDict
 
 dumps = partial(dumps, ensure_ascii=False,
@@ -14,10 +16,9 @@ dumps = partial(dumps, ensure_ascii=False,
 
 # Global session for HTTP requests
 session = Session()
+session.trust_env = False
 session.headers.update(constant.HEADERS_WEB)
 session.cookies.set("appkey", constant.APP_KEY, domain="bilibili.com", path="/")
-session.get = partial(session.get, timeout=5)
-session.post = partial(session.post, timeout=5)
 
 # Queue to communicate with OBS in a separate thread
 obs_req_queue = Queue()
@@ -39,6 +40,21 @@ stream_status = ThreadSafeDict({
     "stream_addr": None,
     "stream_key": None
 })
+
+app_settings = ThreadSafeDict({
+    "use_proxy": False,
+})
+if (app := get_password(KEYRING_SERVICE_NAME,
+                        KEYRING_APP_SETTINGS)) is not None:
+    app_settings.update(loads(app))
+    if app_settings["use_proxy"]:
+        session.get = partial(session.get, verify=False)
+        session.post = partial(session.post, verify=False)
+        session.trust_env = True
+    else:
+        session.get = partial(session.get, verify=True)
+        session.post = partial(session.post, verify=True)
+        session.trust_env = False
 
 # Managed by models.workers.credential_manager
 room_info = ThreadSafeDict({})

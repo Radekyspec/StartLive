@@ -7,11 +7,13 @@ from requests.cookies import cookiejar_from_dict
 
 # local package import
 import config
+import constant
 from config import dumps
 from constant import *
 from exceptions import CredentialExpiredError, CredentialDuplicatedError
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
+from sign import livehime_sign
 from .fetch_login import FetchLoginWorker
 
 
@@ -140,9 +142,18 @@ class CredentialManagerWorker(BaseWorker):
         config.session.cookies.clear()
         cookiejar_from_dict(saved_cookies,
                             cookiejar=config.session.cookies)
+        config.session.cookies.set("appkey", constant.APP_KEY,
+                                   domain="bilibili.com", path="/")
+        config.session.headers.clear()
+        config.session.headers.update(constant.HEADERS_APP)
         nav_url = "https://api.bilibili.com/x/web-interface/nav"
         self.logger.info(f"nav Request")
-        response = config.session.get(nav_url)
+        response = config.session.get(
+            nav_url,
+            params=livehime_sign({},
+                                 access_key=False,
+                                 build=False,
+                                 version=False))
         response.encoding = "utf-8"
         self.logger.info("nav Response")
         response = response.json()
@@ -157,9 +168,10 @@ class CredentialManagerWorker(BaseWorker):
         FetchLoginWorker.post_login(parent_window)
         parent_window.load_credentials()
         panel = parent_window.panel
-        panel.host_input.setText(config.obs_settings["ip_addr"])
-        panel.port_input.setText(config.obs_settings["port"])
-        panel.pass_input.setText(config.obs_settings["password"])
+        panel.host_input.setText(
+            config.obs_settings.get("ip_addr", "localhost"))
+        panel.port_input.setText(config.obs_settings.get("port", "4455"))
+        panel.pass_input.setText(config.obs_settings.get("password", ""))
         panel.obs_auto_live_checkbox.setChecked(
             config.obs_settings.get("auto_live", False))
         panel.obs_auto_connect_checkbox.setChecked(
