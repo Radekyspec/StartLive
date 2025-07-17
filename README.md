@@ -44,3 +44,5 @@ python -m venv venv
 ```shell
 python StartLive.py
 ```
+
+请注意，Bilibili目前没有对所有用户支持HEVC编码推流，如果推流失败可以检查一下编码。
