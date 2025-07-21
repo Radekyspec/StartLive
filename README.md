@@ -2,9 +2,18 @@
 
 绕过强制使用直播姬开播的要求
 
-更新/答疑QQ群：[1022778201](https://qm.qq.com/q/fPBktdfdrG)
+下载/更新/答疑QQ群：[1022778201](https://qm.qq.com/q/fPBktdfdrG)
+
+## 安装
+### 通过 Releases 下载
 
 下载链接：[点击这里下载](https://github.com/Radekyspec/StartLive/releases/latest)
+
+### 通过 Windows Package Manager (winget) 下载
+
+```shell
+winget install Radekyspec.StartLive
+```
 
 ## 软件截图
 
@@ -12,7 +21,7 @@
 
 ## 使用方法
 
-[点我查看教程](https://github.com/Radekyspec/StartLive/blob/master/GETTING_STARTED.md)
+[点我查看教程](https://docs.qq.com/doc/DTHVMdkhtUWJjRFhv?scene=4edcd4a61e4d506148e0f879bN4Lu1)
 
 ## 从源代码运行/开发
 
