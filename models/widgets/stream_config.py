@@ -139,20 +139,27 @@ class StreamConfigPanel(QWidget):
         self.save_title_btn.clicked.connect(self._save_title)
         area_group_layout.addWidget(self.save_title_btn, 0, 8)
 
-        area_group_layout.addWidget(QLabel("分区选择:"), 1, 0, 1, 1)
+        area_group_layout.addWidget(QLabel("主播公告:"), 1, 0, 1, 1)
+        self.announce_input = QLineEdit()
+        area_group_layout.addWidget(self.announce_input, 1, 1, 1, 6)
+        self.save_announce_btn = QPushButton("保存")
+        self.save_announce_btn.clicked.connect(self._save_announce)
+        area_group_layout.addWidget(self.save_announce_btn, 1, 8)
+
+        area_group_layout.addWidget(QLabel("分区选择:"), 2, 0, 1, 1)
         self.parent_combo = CompletionComboBox(config.parent_area)
         # self.parent_combo.addItems(config.parent_area)
-        area_group_layout.addWidget(self.parent_combo, 1, 1, 1, 3)
-
+        area_group_layout.addWidget(self.parent_combo, 2, 1, 1, 3)
         self.child_combo = CompletionComboBox([])
         self.child_combo.setEnabled(False)
-        area_group_layout.addWidget(self.child_combo, 1, 4, 1, 3)
+        area_group_layout.addWidget(self.child_combo, 2, 4, 1, 3)
         self.save_area_btn = QPushButton("保存")
         self.save_area_btn.setEnabled(False)
         self.save_area_btn.clicked.connect(self._save_area)
         self.parent_combo.editTextChanged.connect(self._activate_area_save)
         self.child_combo.editTextChanged.connect(self._activate_area_save)
-        area_group_layout.addWidget(self.save_area_btn, 1, 8)
+        area_group_layout.addWidget(self.save_area_btn, 2, 8)
+
 
         area_group.setLayout(area_group_layout)
         self.main_layout.addWidget(area_group, stretch=1)
@@ -289,6 +296,10 @@ class StreamConfigPanel(QWidget):
             TitleUpdateWorker(self.title_input.text()),
             on_exception=partial(TitleUpdateWorker.on_exception, self)
         )
+
+    def _save_announce(self):
+        self.save_announce_btn.setEnabled(False)
+        # TODO: add save
 
     def _valid_area(self):
         parent_choose = self.parent_combo.currentText()

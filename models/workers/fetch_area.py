@@ -9,7 +9,7 @@ from models.workers.base import BaseWorker, run_wrapper
 
 class FetchAreaWorker(BaseWorker):
     def __init__(self):
-        super().__init__(name="分区更新")
+        super().__init__(name="分区获取")
         self.logger = get_logger(self.__class__.__name__)
 
     @Slot()

@@ -49,6 +49,7 @@ class CredentialManagerWorker(BaseWorker):
             "title": "",
             "parent_area": "",
             "area": "",
+            "announcement": "",
         })
 
     @staticmethod
@@ -57,7 +58,7 @@ class CredentialManagerWorker(BaseWorker):
             "scanned": False, "qr_key": None, "qr_url": None,
             "timeout": False, "wait_for_confirm": False,
             "area_updated": False, "room_updated": False,
-            "const_updated": True
+            "const_updated": True, "announce_updated": False
         })
 
     @staticmethod

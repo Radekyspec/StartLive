@@ -2,6 +2,7 @@ from .area_update import AreaUpdateWorker
 from .const_update import ConstantUpdateWorker
 from .credential_manager import CredentialManagerWorker
 from .face_auth import FaceAuthWorker
+from .fetch_announce import FetchAnnounceWorker
 from .fetch_login import FetchLoginWorker
 from .fetch_pre_live import FetchPreLiveWorker
 from .obs_connector import ObsConnectorWorker

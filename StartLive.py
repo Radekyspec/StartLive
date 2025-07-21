@@ -77,7 +77,7 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("Thread Pool initialized.")
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
         self.windowTitle()
-        self.setGeometry(300, 200, 520, 430)
+        self.setGeometry(300, 200, 520, 450)
         self.tray_icon = QSystemTrayIcon(self)
         # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
         self.tray_icon.setIcon(QIcon(
@@ -468,7 +468,7 @@ class MainWindow(SingleInstanceWindow):
                 login_hint1 = "分区已更新！"
             else:
                 login_hint1 = "正在更新分区..."
-            if config.scan_status["room_updated"]:
+            if config.scan_status["room_updated"] and config.scan_status["announce_updated"]:
                 login_hint2 = "房间信息已更新！"
             else:
                 login_hint2 = "正在更新房间信息..."
@@ -480,7 +480,8 @@ class MainWindow(SingleInstanceWindow):
             self.login_label.setText(login_hint)
             if not config.scan_status["area_updated"] or \
                     not config.scan_status["room_updated"] or \
-                    not config.scan_status["const_updated"]:
+                    not config.scan_status["const_updated"] or \
+                    not config.scan_status["announce_updated"]:
                 return
             self._after_login_success()
         elif config.scan_status["timeout"]:

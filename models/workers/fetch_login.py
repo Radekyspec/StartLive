@@ -10,6 +10,7 @@ import config
 from exceptions import LoginError
 from models.log import get_logger
 from models.workers.base import LongLiveWorker, run_wrapper
+from .fetch_announce import FetchAnnounceWorker
 from .fetch_area import FetchAreaWorker
 from .fetch_pre_live import FetchPreLiveWorker
 
@@ -44,7 +45,14 @@ class FetchLoginWorker(LongLiveWorker):
                 on_finished=partial(FetchPreLiveWorker.on_finished,
                                     parent.panel)
             )
-            parent.add_thread(FetchAreaWorker())
+            parent.add_thread(
+                FetchAnnounceWorker(),
+                on_finished=partial(FetchAnnounceWorker.on_finished,
+                                    parent.panel)
+            )
+            parent.add_thread(
+                FetchAreaWorker()
+            )
 
     @Slot()
     @run_wrapper
