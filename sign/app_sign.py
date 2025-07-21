@@ -47,7 +47,29 @@ def base_payload(*, access_key: bool = True, build: bool = True,
         res["version"] = constant.LIVEHIME_VERSION
     return res
 
-# if __name__ == '__main__':
-#     p = {
-#     }
-#     print(livehime_sign(p))
+
+if __name__ == '__main__':
+    import itertools
+    def get_all_subsets_with_itertools(data_list):
+        """
+        使用 `itertools.combinations` 获取列表的所有子集。
+
+        Args:
+            data_list: 输入的列表。
+
+        Returns:
+            一个包含所有子集的列表。
+        """
+        all_subsets = []
+        for i in range(len(data_list) + 1):
+            for subset in itertools.combinations(data_list, i):
+                all_subsets.append(list(subset))
+        return all_subsets
+
+    p = {
+    }
+    for i in get_all_subsets_with_itertools(p.keys()):
+        j = {}
+        for k in i:
+            j[k] = p[k]
+        print(livehime_sign(j)["sign"])

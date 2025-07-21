@@ -18,6 +18,7 @@ import config
 from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
 from models.workers import *
+from models.workers.announce_update import AnnounceUpdateWorker
 
 
 class StreamConfigPanel(QWidget):
@@ -294,12 +295,17 @@ class StreamConfigPanel(QWidget):
         self.save_title_btn.setEnabled(False)
         self.parent_window.add_thread(
             TitleUpdateWorker(self.title_input.text()),
+            on_finished=partial(TitleUpdateWorker.on_finished, self),
             on_exception=partial(TitleUpdateWorker.on_exception, self)
         )
 
     def _save_announce(self):
         self.save_announce_btn.setEnabled(False)
-        # TODO: add save
+        self.parent_window.add_thread(
+            AnnounceUpdateWorker(self.announce_input.text()),
+            on_finished=partial(AnnounceUpdateWorker.on_finished, self),
+            on_exception=partial(AnnounceUpdateWorker.on_exception, self)
+        )
 
     def _valid_area(self):
         parent_choose = self.parent_combo.currentText()

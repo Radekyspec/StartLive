@@ -1,3 +1,4 @@
+from .AnnounceUpdateError import AnnounceUpdateError
 from .AreaUpdateError import AreaUpdateError
 from .CredentialDuplicatedError import CredentialDuplicatedError
 from .CredentialExpiredError import CredentialExpiredError

@@ -36,5 +36,9 @@ class TitleUpdateWorker(BaseWorker):
             raise TitleUpdateError(response["message"])
 
     @staticmethod
+    def on_finished(parent_window: "StreamConfigPanel"):
+        config.room_info["title"] = parent_window.title_input.text()
+
+    @staticmethod
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
         parent_window.save_title_btn.setEnabled(True)
