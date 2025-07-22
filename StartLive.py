@@ -62,6 +62,7 @@ class MainWindow(SingleInstanceWindow):
 
     def __init__(self, host, port, first_run, no_const_update):
         super().__init__()
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         init_logger()
         self.logger = get_logger(self.__class__.__name__)
         self.logger.info(f"App created with host={host}, port={port}")
@@ -77,7 +78,7 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("Thread Pool initialized.")
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
         self.windowTitle()
-        self.setGeometry(300, 200, 520, 450)
+        self.setGeometry(300, 200, 520, 480)
         self.tray_icon = QSystemTrayIcon(self)
         # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
         self.tray_icon.setIcon(QIcon(
@@ -243,6 +244,7 @@ class MainWindow(SingleInstanceWindow):
         self._stop_http_server()
         self.tray_icon.hide()
         self.tray_icon.deleteLater()
+        QApplication.closeAllWindows()
         event.accept()
 
     def _show_normal(self):

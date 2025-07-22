@@ -1,5 +1,6 @@
 from .AnnounceUpdateError import AnnounceUpdateError
 from .AreaUpdateError import AreaUpdateError
+from .CoverUploadError import CoverUploadError
 from .CredentialDuplicatedError import CredentialDuplicatedError
 from .CredentialExpiredError import CredentialExpiredError
 from .LoginError import LoginError

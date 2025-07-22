@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-
+import tracemalloc
+from contextlib import suppress
 # module import
 from functools import partial
 from ipaddress import ip_address, IPv6Address
@@ -19,15 +20,18 @@ from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
 from models.workers import *
 from models.workers.announce_update import AnnounceUpdateWorker
+from .cover_crop import CoverCropWidget
 
 
 class StreamConfigPanel(QWidget):
 
-    def __init__(self, parent_window):
-        super().__init__()
+    def __init__(self, parent_window, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.parent_window = parent_window
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
         self._obs_timer = QTimer()
+        self.cover_crop_widget: CoverCropWidget | None = None
         self.main_layout = QVBoxLayout()
         self.setLayout(self.main_layout)
         self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -161,6 +165,13 @@ class StreamConfigPanel(QWidget):
         self.child_combo.editTextChanged.connect(self._activate_area_save)
         area_group_layout.addWidget(self.save_area_btn, 2, 8)
 
+        area_group_layout.addWidget(QLabel("直播封面:"), 3, 0, 1, 1)
+        self.cover_status = QLabel()
+        self.cover_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        area_group_layout.addWidget(self.cover_status, 3, 1, 1, 6)
+        self.cover_edit_btn = QPushButton("修改")
+        self.cover_edit_btn.clicked.connect(self._edit_cover)
+        area_group_layout.addWidget(self.cover_edit_btn, 3, 8)
 
         area_group.setLayout(area_group_layout)
         self.main_layout.addWidget(area_group, stretch=1)
@@ -291,6 +302,17 @@ class StreamConfigPanel(QWidget):
                 "断开" if config.obs_client is not None else "连接")
             self._obs_timer.stop()
 
+    def cover_audit_state(self):
+        if config.room_info["cover_status"] == 1:
+            self.cover_status.setText("审核通过~")
+            self.cover_status.setStyleSheet("color: green")
+        elif config.room_info["cover_status"] == 0:
+            self.cover_status.setText("审核中...可以先行开播喔~")
+            self.cover_status.setStyleSheet("color: orange")
+        elif config.room_info["cover_status"] == -1:
+            self.cover_status.setText(f"审核未通过: {config.room_info['cover_audit_reason']}")
+            self.cover_status.setStyleSheet("color: red")
+
     def _save_title(self):
         self.save_title_btn.setEnabled(False)
         self.parent_window.add_thread(
@@ -298,6 +320,27 @@ class StreamConfigPanel(QWidget):
             on_finished=partial(TitleUpdateWorker.on_finished, self),
             on_exception=partial(TitleUpdateWorker.on_exception, self)
         )
+
+    def _edit_cover(self):
+        if config.room_info["cover_status"] == 0:
+            return
+        self.cover_edit_btn.setEnabled(False)
+        self.cover_crop_widget = CoverCropWidget(self)
+        self.cover_crop_widget.destroyed.connect(self._on_cover_exit)
+        self.parent_window.add_thread(
+            FetchCoverWorker(),
+            on_finished=partial(FetchCoverWorker.on_finished,
+                                self.cover_crop_widget),
+        )
+        self.cover_crop_widget.show()
+
+    def _on_cover_exit(self):
+        self.cover_edit_btn.setEnabled(True)
+        with suppress(RuntimeError):
+            self.cover_crop_widget.hide()
+        with suppress(RuntimeError):
+            self.cover_crop_widget.deleteLater()
+        self.cover_crop_widget = None
 
     def _save_announce(self):
         self.save_announce_btn.setEnabled(False)

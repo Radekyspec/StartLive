@@ -1,3 +1,4 @@
+from functools import partial
 # package import
 from PySide6.QtCore import Slot
 
@@ -6,6 +7,7 @@ import config
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign, order_payload
+from .cover_state_update import CoverStateUpdateWorker
 from .start_live import StartLiveWorker
 
 
@@ -14,7 +16,7 @@ class FetchPreLiveWorker(BaseWorker):
         super().__init__(name="房间信息")
         self.logger = get_logger(self.__class__.__name__)
 
-    def _fetch_pre_live(self):
+    def _fetch_room_info(self):
         live_info_url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/GetInfo"
         info_data = livehime_sign({"uId": config.cookies_dict["DedeUserID"]})
         info_data = order_payload(info_data)
@@ -59,8 +61,13 @@ class FetchPreLiveWorker(BaseWorker):
         self.logger.info("PreLive Response")
         response = response.json()
         self.logger.info(f"PreLive Result: {response}")
-        config.room_info["title"] = response["data"]["title"]
-        self._fetch_pre_live()
+        config.room_info.update({
+            "cover_audit_reason": response["data"]["cover"]["auditReason"],
+            "cover_url": response["data"]["cover"]["url"],
+            "cover_status": response["data"]["cover"]["auditStatus"],
+            "title": response["data"]["title"],
+        })
+        self._fetch_room_info()
 
     @staticmethod
     def on_finished(parent_window: "StreamConfigPanel"):
@@ -74,5 +81,13 @@ class FetchPreLiveWorker(BaseWorker):
                 config.stream_status["stream_key"])
             parent_window.start_btn.setEnabled(False)
             parent_window.stop_btn.setEnabled(True)
+        parent_window.cover_audit_state()
+        if config.room_info["cover_status"] == 0:
+            # add updating logic
+            parent_window.parent_window.add_thread(
+                CoverStateUpdateWorker(),
+                on_finished=partial(
+                    CoverStateUpdateWorker.on_finished, parent_window),
+            )
 
         config.scan_status["room_updated"] = True

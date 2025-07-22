@@ -45,6 +45,10 @@ class CredentialManagerWorker(BaseWorker):
     @staticmethod
     def _room_info_default():
         config.room_info.update({
+            "cover_audit_reason": "",
+            "cover_url": "",
+            "cover_status": 0,
+            "cover_data": None,
             "room_id": "",
             "title": "",
             "parent_area": "",

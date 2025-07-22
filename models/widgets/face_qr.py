@@ -8,8 +8,8 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 
 class FaceQRWidget(QWidget):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.setWindowTitle("人脸认证")
         self.setWindowFlags(
             Qt.WindowType.Window | Qt.WindowType.WindowCloseButtonHint)
