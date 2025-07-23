@@ -30,8 +30,8 @@ class CropLabel(QLabel):
         # displaying rect (actual position of the pixmap inside the label)
         self._disp_rect = QRect()
 
-        # ratio: None is free
-        self.aspect_ratio: tuple[int, int] | None = ratio
+        # ratio
+        self.aspect_ratio: tuple[int, int] = ratio
 
         # animation
         self._anim: QVariantAnimation | None = None
@@ -55,30 +55,6 @@ class CropLabel(QLabel):
 
     def get_pixmap(self) -> QPixmap | None:
         return self._orig_pixmap
-
-    def set_aspect_ratio(self, w: int | None, h: int | None):
-        """
-        Sets the aspect ratio and adjusts the existing crop rectangle to the specified
-        aspect ratio if applicable. If either `w` or `h` is None, the aspect ratio will
-        be set to None, effectively disabling the constraint. The function recalculates
-        and updates the crop rectangle based on the new aspect ratio to ensure consistency
-        with the given dimensions.
-
-        :param w: Width of the desired aspect ratio. Can be None to reset the aspect ratio.
-        :param h: Height of the desired aspect ratio. Can be None to reset the aspect ratio.
-        :return: None
-        """
-        self.aspect_ratio = None if (w is None or h is None) else (w, h)
-        # fix existing rect immediately after changing a ratio
-        if not self.crop_rect.isNull() and self.aspect_ratio:
-            fixed = self.crop_rect.topLeft()
-            new_pt = self._fix_aspect_point(fixed, self.crop_rect.bottomRight(),
-                                            *self.aspect_ratio)
-            rect = QRect(fixed, new_pt).normalized().intersected(
-                self._disp_rect)
-            self.crop_rect = rect
-            self.rubber.setGeometry(rect)
-            self.update()
 
     def get_crop_in_pixmap(self) -> QRect:
         """
@@ -195,8 +171,11 @@ class CropLabel(QLabel):
             return
 
         if self.dragging or self.resizing:
-            pos = self._apply_aspect(self.origin, raw_pos)
-            base_rect = QRect(self.origin, pos).normalized().intersected(
+            # pos = self._apply_aspect(self.origin, raw_pos)
+            # base_rect = QRect(self.origin, pos).normalized().intersected(
+            #     self._disp_rect)
+            # rect = self._snap_and_keep_aspect(base_rect)
+            base_rect = QRect(self.origin, raw_pos).normalized().intersected(
                 self._disp_rect)
             rect = self._snap_and_keep_aspect(base_rect)
             self.crop_rect = rect
@@ -329,26 +308,27 @@ class CropLabel(QLabel):
         return [rect.topLeft(), rect.topRight(), rect.bottomRight(),
                 rect.bottomLeft()]
 
-    def _apply_aspect(self, fixed_pt: QPoint, raw_pt: QPoint) -> QPoint:
-        """
-        Adjusts the raw point based on a specified aspect ratio if it exists.
-        If the aspect ratio is defined, the `_fix_aspect_point` method is used
-        to compute an adjusted point based on the provided fixed point, raw
-        point, and the aspect ratio. Otherwise, the raw point is returned as it
-        is.
-
-        :param fixed_pt: A fixed reference point for alignment.
-        :param raw_pt: The actual point to be potentially adjusted.
-        :return: A QPoint object representing the adjusted point if an aspect
-            ratio exists, or the raw point if no adjustment is necessary.
-        """
-        if self.aspect_ratio:
-            return self._fix_aspect_point(fixed_pt, raw_pt, *self.aspect_ratio)
-        return raw_pt
-
     @staticmethod
     def _fix_aspect_point(fixed_pt: QPoint, raw_pt: QPoint,
                           w_ratio: int, h_ratio: int) -> QPoint:
+        """
+        Adjusts a point's position relative to a fixed point while maintaining a specific
+        aspect ratio defined by width and height ratios. The method computes the position
+        of the second point such that the proportional relationship between width and
+        height given by the ratios remains consistent.
+
+        :param fixed_pt: The fixed reference point of type `QPoint` that determines
+            the base for the aspect ratio calculation.
+        :param raw_pt: The initial point of type `QPoint` whose position will be adjusted
+            to ensure the aspect ratio is maintained.
+        :param w_ratio: The width ratio, specified as an integer, which contributes
+            to defining the aspect ratio.
+        :param h_ratio: The height ratio, specified as an integer, which contributes
+            to defining the aspect ratio.
+        :return: A new `QPoint` object representing the adjusted point, computed
+            to maintain the aspect ratio with respect to the fixed point.
+        :rtype: QPoint
+        """
         dx, dy = raw_pt.x() - fixed_pt.x(), raw_pt.y() - fixed_pt.y()
         frac_w, frac_h = abs(dx) / w_ratio, abs(dy) / h_ratio
         if frac_w < frac_h:
@@ -360,6 +340,16 @@ class CropLabel(QLabel):
         return QPoint(int(fixed_pt.x() + dx_use), int(fixed_pt.y() + dy_use))
 
     def _clamp(self, pt: QPoint) -> QPoint:
+        """
+        Restricts the provided point to lie within the boundaries of the display rectangle
+        or the widget's dimensions if the display rectangle is null. It ensures that the
+        resulting point coordinates do not exceed the allowed range in either x or y
+        direction.
+
+        :param pt: The QPoint to be clamped.
+        :return: A QPoint instance where its `x` and `y` coordinates have been adjusted
+                 to fit within the defined boundaries.
+        """
         if not self._disp_rect.isNull():
             x = max(self._disp_rect.left(),
                     min(self._disp_rect.right(), pt.x()))
@@ -370,17 +360,31 @@ class CropLabel(QLabel):
             y = max(0, min(self.height(), pt.y()))
         return QPoint(x, y)
 
-    def _snap_and_keep_aspect(self, raw_rect: QRect) -> QRect:
-        if self.aspect_ratio is None:
-            return self._snap_to_edges(raw_rect)
+    def _farthest_corner(self, fixed_pt: QPoint, rect: QRect) -> QPoint:
+        corners = self._corners(rect)
+        return max(corners, key=lambda p: (p.x() - fixed_pt.x()) ** 2 + (
+                    p.y() - fixed_pt.y()) ** 2)
 
+    def _snap_and_keep_aspect(self, raw_rect: QRect) -> QRect:
+        """
+        Adjusts the input rectangle's size and position to snap its moving corner
+        to the closest edges of the display rectangle and ensures the aspect ratio
+        is preserved. The operation limits the rectangle to stay within the
+        boundaries of the display rectangle.
+
+        :param raw_rect: The QRect instance representing the raw rectangle
+            possibly moved by the user.
+        :return: A normalized QRect instance that maintains the original aspect
+            ratio and is constrained within the display rectangle boundaries.
+        """
         dr, m = self._disp_rect, self.SNAP_MARGIN
         fixed_pt = self.origin
         corners = self._corners(raw_rect)
         if self.active_handle is not None:
             moving_pt = corners[self.active_handle]
         else:
-            moving_pt = raw_rect.bottomRight()
+            # moving_pt = raw_rect.bottomRight()
+            moving_pt = self._farthest_corner(fixed_pt, raw_rect)
 
         # snap to pixmap corners
         if abs(moving_pt.x() - dr.left()) < m:
@@ -393,38 +397,21 @@ class CropLabel(QLabel):
             moving_pt.setY(dr.bottom())
 
         new_pt = self._fix_aspect_point(fixed_pt, moving_pt, *self.aspect_ratio)
-        return QRect(fixed_pt, new_pt).normalized()
-
-    def _snap_to_edges(self, rect: QRect) -> QRect:
-        dr, m = self._disp_rect, self.SNAP_MARGIN
-        if abs(rect.left() - dr.left()) < m:
-            rect.setLeft(dr.left())
-        if abs(rect.right() - dr.right()) < m:
-            rect.setRight(dr.right())
-        if abs(rect.top() - dr.top()) < m:
-            rect.setTop(dr.top())
-        if abs(rect.bottom() - dr.bottom()) < m:
-            rect.setBottom(dr.bottom())
+        rect = QRect(fixed_pt, new_pt).normalized().intersected(dr)
         return rect
 
     def _largest_rect_inside(self, bounds: QRect,
                              center: QPoint | None = None) -> QRect:
         """
-        Calculates the largest rectangle that can fit inside the given bounds while maintaining a specific
-        aspect ratio. If no center is provided, the rectangle is centered within the bounds by default.
+        Calculates the largest rectangle that can fit inside the given bounds while maintaining
+        the aspect ratio specified by the `aspect_ratio` property. Optionally positions the
+        rectangle around a specified center point.
 
-        :param bounds: The bounding rectangle within which the largest rectangle is to be calculated.
-        :type bounds: QRect
-        :param center: The optional center point around which the rectangle should be positioned.
-                       If None, the rectangle will be centered within the bounds.
-        :type center: QPoint | None
-        :return: The largest inscribed QRect that satisfies the aspect ratio constraints.
-        :rtype: QRect
+        :param bounds: The bounding `QRect` within which the rectangle must fit.
+        :param center: The optional `QPoint` that specifies where the rectangle should be
+            centered. If not provided, the rectangle will be centered within the bounds.
+        :return: A `QRect` representing the calculated rectangle.
         """
-        if self.aspect_ratio is None:
-            # free ratio
-            return bounds
-
         bw, bh = bounds.width(), bounds.height()
         wr, hr = self.aspect_ratio
 
@@ -448,8 +435,7 @@ class CropLabel(QLabel):
     def _largest_rect_with_fixed_corner(self, corner_idx: int) -> QRect:
         """
         Calculate the largest rectangle that can fit within a given display rectangle with a fixed aspect
-        ratio, while aligning its position based on a specified corner. If no aspect ratio is provided,
-        the entire display rectangle is used.
+        ratio, while aligning its position based on a specified corner.
 
         :param corner_idx: The index of the corner where the rectangle will align. This should be one
             of the following:
@@ -461,9 +447,6 @@ class CropLabel(QLabel):
         :return: A QRect object representing the calculated rectangle aligned to the specified corner.
         :rtype: QRect
         """
-        if self.aspect_ratio is None:
-            return self._disp_rect
-
         dr = self._disp_rect
         wr, hr = self.aspect_ratio
 
