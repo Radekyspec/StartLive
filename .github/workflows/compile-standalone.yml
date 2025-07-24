@@ -16,7 +16,6 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v5
-        if: matrix.os != 'macos-latest'
         with:
           python-version: '3.12.10' # Version range or exact version of a Python version to use, using SemVer's version range syntax
           architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
@@ -29,7 +28,6 @@ jobs:
           pip install -r requirements.txt git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
 
       - name: Build Executable for Windows
-        if: matrix.os == 'windows-latest'
         uses: Nuitka/Nuitka-Action@main
         with:
           nuitka-version: main
