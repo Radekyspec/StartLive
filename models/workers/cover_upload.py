@@ -1,5 +1,6 @@
 # module import
 from functools import partial
+
 # package import
 from PySide6.QtCore import Slot
 
@@ -67,8 +68,10 @@ class CoverUploadWorker(BaseWorker):
             raise CoverUploadError(response["message"])
         config.room_info.update({
             "cover_url": cover_url,
-            "cover_audit_reason": response["data"]["audit_info"]["audit_title_reason"],
-            "cover_status": response["data"]["audit_info"]["audit_title_status"],
+            "cover_audit_reason": response["data"]["audit_info"][
+                "audit_title_reason"],
+            "cover_status": response["data"]["audit_info"][
+                "audit_title_status"],
         })
 
     @staticmethod

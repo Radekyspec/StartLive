@@ -363,7 +363,7 @@ class CropLabel(QLabel):
     def _farthest_corner(self, fixed_pt: QPoint, rect: QRect) -> QPoint:
         corners = self._corners(rect)
         return max(corners, key=lambda p: (p.x() - fixed_pt.x()) ** 2 + (
-                    p.y() - fixed_pt.y()) ** 2)
+                p.y() - fixed_pt.y()) ** 2)
 
     def _snap_and_keep_aspect(self, raw_rect: QRect) -> QRect:
         """

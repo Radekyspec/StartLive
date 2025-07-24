@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import tracemalloc
 from contextlib import suppress
 # module import
 from functools import partial
@@ -310,7 +309,8 @@ class StreamConfigPanel(QWidget):
             self.cover_status.setText("审核中...可以先行开播喔~")
             self.cover_status.setStyleSheet("color: orange")
         elif config.room_info["cover_status"] == -1:
-            self.cover_status.setText(f"审核未通过: {config.room_info['cover_audit_reason']}")
+            self.cover_status.setText(
+                f"审核未通过: {config.room_info['cover_audit_reason']}")
             self.cover_status.setStyleSheet("color: red")
 
     def _save_title(self):

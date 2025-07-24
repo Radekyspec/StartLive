@@ -1,4 +1,5 @@
 from functools import partial
+
 # package import
 from PySide6.QtCore import Slot
 

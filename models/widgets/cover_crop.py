@@ -77,6 +77,7 @@ class CoverCropWidget(QWidget):
         buf.close()
         self.parent_window.parent_window.add_thread(
             CoverUploadWorker(ba.data()),
-            on_finished=partial(CoverUploadWorker.on_finished, self.parent_window),
+            on_finished=partial(CoverUploadWorker.on_finished,
+                                self.parent_window),
             on_exception=partial(CoverUploadWorker.on_exception, self)
         )

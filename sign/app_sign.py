@@ -50,6 +50,8 @@ def base_payload(*, access_key: bool = True, build: bool = True,
 
 if __name__ == '__main__':
     import itertools
+
+
     def get_all_subsets_with_itertools(data_list):
         """
         使用 `itertools.combinations` 获取列表的所有子集。
@@ -65,6 +67,7 @@ if __name__ == '__main__':
             for subset in itertools.combinations(data_list, i):
                 all_subsets.append(list(subset))
         return all_subsets
+
 
     p = {
     }

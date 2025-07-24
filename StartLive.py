@@ -470,7 +470,8 @@ class MainWindow(SingleInstanceWindow):
                 login_hint1 = "分区已更新！"
             else:
                 login_hint1 = "正在更新分区..."
-            if config.scan_status["room_updated"] and config.scan_status["announce_updated"]:
+            if config.scan_status["room_updated"] and config.scan_status[
+                "announce_updated"]:
                 login_hint2 = "房间信息已更新！"
             else:
                 login_hint2 = "正在更新房间信息..."

@@ -5,6 +5,7 @@
 下载/更新/答疑QQ群：[1022778201](https://qm.qq.com/q/fPBktdfdrG)
 
 ## 安装
+
 ### 通过 Releases 下载
 
 下载链接：[点击这里下载](https://github.com/Radekyspec/StartLive/releases/latest)

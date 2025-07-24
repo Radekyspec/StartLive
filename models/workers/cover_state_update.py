@@ -1,12 +1,11 @@
 # module import
 from time import sleep
+
 # package import
 from PySide6.QtCore import Slot
 
 # local package import
 import config
-import constant
-from exceptions import AreaUpdateError
 from models.log import get_logger
 from models.workers.base import run_wrapper, LongLiveWorker
 from sign import livehime_sign
