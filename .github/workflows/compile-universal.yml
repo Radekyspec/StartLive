@@ -1,3 +1,5 @@
+name: Compile universal binaries
+
 on:
   push:
     branches:

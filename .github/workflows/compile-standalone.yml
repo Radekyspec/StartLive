@@ -1,3 +1,5 @@
+name: Compile standalone for Windows
+
 on:
   push:
     branches:
