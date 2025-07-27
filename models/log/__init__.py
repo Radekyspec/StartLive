@@ -14,30 +14,32 @@ class ThreadClassFormatter(Formatter):
         return super().format(record)
 
 
-def init_logger(name: str = LOGGER_NAME) -> Logger:
-    logger = getLogger(name)
-    logger.setLevel(DEBUG)
+def get_log_path(*, is_makedir: bool = True) -> (str, str):
     if system() == "Windows":
         try:
             base_dir = os.path.abspath(__compiled__.containing_dir)
         except NameError:
             base_dir = os.path.abspath(".")
-        os.makedirs(os.path.join(base_dir, "logs"), exist_ok=True)
-        log_dir = os.path.join(base_dir, "logs")
-        log_path = os.path.join(log_dir, "StartLive.log")
+        base_dir = os.path.join(base_dir, "logs")
+        log_path = os.path.join(base_dir, "StartLive.log")
     elif system() == "Linux":
         base_dir = os.path.join("var", "log", "StartLive")
-        os.makedirs(base_dir, exist_ok=True)
-        log_dir = base_dir
-        log_path = os.path.join(log_dir, "StartLive.log")
+        log_path = os.path.join(base_dir, "StartLive.log")
     elif system() == "Darwin":
         base_dir = os.path.join(os.path.expanduser("~"), "Library", "Logs",
                                 "StartLive")
-        os.makedirs(base_dir, exist_ok=True)
-        log_dir = base_dir
-        log_path = os.path.join(log_dir, "StartLive.log")
+        log_path = os.path.join(base_dir, "StartLive.log")
     else:
         raise ValueError("Unsupported system")
+    if is_makedir:
+        os.makedirs(base_dir, exist_ok=True)
+    return base_dir, log_path
+
+
+def init_logger(name: str = LOGGER_NAME) -> Logger:
+    logger = getLogger(name)
+    logger.setLevel(DEBUG)
+    log_dir, log_path = get_log_path()
     fh = TimedRotatingFileHandler(
         log_path, when="midnight", interval=1, backupCount=30, encoding="utf-8"
     )

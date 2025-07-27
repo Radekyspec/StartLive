@@ -13,8 +13,9 @@ from typing import Optional, Callable
 
 # package import
 from PIL import ImageQt
-from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool)
-from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup
+from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool, QUrl)
+from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup, \
+    QDesktopServices
 from PySide6.QtWidgets import (QLabel, QMessageBox, QVBoxLayout, QWidget,
                                QApplication, QSystemTrayIcon, QMenu
                                )
@@ -30,7 +31,7 @@ import constant
 from config import dumps
 from constant import *
 from models.classes import ClickableLabel, SingleInstanceWindow
-from models.log import init_logger, get_logger
+from models.log import init_logger, get_logger, get_log_path
 from models.widgets import *
 from models.workers import *
 from models.workers.base import *
@@ -60,7 +61,7 @@ class MainWindow(SingleInstanceWindow):
     login_worker: Optional[FetchLoginWorker]
     face_window: Optional[FaceQRWidget]
 
-    def __init__(self, host, port, first_run, no_const_update):
+    def __init__(self, host, port, first_run, no_const_update, /):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         init_logger()
@@ -120,6 +121,10 @@ class MainWindow(SingleInstanceWindow):
         delete_cred = QAction("清空所有凭据", self)
         delete_cred.triggered.connect(self._delete_cred)
         setting_menu.addAction(delete_cred)
+
+        open_log_folder = QAction("显示日志文件", self)
+        open_log_folder.triggered.connect(self._open_log_folder)
+        menu_bar.addAction(open_log_folder)
 
         self.account_menu = QMenu("账号切换", self)
         menu_bar.addMenu(self.account_menu)
@@ -254,6 +259,11 @@ class MainWindow(SingleInstanceWindow):
     def _on_tray_icon_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._show_normal()
+
+    @staticmethod
+    def _open_log_folder():
+        log_dir, _ = get_log_path(is_makedir=False)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(log_dir))
 
     def _delete_cookies(self):
         if not config.scan_status["scanned"]:
@@ -415,6 +425,17 @@ class MainWindow(SingleInstanceWindow):
                              repr(e))
 
     def on_exit(self):
+        """
+        Handles final cleanup when the application exits.
+
+        This method performs critical cleanup tasks necessary to securely shutdown
+        the application. It stores sensitive internal application settings into a
+        secured keyring and stops any active background workers. The keyring is utilized
+        to help securely persist application and service settings between application
+        sessions without exposing sensitive data.
+
+        :raises Exception: Raised if any underlying method fails to execute properly.
+        """
         if config.obs_settings.internal:
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
                          dumps(config.obs_settings.internal))

@@ -63,7 +63,7 @@ jobs:
           noinclude-setuptools-mode: "nofollow"
           noinclude-pytest-mode: "nofollow"
           noinclude-unittest-mode: "nofollow"
-          include-data-dir: "resources=resources"
+          include-data-files: "resources/*.png=resources/"
           deployment: true
 
       - name: Build Executable for Mac
@@ -77,7 +77,7 @@ jobs:
           noinclude-setuptools-mode: "nofollow"
           noinclude-pytest-mode: "nofollow"
           noinclude-unittest-mode: "nofollow"
-          include-data-dir: "resources=resources"
+          include-data-files: "resources/*.png=resources/"
           deployment: true
 
       - name: Upload Artifacts
