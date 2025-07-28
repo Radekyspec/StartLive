@@ -26,6 +26,8 @@ winget install Radekyspec.StartLive
 
 ## 从源代码运行/开发
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Radekyspec/StartLive)
+
 ### 前置要求
 
 * `3.10 <= Python <= 3.12`
