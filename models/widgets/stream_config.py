@@ -42,6 +42,7 @@ class StreamConfigPanel(QWidget):
             config.obs_settings["port"] = self.port_input.text()
 
         def _password_save():
+            print(self.pass_input.text())
             config.obs_settings["password"] = self.pass_input.text()
 
         def _auto_live_save():

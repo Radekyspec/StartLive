@@ -246,6 +246,14 @@ class MainWindow(SingleInstanceWindow):
 
     def closeEvent(self, event):
         # 关闭窗口时退出应用
+        if config.obs_settings.internal:
+            set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
+                         dumps(config.obs_settings.internal))
+        if config.app_settings.internal:
+            set_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS,
+                         dumps(config.app_settings.internal))
+        for worker in self._ll_workers:
+            worker.stop()
         self._stop_http_server()
         self.tray_icon.hide()
         self.tray_icon.deleteLater()
@@ -424,27 +432,6 @@ class MainWindow(SingleInstanceWindow):
         QMessageBox.critical(self, f"{worker.name}线程错误",
                              repr(e))
 
-    def on_exit(self):
-        """
-        Handles final cleanup when the application exits.
-
-        This method performs critical cleanup tasks necessary to securely shutdown
-        the application. It stores sensitive internal application settings into a
-        secured keyring and stops any active background workers. The keyring is utilized
-        to help securely persist application and service settings between application
-        sessions without exposing sensitive data.
-
-        :raises Exception: Raised if any underlying method fails to execute properly.
-        """
-        if config.obs_settings.internal:
-            set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
-                         dumps(config.obs_settings.internal))
-        if config.app_settings.internal:
-            set_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS,
-                         dumps(config.app_settings.internal))
-        for worker in self._ll_workers:
-            worker.stop()
-
     @staticmethod
     # Helper: Generate QR code image from URL
     def generate_qr_code(data: str):
@@ -590,6 +577,5 @@ if __name__ == '__main__':
     setup_theme("auto")
     window = MainWindow(args.web_host, args.web_port, args.first_run,
                         args.no_update)
-    app.aboutToQuit.connect(window.on_exit)
     window.show()
     sys.exit(app.exec())
