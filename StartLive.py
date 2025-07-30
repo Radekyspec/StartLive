@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 # module import
-import os.path
 import sys
 from argparse import ArgumentParser
 from contextlib import suppress
 from functools import partial
+from os.path import abspath, dirname, join, isdir, exists
 from platform import system
 from subprocess import Popen
 from traceback import format_exception
@@ -83,7 +83,7 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon = QSystemTrayIcon(self)
         # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
         self.tray_icon.setIcon(QIcon(
-            os.path.join(os.path.dirname(__file__), "resources",
+            join(dirname(__file__), "resources",
                          "icon_cr.png")))
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
@@ -563,9 +563,10 @@ if __name__ == '__main__':
         sys.exit(0)
     if system() == "Windows":
         try:
-            updater_path = os.path.abspath(os.path.join(
-                __compiled__.containing_dir, "Update.exe"))
-            if os.path.exists(updater_path):
+            install_path = abspath(__compiled__.containing_dir)
+            updater_path = join(install_path, "Update.exe")
+            app_path = join(install_path, f"app-{VERSION}")
+            if exists(updater_path) and isdir(app_path):
                 Popen([updater_path, "--update=https://startlive.vtbs.ai/"])
         except:
             pass
