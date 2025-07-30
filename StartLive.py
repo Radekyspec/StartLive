@@ -228,6 +228,7 @@ class MainWindow(SingleInstanceWindow):
         """This function should only be called once
         when the program is shutting down."""
         if self._server_thread is not None and self._server_started:
+            self.logger.info("Stopping web server.")
             self._server_thread.stop()
             self._server_thread.quit()
             self._server_started = False
@@ -246,10 +247,13 @@ class MainWindow(SingleInstanceWindow):
 
     def closeEvent(self, event):
         # 关闭窗口时退出应用
+        self.logger.info("closeEvent triggered. Exiting application.")
         if config.obs_settings.internal:
+            self.logger.info("Saving OBS connection settings.")
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
                          dumps(config.obs_settings.internal))
         if config.app_settings.internal:
+            self.logger.info("Saving app settings.")
             set_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS,
                          dumps(config.app_settings.internal))
         for worker in self._ll_workers:
@@ -258,6 +262,7 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon.hide()
         self.tray_icon.deleteLater()
         QApplication.closeAllWindows()
+        self.logger.info("Application closed.")
         event.accept()
 
     def _show_normal(self):
