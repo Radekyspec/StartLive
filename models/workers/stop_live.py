@@ -49,6 +49,7 @@ class StopLiveWorker(BaseWorker):
             raise StopLiveError(response["message"])
 
     @staticmethod
+    @Slot()
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
         parent_window.start_btn.setEnabled(False)
         parent_window.stop_btn.setEnabled(True)

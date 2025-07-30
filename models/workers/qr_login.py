@@ -38,5 +38,6 @@ class QRLoginWorker(BaseWorker):
         config.scan_status["qr_url"] = response["data"]["url"]
 
     @staticmethod
+    @Slot()
     def on_finished(parent_window: "MainWindow"):
         parent_window.update_qr_image(config.scan_status["qr_url"])

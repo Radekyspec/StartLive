@@ -36,5 +36,6 @@ class ConstantUpdateWorker(BaseWorker):
         constant.STOP_LIVE_AUTH_CSRF = response["stop_ac"]
 
     @staticmethod
+    @Slot()
     def on_finished():
         config.scan_status["const_updated"] = True

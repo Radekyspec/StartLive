@@ -86,6 +86,7 @@ class StartLiveWorker(BaseWorker):
             "code"]
 
     @staticmethod
+    @Slot()
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
         parent_window.start_btn.setEnabled(True)
         parent_window.stop_btn.setEnabled(False)

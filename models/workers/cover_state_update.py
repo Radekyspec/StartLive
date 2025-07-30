@@ -45,5 +45,6 @@ class CoverStateUpdateWorker(LongLiveWorker):
             sleep(3)
 
     @staticmethod
+    @Slot()
     def on_finished(parent_window: "StreamConfigPanel"):
         parent_window.cover_audit_state()

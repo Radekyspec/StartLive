@@ -13,7 +13,7 @@ from typing import Optional, Callable
 
 # package import
 from PIL import ImageQt
-from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool, QUrl)
+from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool, QUrl, Slot)
 from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup, \
     QDesktopServices
 from PySide6.QtWidgets import (QLabel, QMessageBox, QVBoxLayout, QWidget,
@@ -233,6 +233,7 @@ class MainWindow(SingleInstanceWindow):
             self._server_thread.quit()
             self._server_started = False
 
+    @Slot(Exception)
     def _http_error_handler(self, e: Exception):
         QMessageBox.critical(self, f"Web服务线程错误",
                              repr(e))
@@ -422,6 +423,7 @@ class MainWindow(SingleInstanceWindow):
             self._ll_workers.append(worker)
         self._thread_pool.start(worker)
 
+    @Slot()
     def _remove_worker(self, dead_worker: BaseWorker | LongLiveWorker):
         self.logger.info(
             f"{dead_worker.__class__.__name__} removed from thread pool")
@@ -430,6 +432,7 @@ class MainWindow(SingleInstanceWindow):
         if dead_worker in self._ll_workers:
             self._ll_workers.remove(dead_worker)
 
+    @Slot()
     def _worker_exception(self, worker: BaseWorker | LongLiveWorker,
                           e: Exception):
         self.logger.error(
@@ -473,6 +476,7 @@ class MainWindow(SingleInstanceWindow):
             config.room_info.get("area", ""))
         self._start_http_server()
 
+    @Slot()
     def _check_scan_status(self):
         if config.scan_status["scanned"]:
             # Login succeeded, ready to switch to main UI

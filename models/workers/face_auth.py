@@ -41,6 +41,7 @@ class FaceAuthWorker(LongLiveWorker):
             sleep(1)
 
     @staticmethod
+    @Slot()
     def on_finished(qr_window: "FaceQRWidget"):
         with suppress(RuntimeError):
             qr_window.deleteLater()

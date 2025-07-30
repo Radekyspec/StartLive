@@ -71,6 +71,7 @@ class FetchPreLiveWorker(BaseWorker):
         self._fetch_room_info()
 
     @staticmethod
+    @Slot()
     def on_finished(parent_window: "StreamConfigPanel"):
         parent_window.title_input.setText(config.room_info["title"])
         parent_window.title_input.textEdited.connect(

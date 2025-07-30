@@ -75,6 +75,7 @@ class CoverUploadWorker(BaseWorker):
         })
 
     @staticmethod
+    @Slot()
     def on_finished(parent_window: "StreamConfigPanel"):
         parent_window.cover_audit_state()
         parent_window.cover_crop_widget.close()
@@ -85,6 +86,7 @@ class CoverUploadWorker(BaseWorker):
         )
 
     @staticmethod
+    @Slot()
     def on_exception(parent_window: "CoverCropWidget", *args, **kwargs):
         parent_window.btn_upload.setText("保存封面")
         parent_window.btn_upload.setEnabled(True)

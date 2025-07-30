@@ -23,6 +23,7 @@ class FetchCoverWorker(BaseWorker):
         config.room_info["cover_data"] = response.content
 
     @staticmethod
+    @Slot()
     def on_finished(parent: "CoverCropWidget"):
         pix = QPixmap()
         pix.loadFromData(config.room_info["cover_data"])

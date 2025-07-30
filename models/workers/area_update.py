@@ -43,6 +43,7 @@ class AreaUpdateWorker(BaseWorker):
             raise AreaUpdateError(response["message"])
 
     @staticmethod
+    @Slot()
     def on_finished(parent_window: "StreamConfigPanel"):
         config.room_info[
             "parent_area"] = parent_window.parent_combo.currentText()
@@ -50,5 +51,6 @@ class AreaUpdateWorker(BaseWorker):
             "area"] = parent_window.child_combo.currentText()
 
     @staticmethod
+    @Slot()
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
         parent_window.save_area_btn.setEnabled(True)

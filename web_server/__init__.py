@@ -14,6 +14,7 @@ class SignalEmitter(QObject):
 
 class HttpServerWorker(QThread):
     signals = SignalEmitter()
+    httpd: HTTPServer
 
     def __init__(self, host="localhost", port=8080):
         super().__init__()

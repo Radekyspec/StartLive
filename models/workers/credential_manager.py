@@ -169,6 +169,7 @@ class CredentialManagerWorker(BaseWorker):
         config.scan_status["scanned"] = True
 
     @staticmethod
+    @Slot()
     def on_finished(parent_window: "MainWindow"):
         FetchLoginWorker.post_login(parent_window)
         parent_window.load_credentials()

@@ -43,9 +43,11 @@ class AnnounceUpdateWorker(BaseWorker):
             raise AnnounceUpdateError(response["message"])
 
     @staticmethod
+    @Slot()
     def on_finished(parent_window: "StreamConfigPanel"):
         config.room_info["announcement"] = parent_window.announce_input.text()
 
     @staticmethod
+    @Slot()
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
         parent_window.save_announce_btn.setEnabled(True)

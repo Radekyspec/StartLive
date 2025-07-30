@@ -5,7 +5,7 @@ from functools import partial
 from ipaddress import ip_address, IPv6Address
 
 # package import
-from PySide6.QtCore import (Qt, QTimer)
+from PySide6.QtCore import (Qt, QTimer, Slot)
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
@@ -42,7 +42,6 @@ class StreamConfigPanel(QWidget):
             config.obs_settings["port"] = self.port_input.text()
 
         def _password_save():
-            print(self.pass_input.text())
             config.obs_settings["password"] = self.pass_input.text()
 
         def _auto_live_save():
@@ -222,9 +221,11 @@ class StreamConfigPanel(QWidget):
     def copy_key(self):
         QApplication.clipboard().setText(self.key_input.text())
 
+    @Slot()
     def start_live(self):
         self._start_live()
 
+    @Slot()
     def stop_live(self):
         self._stop_live()
 

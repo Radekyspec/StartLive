@@ -27,6 +27,7 @@ class FetchAnnounceWorker(BaseWorker):
             "content"]
 
     @staticmethod
+    @Slot()
     def on_finished(panel: "StreamConfigPanel"):
         panel.announce_input.setText(config.room_info["announcement"])
         panel.announce_input.textEdited.connect(

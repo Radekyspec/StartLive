@@ -30,6 +30,7 @@ class ObsConnectorWorker(BaseWorker):
         config.obs_connecting = False
 
     @classmethod
+    @Slot()
     def on_exception(cls, parent_window: "StreamConfigPanel", *args, **kwargs):
         logger = get_logger(cls.__name__)
         logger.error(f"OBS connect failed.")
@@ -38,6 +39,7 @@ class ObsConnectorWorker(BaseWorker):
         config.obs_connecting = False
 
     @classmethod
+    @Slot()
     def on_finished(cls, parent_window):
         logger = get_logger(cls.__name__)
         if config.obs_client is not None:

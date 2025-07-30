@@ -96,6 +96,7 @@ class FetchLoginWorker(LongLiveWorker):
                 case _:
                     raise LoginError(result["message"])
 
+    @Slot()
     def on_finished(self, parent_window: "MainWindow"):
         if not self.is_running:
             return

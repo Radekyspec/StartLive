@@ -38,6 +38,7 @@ class ObsDaemonWorker(LongLiveWorker):
         config.obs_op = False
 
     @classmethod
+    @Slot()
     def on_finished(cls):
         if config.obs_client is not None:
             cls.disconnect_obs()

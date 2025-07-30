@@ -13,7 +13,7 @@ class FaceQRWidget(QWidget):
         self.setWindowTitle("人脸认证")
         self.setWindowFlags(
             Qt.WindowType.Window | Qt.WindowType.WindowCloseButtonHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         layout = QVBoxLayout()
 
         self.face_hint = QLabel("目标分区需要人脸认证")
