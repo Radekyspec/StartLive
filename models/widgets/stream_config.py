@@ -5,7 +5,7 @@ from functools import partial
 from ipaddress import ip_address, IPv6Address
 
 # package import
-from PySide6.QtCore import (Qt, QTimer, Slot)
+from PySide6.QtCore import (Qt, Slot)
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
 import config
 from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
+from models.states import ObsBtnState
 from models.workers import *
 from models.workers.announce_update import AnnounceUpdateWorker
 from .cover_crop import CoverCropWidget
@@ -29,7 +30,10 @@ class StreamConfigPanel(QWidget):
         self.parent_window = parent_window
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
-        self._obs_timer = QTimer()
+        self.obs_btn_state = ObsBtnState()
+        self.obs_btn_state.obsConnected.connect(self._obs_btn_connected)
+        self.obs_btn_state.obsDisconnected.connect(self._obs_btn_disconnected)
+        self.obs_btn_state.obsConnecting.connect(self._obs_btn_connecting)
         self.cover_crop_widget: CoverCropWidget | None = None
         self.main_layout = QVBoxLayout()
         self.setLayout(self.main_layout)
@@ -76,7 +80,7 @@ class StreamConfigPanel(QWidget):
         self.connect_btn = QPushButton("连接")
         self.connect_btn.clicked.connect(self._connect_obs)
         obs_layout.addWidget(self.connect_btn, 1, 6)
-        self._obs_timer.timeout.connect(self._obs_btn_state)
+        # self._obs_timer.timeout.connect(self._obs_btn_state)
 
         obs_hint = QLabel(
             "在 OBS 中打开 WebSocket服务器 功能，在下方填写信息以自动导入推流地址到OBS\n未连接 OBS 时自动推流将不会生效")
@@ -272,7 +276,6 @@ class StreamConfigPanel(QWidget):
 
     def _connect_obs(self):
         if config.obs_client is None and not config.obs_op:
-            self.connect_btn.setText("连接中")
             obs_host = self.host_input.text()
             try:
                 ip_object = ip_address(obs_host)
@@ -280,28 +283,29 @@ class StreamConfigPanel(QWidget):
                     obs_host = f"[{obs_host}]"
             except ValueError:
                 pass
-            connector = ObsConnectorWorker(host=obs_host,
+            connector = ObsConnectorWorker(self.obs_btn_state,
+                                           host=obs_host,
                                            port=self.port_input.text(),
                                            password=self.pass_input.text())
             self.parent_window.add_thread(
                 connector,
-                on_finished=partial(connector.on_finished, self),
-                on_exception=partial(connector.on_exception, self)
+                on_finished=partial(connector.on_finished, self,
+                                    self.obs_btn_state),
+                on_exception=partial(connector.on_exception, self,
+                                     self.obs_btn_state)
             )
-            self._obs_timer.start(100)
         elif config.obs_client is not None and not config.obs_op:
-            ObsDaemonWorker.disconnect_obs()
+            ObsDaemonWorker.disconnect_obs(self.obs_btn_state)
             self.obs_auto_live_checkbox.setEnabled(False)
-            self._obs_timer.start(100)
 
-    def _obs_btn_state(self):
-        if config.obs_connecting:
-            self.connect_btn.setText("连接中")
-            return
-        if not config.obs_op:
-            self.connect_btn.setText(
-                "断开" if config.obs_client is not None else "连接")
-            self._obs_timer.stop()
+    def _obs_btn_connecting(self):
+        self.connect_btn.setText("连接中")
+
+    def _obs_btn_connected(self):
+        self.connect_btn.setText("断开")
+
+    def _obs_btn_disconnected(self):
+        self.connect_btn.setText("连接")
 
     def cover_audit_state(self):
         if config.room_info["cover_status"] == 1:

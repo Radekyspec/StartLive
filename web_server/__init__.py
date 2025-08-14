@@ -1,19 +1,13 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from traceback import format_exception
 
-from PySide6.QtCore import QThread, Signal, QObject
+from PySide6.QtCore import QThread
 
 from models.log import get_logger
-
-
-class SignalEmitter(QObject):
-    startLive = Signal()
-    stopLive = Signal()
-    exception = Signal(Exception)
+from models.states import HttpSignalEmitter
 
 
 class HttpServerWorker(QThread):
-    signals = SignalEmitter()
     httpd: HTTPServer
 
     def __init__(self, host="localhost", port=8080):
@@ -21,6 +15,7 @@ class HttpServerWorker(QThread):
         self.host = host
         self.port = port
         self.logger = get_logger(self.__class__.__name__)
+        self.signals = HttpSignalEmitter()
 
     def run(self):
         try:

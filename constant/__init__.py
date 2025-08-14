@@ -12,7 +12,7 @@ KEYRING_APP_SETTINGS = "appSettings"
 KEYRING_ROOM_INFO = "roomInfo"
 LOCAL_SERVER_NAME = "StartLive|singleInstanceServer"
 LOGGER_NAME = "StartLiveLogger"
-VERSION = "0.5.4"
+VERSION = "0.5.5"
 
 APP_KEY = "aae92bc66f3edfab"
 APP_SECRET = "af125a0d5279fd576c1b4418a3e8276d"

@@ -84,7 +84,7 @@ class MainWindow(SingleInstanceWindow):
         # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
         self.tray_icon.setIcon(QIcon(
             join(dirname(__file__), "resources",
-                         "icon_cr.png")))
+                 "icon_cr.png")))
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
         self.logger.info("System tray icon initialized.")
@@ -164,7 +164,7 @@ class MainWindow(SingleInstanceWindow):
         for worker in self._ll_workers:
             worker.stop()
         if config.obs_client is not None:
-            ObsDaemonWorker.disconnect_obs()
+            ObsDaemonWorker.disconnect_obs(self.panel.obs_btn_state)
         # self.timer.deleteLater()
         # with suppress(AttributeError):
         #     self.panel.deleteLater()
