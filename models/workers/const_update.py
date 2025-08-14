@@ -19,7 +19,7 @@ class ConstantUpdateWorker(BaseWorker):
     @run_wrapper
     def run(self, /) -> None:
         # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
-        url = "https://ghfast.top/https://raw.githubusercontent.com/Radekyspec/StartLive/refs/heads/master/resources/version.json"
+        url = "https://gh.vtbs.ai/https://raw.githubusercontent.com/Radekyspec/StartLive/refs/heads/master/resources/version.json"
         self.logger.info(f"version.json Request")
         response = config.session.get(url)
         response.encoding = "utf-8"
