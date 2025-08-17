@@ -3,18 +3,33 @@ name: WinGet submission on release
 on:
   workflow_dispatch:
   release:
-    types: [ released ]
+    types: [published]
 
 jobs:
   winget:
-    name: Publish to WinGet
+    name: Publish winget package
+
+    # winget-create is only supported on Windows
     runs-on: windows-latest
 
+    # winget-create will read the following environment variable to access the GitHub token needed for submitting a PR
+    # See https://aka.ms/winget-create-token
+    env:
+      WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.PT_WINGET }}
+
+    # Only submit stable releases
+    if: ${{ !github.event.release.prerelease }}
     steps:
-      - name: Publish to WinGet
-        uses: vedantmgoyal9/winget-releaser@main
-        with:
-          identifier: Radekyspec.StartLive
-          version: ${{ github.event.release.tag_name }}
-          installers-regex: '^StartLive-Setup\.exe$'
-          token: ${{ secrets.PT_WINGET }}
+      - name: Upgrade the package Radekyspec.StartLive
+        run: |
+          # Get installer info from GitHub release event
+          $assets = '${{ toJSON(github.event.release.assets) }}' | ConvertFrom-Json
+          $installerUrl = $assets | Where-Object -Property name -match 'StartLive-Setup.exe' | Select -ExpandProperty browser_download_url
+          $packageVersion = ${{ toJSON(github.event.release.tag_name) }}
+
+          # Update package using wingetcreate
+          curl.exe -JLO https://aka.ms/wingetcreate/latest
+          .\wingetcreate.exe update Radekyspec.StartLive `
+            --version $packageVersion `
+            --urls "$installerUrl|x64" `
+            --submit
