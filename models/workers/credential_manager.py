@@ -15,6 +15,7 @@ from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign
 from .fetch_login import FetchLoginWorker
+from ..states import LoginState
 
 
 class CredentialManagerWorker(BaseWorker):
@@ -170,9 +171,9 @@ class CredentialManagerWorker(BaseWorker):
 
     @staticmethod
     @Slot()
-    def on_finished(parent_window: "MainWindow"):
-        FetchLoginWorker.post_login(parent_window)
-        parent_window.load_credentials()
+    def on_finished(parent_window: "MainWindow", state: LoginState):
+        FetchLoginWorker.post_login(parent_window, state)
+        state.credentialLoaded.emit()
         panel = parent_window.panel
         panel.host_input.setText(
             config.obs_settings.get("ip_addr", "localhost"))

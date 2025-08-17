@@ -1,7 +1,7 @@
 from functools import partial
 
 # package import
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Slot, QMutex, QWaitCondition, QMutexLocker
 from obsws_python import ReqClient
 
 # local package import
@@ -13,8 +13,11 @@ from .obs_daemon import ObsDaemonWorker
 
 
 class ObsConnectorWorker(BaseWorker):
-    def __init__(self, state: ObsBtnState, /, host, port, password):
+    def __init__(self, state: ObsBtnState, /, mutex: QMutex,
+                 cond: QWaitCondition, *, host, port, password):
         super().__init__(name="OBS通讯")
+        self._mutex = mutex
+        self._cond = cond
         self.host = host
         self.port = port
         self.password = password
@@ -24,35 +27,37 @@ class ObsConnectorWorker(BaseWorker):
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
-        config.obs_op = True
-        config.obs_connecting = True
+        with QMutexLocker(self._mutex):
+            config.obs_op = True
+            config.obs_connecting = True
+            self._cond.wakeAll()
         self.state.obsConnecting.emit()
         self.logger.info("OBS connecting")
         config.obs_client = ReqClient(host=self.host, port=self.port,
                                       password=self.password,
                                       timeout=5)
-        config.obs_op = False
-        config.obs_connecting = False
+        with QMutexLocker(self._mutex):
+            config.obs_op = False
+            config.obs_connecting = False
+            self._cond.wakeAll()
 
-    @classmethod
     @Slot()
-    def on_exception(cls, parent_window: "StreamConfigPanel",
+    def on_exception(self, parent_window: "StreamConfigPanel",
                      state: ObsBtnState,
                      *args, **kwargs):
-        logger = get_logger(cls.__name__)
-        logger.error(f"OBS connect failed.")
+        self.logger.error(f"OBS connect failed.")
         parent_window.obs_auto_live_checkbox.setEnabled(False)
-        config.obs_op = False
-        config.obs_connecting = False
+        with QMutexLocker(self._mutex):
+            config.obs_op = False
+            config.obs_connecting = False
+            self._cond.wakeAll()
         state.obsDisconnected.emit()
 
-    @classmethod
     @Slot()
-    def on_finished(cls, parent_window, state: ObsBtnState):
-        logger = get_logger(cls.__name__)
+    def on_finished(self, parent_window, state: ObsBtnState):
         if config.obs_client is not None:
             state.obsConnected.emit()
-            logger.info("OBS connected")
+            self.logger.info("OBS connected")
             parent_window.obs_auto_live_checkbox.setEnabled(True)
             parent_window.parent_window.add_thread(
                 ObsDaemonWorker(),

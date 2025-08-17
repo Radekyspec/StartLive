@@ -8,9 +8,9 @@ from .fetch_announce import FetchAnnounceWorker
 from .fetch_cover import FetchCoverWorker
 from .fetch_login import FetchLoginWorker
 from .fetch_pre_live import FetchPreLiveWorker
+from .fetch_qr import FetchQRWorker
 from .obs_connector import ObsConnectorWorker
 from .obs_daemon import ObsDaemonWorker
-from .qr_login import QRLoginWorker
 from .start_live import StartLiveWorker
 from .stop_live import StopLiveWorker
 from .title_update import TitleUpdateWorker

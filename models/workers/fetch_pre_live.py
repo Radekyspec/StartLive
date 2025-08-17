@@ -10,6 +10,7 @@ from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign, order_payload
 from .cover_state_update import CoverStateUpdateWorker
 from .start_live import StartLiveWorker
+from ..states import LoginState
 
 
 class FetchPreLiveWorker(BaseWorker):
@@ -72,7 +73,7 @@ class FetchPreLiveWorker(BaseWorker):
 
     @staticmethod
     @Slot()
-    def on_finished(parent_window: "StreamConfigPanel"):
+    def on_finished(parent_window: "StreamConfigPanel", state: LoginState):
         parent_window.title_input.setText(config.room_info["title"])
         parent_window.title_input.textEdited.connect(
             lambda: parent_window.save_title_btn.setEnabled(True))
@@ -93,3 +94,4 @@ class FetchPreLiveWorker(BaseWorker):
             )
 
         config.scan_status["room_updated"] = True
+        state.roomUpdated.emit()

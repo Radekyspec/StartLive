@@ -32,6 +32,7 @@ from config import dumps
 from constant import *
 from models.classes import ClickableLabel, SingleInstanceWindow
 from models.log import init_logger, get_logger, get_log_path
+from models.states import LoginState
 from models.widgets import *
 from models.workers import *
 from models.workers.base import *
@@ -46,17 +47,18 @@ class MainWindow(SingleInstanceWindow):
     _thread_pool: QThreadPool
     _host: str
     _port: int
+    _no_const_update: bool
     _server_started: bool
     _server_thread: Optional[HttpServerWorker]
     _current_cookie_idx: int
     _cookie_index_len: int
+    _login_state: LoginState
     account_group: QActionGroup
     account_menu: QMenu
     login_label: QLabel
     status_label: ClickableLabel
     qr_label: QLabel
     panel: StreamConfigPanel
-    timer: QTimer
     credential_worker: CredentialManagerWorker
     login_worker: Optional[FetchLoginWorker]
     face_window: Optional[FaceQRWidget]
@@ -69,10 +71,10 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info(f"App created with host={host}, port={port}")
         self._host = host
         self._port = port
+        self._no_const_update = no_const_update
         self._thread_pool = QThreadPool()
         self._current_cookie_idx = 0
         self._managed_workers = []
-        self.timer = QTimer()
         # Long live workers
         self._ll_workers = []
         self._worker_typeset = set()
@@ -88,12 +90,6 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
         self.logger.info("System tray icon initialized.")
-        if no_const_update:
-            self.logger.info("Constant update disabled.")
-            config.scan_status["const_updated"] = True
-        else:
-            self.add_thread(ConstantUpdateWorker(),
-                            on_finished=ConstantUpdateWorker.on_finished)
 
         tray_menu = QMenu()
         restore_action = QAction("显示窗口", self)
@@ -168,7 +164,7 @@ class MainWindow(SingleInstanceWindow):
         # self.timer.deleteLater()
         # with suppress(AttributeError):
         #     self.panel.deleteLater()
-        self.timer = QTimer()
+        self._login_state = LoginState()
         self.panel = StreamConfigPanel(self)
         config.session.headers.clear()
         config.session.headers.update(constant.HEADERS_WEB)
@@ -202,9 +198,23 @@ class MainWindow(SingleInstanceWindow):
         self.login_worker = None
         self.add_thread(self.credential_worker,
                         on_finished=partial(self.credential_worker.on_finished,
-                                            self))
+                                            self, self._login_state))
 
         self.face_window: Optional[FaceQRWidget] = None
+        self._login_state.areaUpdated.connect(self._post_scan_setup)
+        self._login_state.constUpdated.connect(self._post_scan_setup)
+        self._login_state.credentialLoaded.connect(self.load_credentials)
+        self._login_state.roomUpdated.connect(self._post_scan_setup)
+        self._login_state.qrScanned.connect(self._post_scan_setup)
+        self._login_state.qrExpired.connect(self._qr_expired)
+        self._login_state.qrNotConfirmed.connect(self._qr_not_confirmed)
+        if self._no_const_update:
+            self.logger.info("Constant update disabled.")
+            config.scan_status["const_updated"] = True
+        else:
+            const_updater = ConstantUpdateWorker(self._login_state)
+            self.add_thread(const_updater,
+                            on_finished=const_updater.on_finished)
 
     def _init_http_server(self):
         self._server_started = False
@@ -368,6 +378,13 @@ class MainWindow(SingleInstanceWindow):
             config.session.post = partial(config.session.post, verify=True)
             config.session.trust_env = False
 
+    def load_credentials(self):
+        if config.scan_status["scanned"]:
+            self._post_scan_setup()
+        else:
+            # Needs update credential
+            self._fetch_qr()
+
     def _fetch_qr(self, retry: bool = False):
         # Start fetching QR and begin polling thread
         self.logger.info("Starting login flow.")
@@ -380,12 +397,10 @@ class MainWindow(SingleInstanceWindow):
                 "qr_key": None, "qr_url": None,
                 "wait_for_confirm": False
             })
-            self.timer.timeout.connect(self._check_scan_status)
-            self.timer.start(50)
-        qr_login_worker = QRLoginWorker()
+        qr_login_worker = FetchQRWorker()
         self.add_thread(qr_login_worker,
                         on_finished=partial(qr_login_worker.on_finished, self))
-        self.login_worker = FetchLoginWorker()
+        self.login_worker = FetchLoginWorker(self._login_state)
         self.add_thread(self.login_worker,
                         on_finished=partial(self.login_worker.on_finished,
                                             self))
@@ -393,13 +408,6 @@ class MainWindow(SingleInstanceWindow):
         self.status_label.setText("等待扫码中...")
         self.status_label.setStyleSheet("color: blue; font-size: 16pt;")
         # Timer checks the login state and updates UI
-
-    def load_credentials(self):
-        self.timer.timeout.connect(self._check_scan_status)
-        self.timer.start(50)
-        if not config.scan_status["scanned"]:
-            # Needs update credential
-            self._fetch_qr()
 
     def add_thread(self, worker: BaseWorker | LongLiveWorker, *,
                    on_finished: Callable | None = None,
@@ -461,8 +469,6 @@ class MainWindow(SingleInstanceWindow):
         self.qr_label.setPixmap(self._qpixmap_from_str(qr_url))  # Show in UI
 
     def _after_login_success(self):
-        self.timer.timeout.disconnect(self._check_scan_status)
-        self.timer.stop()
         config.session.headers.clear()
         config.session.headers.update(constant.HEADERS_APP)
         self.panel.parent_combo.clear()
@@ -477,84 +483,58 @@ class MainWindow(SingleInstanceWindow):
         self._start_http_server()
 
     @Slot()
-    def _check_scan_status(self):
-        if config.scan_status["scanned"]:
-            # Login succeeded, ready to switch to main UI
-            if self.status_label.text() != "登录成功！":
-                self.status_label.setText("登录成功！")
-                self.status_label.setStyleSheet("color: green;font-size: 16pt;")
-            if config.scan_status["area_updated"]:
-                login_hint1 = "分区已更新！"
-            else:
-                login_hint1 = "正在更新分区..."
-            if config.scan_status["room_updated"] and config.scan_status[
-                "announce_updated"]:
-                login_hint2 = "房间信息已更新！"
-            else:
-                login_hint2 = "正在更新房间信息..."
-            if config.scan_status["const_updated"]:
-                login_hint3 = "请求参数已更新！"
-            else:
-                login_hint3 = "正在更新请求参数..."
-            login_hint = f"{login_hint1}\n{login_hint2}\n{login_hint3}"
-            self.login_label.setText(login_hint)
-            if not config.scan_status["area_updated"] or \
-                    not config.scan_status["room_updated"] or \
-                    not config.scan_status["const_updated"] or \
-                    not config.scan_status["announce_updated"]:
-                return
-            self._after_login_success()
-        elif config.scan_status["timeout"]:
-            self.status_label.setText("二维码已失效，点击这里刷新")
-            self.status_label.setStyleSheet("color: red; font-size: 16pt;")
-            self.status_label.clicked.connect(lambda: self._fetch_qr(True))
-            self.timer.timeout.disconnect(self._check_scan_status)
-            self.timer.stop()
-        elif config.scan_status["wait_for_confirm"]:
-            self.status_label.setText("已扫码，等待确认登录...")
+    def _post_scan_setup(self):
+        if not config.scan_status["scanned"]:
+            return
+        if self.status_label.text() != "登录成功！":
+            self.status_label.setText("登录成功！")
+            self.status_label.setStyleSheet("color: green;font-size: 16pt;")
+        if config.scan_status["area_updated"]:
+            login_hint1 = "分区已更新！"
+        else:
+            login_hint1 = "正在更新分区..."
+        if config.scan_status["room_updated"] and config.scan_status[
+            "announce_updated"]:
+            login_hint2 = "房间信息已更新！"
+        else:
+            login_hint2 = "正在更新房间信息..."
+        if config.scan_status["const_updated"]:
+            login_hint3 = "请求参数已更新！"
+        else:
+            login_hint3 = "正在更新请求参数..."
+        login_hint = f"{login_hint1}\n{login_hint2}\n{login_hint3}"
+        self.login_label.setText(login_hint)
+        if not config.scan_status["area_updated"] or \
+                not config.scan_status["room_updated"] or \
+                not config.scan_status["const_updated"] or \
+                not config.scan_status["announce_updated"]:
+            return
+        self._after_login_success()
 
-    def fill_stream_info(self):
-        if config.stream_status["stream_key"] is not None and \
-                config.stream_status[
-                    "stream_addr"] is not None:
-            if config.obs_connecting:
-                return
-            self.panel.addr_input.setText(
-                str(config.stream_status["stream_addr"]))
-            self.panel.key_input.setText(
-                str(config.stream_status["stream_key"]))
+    @Slot()
+    def _qr_expired(self):
+        self.status_label.setText("二维码已失效，点击这里刷新")
+        self.status_label.setStyleSheet("color: red; font-size: 16pt;")
+        self.status_label.clicked.connect(lambda: self._fetch_qr(True))
 
-            if config.obs_client is not None:
-                config.obs_req_queue.put(("SetStreamServiceSettings", {
-                    "streamServiceType": "rtmp_custom",
-                    "streamServiceSettings": {
-                        "bwtest": False,
-                        "server": str(config.stream_status["stream_addr"]),
-                        "key": str(config.stream_status["stream_key"]),
-                        "use_auth": False
-                    }
-                }))
-                if self.panel.obs_auto_live_checkbox.isChecked():
-                    config.obs_req_queue.put(("StartStream", {}))
+    @Slot()
+    def _qr_not_confirmed(self):
+        self.status_label.setText("已扫码，等待确认登录...")
 
-            self.timer.timeout.disconnect(self.fill_stream_info)
-            self.timer.stop()
-        elif config.stream_status["required_face"]:
-            config.stream_status["required_face"] = False
-            self.panel.start_btn.setEnabled(True)
-            self.panel.stop_btn.setEnabled(False)
-            self.panel.parent_combo.setEnabled(True)
-            self.panel.child_combo.setEnabled(True)
-            self.face_window = FaceQRWidget()
-            self.face_window.face_qr.setPixmap(self._qpixmap_from_str(
-                config.stream_status["face_url"]
-            ))
-            auth_worker = FaceAuthWorker(self.face_window)
-            self.face_window.destroyed.connect(auth_worker.stop)
-            self.add_thread(auth_worker,
-                            on_finished=partial(auth_worker.on_finished,
-                                                self.face_window))
-            self.face_window.show()
+    def popup_face_widget(self, face_url: str):
+        config.stream_status["required_face"] = False
+        self.panel.start_btn.setEnabled(True)
+        self.panel.stop_btn.setEnabled(False)
+        self.panel.parent_combo.setEnabled(True)
+        self.panel.child_combo.setEnabled(True)
+        self.face_window = FaceQRWidget()
+        self.face_window.face_qr.setPixmap(self._qpixmap_from_str(face_url))
+        auth_worker = FaceAuthWorker(self.face_window)
+        self.face_window.destroyed.connect(auth_worker.stop)
+        self.add_thread(auth_worker,
+                        on_finished=partial(auth_worker.on_finished,
+                                            self.face_window))
+        self.face_window.show()
 
 
 # Entry point

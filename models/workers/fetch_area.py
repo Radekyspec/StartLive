@@ -4,12 +4,14 @@ from PySide6.QtCore import Slot
 # local package import
 import config
 from models.log import get_logger
+from models.states import LoginState
 from models.workers.base import BaseWorker, run_wrapper
 
 
 class FetchAreaWorker(BaseWorker):
-    def __init__(self):
+    def __init__(self, state: LoginState):
         super().__init__(name="分区获取")
+        self.state = state
         self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
@@ -28,3 +30,4 @@ class FetchAreaWorker(BaseWorker):
                 config.area_codes[sub_area["name"]] = sub_area["id"]
                 config.area_options[area_info["name"]].append(sub_area["name"])
         config.scan_status["area_updated"] = True
+        self.state.areaUpdated.emit()

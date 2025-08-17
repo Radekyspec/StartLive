@@ -7,12 +7,14 @@ from PySide6.QtCore import Slot
 import config
 import constant
 from models.log import get_logger
+from models.states import LoginState
 from models.workers.base import BaseWorker, run_wrapper
 
 
 class ConstantUpdateWorker(BaseWorker):
-    def __init__(self):
+    def __init__(self, state: LoginState):
         super().__init__(name="配置更新")
+        self.state = state
         self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
@@ -35,7 +37,7 @@ class ConstantUpdateWorker(BaseWorker):
         constant.START_LIVE_AUTH_CSRF = response["start_ac"]
         constant.STOP_LIVE_AUTH_CSRF = response["stop_ac"]
 
-    @staticmethod
     @Slot()
-    def on_finished():
+    def on_finished(self):
         config.scan_status["const_updated"] = True
+        self.state.constUpdated.emit()

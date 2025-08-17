@@ -1,27 +1,45 @@
+from warnings import warn
+
 # package import
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Slot, QMutex, QWaitCondition, QMutexLocker
 
 # local package import
 import config
 import constant
 from exceptions import StartLiveError
 from models.log import get_logger
+from models.states import StreamState
 from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign, order_payload
 
 
 class StartLiveWorker(BaseWorker):
-    def __init__(self, area):
+    def __init__(self, state: StreamState, /, mutex: QMutex,
+                 cond: QWaitCondition, *, area):
         super().__init__(name="开播任务")
+        self.state = state
         self.area = area
+        self._mutex = mutex
+        self._cond = cond
 
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
-        self.start_live(self.area)
+        result = self.start_live(self.area)
+        match result:
+            case 0:
+                with QMutexLocker(self._mutex):
+                    while config.obs_connecting:
+                        self._cond.wait(self._mutex)
+                self.state.addressUpdated.emit(
+                    config.stream_status["stream_addr"],
+                    config.stream_status["stream_key"])
+            case 60024:
+                self.state.faceRequired.emit(
+                    config.stream_status["face_url"])
 
     @classmethod
-    def start_live(cls, area):
+    def start_live(cls, area) -> int:
         logger = get_logger(cls.__name__)
         live_url = "https://api.live.bilibili.com/room/v1/Room/startLive"
         # self.fetch_upstream()
@@ -57,19 +75,21 @@ class StartLiveWorker(BaseWorker):
                     "stream_addr": response["data"]["rtmp"]["addr"],
                     "stream_key": response["data"]["rtmp"]["code"]
                 })
+                return 0
             case 60024:
                 logger.warning(f"startLive Response face auth: {response}")
                 config.stream_status.update({
                     "required_face": True,
                     "face_url": response["data"]["qr"]
                 })
+                return 60024
             case _:
                 logger.error(f"startLive Response error: {response}")
                 raise StartLiveError(response["message"])
 
     @staticmethod
     def fetch_upstream():
-        raise DeprecationWarning("fetch_upstream is deprecated")
+        warn("fetch_upstream is deprecated", DeprecationWarning)
         stream_url = "https://api.live.bilibili.com/xlive/app-blink/v1/live/FetchWebUpStreamAddr"
         stream_data = livehime_sign({
             "backup_stream": 0,

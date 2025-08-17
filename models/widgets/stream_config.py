@@ -5,7 +5,7 @@ from functools import partial
 from ipaddress import ip_address, IPv6Address
 
 # package import
-from PySide6.QtCore import (Qt, Slot)
+from PySide6.QtCore import (Qt, Slot, QMutex, QWaitCondition)
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
 import config
 from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
-from models.states import ObsBtnState
+from models.states import ObsBtnState, StreamState
 from models.workers import *
 from models.workers.announce_update import AnnounceUpdateWorker
 from .cover_crop import CoverCropWidget
@@ -29,7 +29,13 @@ class StreamConfigPanel(QWidget):
         super().__init__(*args, **kwargs)
         self.parent_window = parent_window
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self._mutex = QMutex()
+        self._cond = QWaitCondition()
 
+        self.stream_state = StreamState()
+        self.stream_state.addressUpdated.connect(self.fill_stream_info)
+        self.stream_state.faceRequired.connect(
+            self.parent_window.popup_face_widget)
         self.obs_btn_state = ObsBtnState()
         self.obs_btn_state.obsConnected.connect(self._obs_btn_connected)
         self.obs_btn_state.obsDisconnected.connect(self._obs_btn_disconnected)
@@ -248,12 +254,10 @@ class StreamConfigPanel(QWidget):
         config.room_info["parent_area"] = self.parent_combo.currentText()
         config.room_info["area"] = self.child_combo.currentText()
         self.parent_window.add_thread(
-            StartLiveWorker(area_code),
+            StartLiveWorker(self.stream_state,
+                            mutex=self._mutex, cond=self._cond, area=area_code),
             on_exception=partial(StartLiveWorker.on_exception, self)
         )
-        self.parent_window.timer.timeout.connect(
-            self.parent_window.fill_stream_info)
-        self.parent_window.timer.start(100)
 
     def _stop_live(self):
         if not self.stop_btn.isEnabled():
@@ -274,6 +278,27 @@ class StreamConfigPanel(QWidget):
             on_exception=partial(StopLiveWorker.on_exception, self)
         )
 
+    def fill_stream_info(self, addr: str, key: str):
+        if config.obs_connecting:
+            return
+        self.addr_input.setText(
+            str(addr))
+        self.key_input.setText(
+            str(key))
+
+        if config.obs_client is not None:
+            config.obs_req_queue.put(("SetStreamServiceSettings", {
+                "streamServiceType": "rtmp_custom",
+                "streamServiceSettings": {
+                    "bwtest": False,
+                    "server": str(addr),
+                    "key": str(key),
+                    "use_auth": False
+                }
+            }))
+            if self.obs_auto_live_checkbox.isChecked():
+                config.obs_req_queue.put(("StartStream", {}))
+
     def _connect_obs(self):
         if config.obs_client is None and not config.obs_op:
             obs_host = self.host_input.text()
@@ -284,6 +309,7 @@ class StreamConfigPanel(QWidget):
             except ValueError:
                 pass
             connector = ObsConnectorWorker(self.obs_btn_state,
+                                           self._mutex, self._cond,
                                            host=obs_host,
                                            port=self.port_input.text(),
                                            password=self.pass_input.text())
