@@ -22,6 +22,23 @@ class BaseWorker(QRunnable):
 
     @staticmethod
     def on_exception(*args, **kwargs):
+        """
+        Handles an exception for the method or operation that has been implemented. It
+        serves as a placeholder that requires concrete behavior in derived classes or
+        implementations. This method must be overridden with proper exception handling
+        logic where applicable.
+
+        :param args: Positional arguments passed to the function.
+                     These arguments are user-defined and unspecified per the
+                     method signature.
+        :param kwargs: Keyword arguments passed to the function.
+                       These arguments are user-defined and unspecified as per
+                       the method signature.
+        :return: No return value; this method is expected to be redefined in a
+                 subclass or specific implementation.
+        :raises NotImplementedError: Always raised to signal the requirement
+                                      for a concrete implementation.
+        """
         raise NotImplementedError
 
     @staticmethod
@@ -39,4 +56,21 @@ class BaseWorker(QRunnable):
 
     @staticmethod
     def on_finished(*args, **kwargs):
+        """
+        Handles the finalization or cleanup processes after a specific event or task
+        has been completed. This method is expected to be overridden by derived
+        classes to provide the desired behavior for post-completion operations.
+
+        IMPORTANT: This method WILL BE CALLED regardless of whether the worker's execution succeeded or failed.
+        So any exception handling should be handled in the `on_exception` method,
+        and any result processing should be handled inside the `run` method.
+
+        :param args: Positional arguments that may be used during the finishing process.
+        :type args: Tuple
+        :param kwargs: Keyword arguments that may be used during the finishing process.
+        :type kwargs: Dict
+        :return: None
+        :raises NotImplementedError: Always raised to indicate the necessity of
+            overriding this method in a derived class.
+        """
         raise NotImplementedError

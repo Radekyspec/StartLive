@@ -41,11 +41,7 @@ class AnnounceUpdateWorker(BaseWorker):
         self.logger.info(f"AnnounceCommit Result: {response}")
         if response["code"] != 0:
             raise AnnounceUpdateError(response["message"])
-
-    @staticmethod
-    @Slot()
-    def on_finished(parent_window: "StreamConfigPanel"):
-        config.room_info["announcement"] = parent_window.announce_input.text()
+        config.room_info["announcement"] = self.content
 
     @staticmethod
     @Slot()

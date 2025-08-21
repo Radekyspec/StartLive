@@ -25,6 +25,7 @@ class FetchAnnounceWorker(BaseWorker):
         response = response.json()
         config.room_info["announcement"] = response["data"]["announces"]["1"][
             "content"]
+        config.scan_status["announce_updated"] = True
 
     @staticmethod
     @Slot()
@@ -32,4 +33,3 @@ class FetchAnnounceWorker(BaseWorker):
         panel.announce_input.setText(config.room_info["announcement"])
         panel.announce_input.textEdited.connect(
             lambda: panel.save_announce_btn.setEnabled(True))
-        config.scan_status["announce_updated"] = True

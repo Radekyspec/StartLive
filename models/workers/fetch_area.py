@@ -30,4 +30,7 @@ class FetchAreaWorker(BaseWorker):
                 config.area_codes[sub_area["name"]] = sub_area["id"]
                 config.area_options[area_info["name"]].append(sub_area["name"])
         config.scan_status["area_updated"] = True
+
+    @Slot()
+    def on_finished(self):
         self.state.areaUpdated.emit()

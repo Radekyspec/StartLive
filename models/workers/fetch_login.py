@@ -35,8 +35,10 @@ class FetchLoginWorker(LongLiveWorker):
                 on_finished=partial(FetchAnnounceWorker.on_finished,
                                     parent.panel)
             )
+            area_worker = FetchAreaWorker(state)
             parent.add_thread(
-                FetchAreaWorker(state)
+                area_worker,
+                on_finished=area_worker.on_finished
             )
 
     @Slot()

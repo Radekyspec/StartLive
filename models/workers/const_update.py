@@ -36,8 +36,8 @@ class ConstantUpdateWorker(BaseWorker):
         constant.HEADERS_APP = response["ha"]
         constant.START_LIVE_AUTH_CSRF = response["start_ac"]
         constant.STOP_LIVE_AUTH_CSRF = response["stop_ac"]
+        config.scan_status["const_updated"] = True
 
     @Slot()
     def on_finished(self):
-        config.scan_status["const_updated"] = True
         self.state.constUpdated.emit()

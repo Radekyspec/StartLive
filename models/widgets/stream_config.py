@@ -349,7 +349,6 @@ class StreamConfigPanel(QWidget):
         self.save_title_btn.setEnabled(False)
         self.parent_window.add_thread(
             TitleUpdateWorker(self.title_input.text()),
-            on_finished=partial(TitleUpdateWorker.on_finished, self),
             on_exception=partial(TitleUpdateWorker.on_exception, self)
         )
 
@@ -378,7 +377,6 @@ class StreamConfigPanel(QWidget):
         self.save_announce_btn.setEnabled(False)
         self.parent_window.add_thread(
             AnnounceUpdateWorker(self.announce_input.text()),
-            on_finished=partial(AnnounceUpdateWorker.on_finished, self),
             on_exception=partial(AnnounceUpdateWorker.on_exception, self)
         )
 

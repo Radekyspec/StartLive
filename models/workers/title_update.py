@@ -34,11 +34,7 @@ class TitleUpdateWorker(BaseWorker):
         self.logger.info(f"updateV2 Result: {response}")
         if response["code"] != 0:
             raise TitleUpdateError(response["message"])
-
-    @staticmethod
-    @Slot()
-    def on_finished(parent_window: "StreamConfigPanel"):
-        config.room_info["title"] = parent_window.title_input.text()
+        config.room_info["title"] = self.title
 
     @staticmethod
     @Slot()

@@ -43,6 +43,7 @@ class FetchPreLiveWorker(BaseWorker):
             # Which seems like have no other side effect
             # Subject to change if there is an unknown side effect
             StartLiveWorker.start_live(response["data"]["area_v2_id"])
+        config.scan_status["room_updated"] = True
 
     @Slot()
     @run_wrapper
@@ -92,6 +93,4 @@ class FetchPreLiveWorker(BaseWorker):
                 on_finished=partial(
                     CoverStateUpdateWorker.on_finished, parent_window),
             )
-
-        config.scan_status["room_updated"] = True
         state.roomUpdated.emit()
