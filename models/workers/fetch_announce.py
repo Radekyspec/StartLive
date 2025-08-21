@@ -23,8 +23,11 @@ class FetchAnnounceWorker(BaseWorker):
         response.encoding = "utf-8"
         self.logger.info("Announcement info Response")
         response = response.json()
-        config.room_info["announcement"] = response["data"]["announces"]["1"][
-            "content"]
+        self.logger.info(f"Announcement info Result: {response}")
+        content: dict = response["data"]["announces"]
+        config.room_info["announcement"] = content.get("1", {}).get(
+            "content", ""
+        )
         config.scan_status["announce_updated"] = True
 
     @staticmethod

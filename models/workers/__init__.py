@@ -9,6 +9,7 @@ from .fetch_cover import FetchCoverWorker
 from .fetch_login import FetchLoginWorker
 from .fetch_pre_live import FetchPreLiveWorker
 from .fetch_qr import FetchQRWorker
+from .fetch_room_status import FetchRoomStatusWorker
 from .obs_connector import ObsConnectorWorker
 from .obs_daemon import ObsDaemonWorker
 from .start_live import StartLiveWorker

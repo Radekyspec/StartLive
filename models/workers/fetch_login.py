@@ -9,11 +9,12 @@ from PySide6.QtCore import Slot
 import config
 from exceptions import LoginError
 from models.log import get_logger
+from models.states import LoginState
 from models.workers.base import LongLiveWorker, run_wrapper
 from .fetch_announce import FetchAnnounceWorker
 from .fetch_area import FetchAreaWorker
 from .fetch_pre_live import FetchPreLiveWorker
-from ..states import LoginState
+from .fetch_room_status import FetchRoomStatusWorker
 
 
 class FetchLoginWorker(LongLiveWorker):
@@ -25,6 +26,9 @@ class FetchLoginWorker(LongLiveWorker):
     @staticmethod
     def post_login(parent: "MainWindow", state: LoginState):
         if config.scan_status["scanned"]:
+            parent.add_thread(
+                FetchRoomStatusWorker()
+            )
             parent.add_thread(
                 FetchPreLiveWorker(),
                 on_finished=partial(FetchPreLiveWorker.on_finished,
