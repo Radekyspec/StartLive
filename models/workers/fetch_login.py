@@ -15,6 +15,7 @@ from .fetch_announce import FetchAnnounceWorker
 from .fetch_area import FetchAreaWorker
 from .fetch_pre_live import FetchPreLiveWorker
 from .fetch_room_status import FetchRoomStatusWorker
+from .fetch_usernames import FetchUsernamesWorker
 
 
 class FetchLoginWorker(LongLiveWorker):
@@ -22,6 +23,7 @@ class FetchLoginWorker(LongLiveWorker):
         super().__init__(name="登录")
         self.state = state
         self.logger = get_logger(self.__class__.__name__)
+        self.cookie_key = None
 
     @staticmethod
     def post_login(parent: "MainWindow", state: LoginState):
@@ -83,7 +85,7 @@ class FetchLoginWorker(LongLiveWorker):
                     # config.cookies_dict["refresh_token"] = result["data"][
                     #     "refresh_token"]
                     from .credential_manager import CredentialManagerWorker
-                    CredentialManagerWorker.add_cookie()
+                    self.cookie_key = CredentialManagerWorker.add_cookie()
                     config.scan_status["scanned"] = True
                     self.state.qrScanned.emit()
                     break
@@ -95,3 +97,9 @@ class FetchLoginWorker(LongLiveWorker):
         if not self.is_running:
             return
         FetchLoginWorker.post_login(parent_window, self.state)
+        if self.cookie_key is not None:
+            from .credential_manager import CredentialManagerWorker
+            parent_window.add_thread(
+                FetchUsernamesWorker(
+                    CredentialManagerWorker.get_cookies_index()[-1])
+            )

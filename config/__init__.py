@@ -48,17 +48,18 @@ if (app := get_password(KEYRING_SERVICE_NAME,
                         KEYRING_APP_SETTINGS)) is not None:
     app_settings.update(loads(app))
     if app_settings["use_proxy"]:
-        session.get = partial(session.get, verify=False)
-        session.post = partial(session.post, verify=False)
+        session.get = partial(session.get, verify=False, timeout=5)
+        session.post = partial(session.post, verify=False, timeout=5)
         session.trust_env = True
     else:
-        session.get = partial(session.get, verify=True)
-        session.post = partial(session.post, verify=True)
+        session.get = partial(session.get, verify=True, timeout=5)
+        session.post = partial(session.post, verify=True, timeout=5)
         session.trust_env = False
 
 # Managed by models.workers.credential_manager
 room_info = ThreadSafeDict({})
 obs_settings = ThreadSafeDict({})
+usernames = ThreadSafeDict({})
 
 # Area (category) selections for live stream configuration
 parent_area = ["请选择"]

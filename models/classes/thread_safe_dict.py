@@ -1,40 +1,83 @@
 from threading import Lock
+from typing import Iterator, Iterable, Any, Tuple
 
 
 class ThreadSafeDict:
-    def __init__(self, value: dict):
-        self._dict: dict = value
+    def __init__(self, value: dict | None = None):
+        self._dict: dict = {} if value is None else value
         self._lock = Lock()
 
-    def __bool__(self):
-        return bool(self._dict)
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __setitem__(self, key, value):
+    def __bool__(self) -> bool:
         with self._lock:
-            self._dict[key] = value
+            return bool(self._dict)
 
-    def __delitem__(self, key):
+    def __len__(self) -> int:
         with self._lock:
-            del self._dict[key]
+            return len(self._dict)
 
-    def __contains__(self, key):
+    def __contains__(self, key: Any) -> bool:
         with self._lock:
             return key in self._dict
 
-    def get(self, key, default=None):
+    def __iter__(self) -> Iterator[Any]:
         with self._lock:
-            return self._dict.get(key, default)
+            keys_snapshot = list(self._dict.keys())
+        return iter(keys_snapshot)
 
-    def __repr__(self):
+    def values(self) -> Iterator[Any]:
         with self._lock:
-            return repr(self._dict)
+            vals_snapshot = list(self._dict.values())
+        return iter(vals_snapshot)
 
-    def update(self, value, **kwargs):
+    def items(self) -> Iterator[Tuple[Any, Any]]:
+        with self._lock:
+            items_snapshot = list(self._dict.items())
+        return iter(items_snapshot)
+
+    def __getitem__(self, key: Any) -> Any:
+        return self._dict[key]
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        with self._lock:
+            self._dict[key] = value
+
+    def __delitem__(self, key: Any) -> None:
+        with self._lock:
+            del self._dict[key]
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        return self._dict.get(key, default)
+
+    def setdefault(self, key: Any, default: Any = None) -> Any:
+        with self._lock:
+            return self._dict.setdefault(key, default)
+
+    def pop(self, key: Any, default: Any = ...):
+        with self._lock:
+            if default is ...:
+                return self._dict.pop(key)
+            return self._dict.pop(key, default)
+
+    def popitem(self):
+        with self._lock:
+            return self._dict.popitem()
+
+    def clear(self) -> None:
+        with self._lock:
+            self._dict.clear()
+
+    def update(self, value: Iterable[Tuple[Any, Any]] | dict = (),
+               **kwargs) -> None:
         with self._lock:
             self._dict.update(value, **kwargs)
+
+    def copy(self) -> dict:
+        with self._lock:
+            return dict(self._dict)
+
+    def __repr__(self) -> str:
+        with self._lock:
+            return f"{self.__class__.__name__}({repr(self._dict)})"
 
     @property
     def internal(self) -> dict:

@@ -40,13 +40,12 @@ class CropLabel(QLabel):
         self.setScaledContents(False)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._scaled_pixmap: QPixmap | None = None
-        self._scaled_key = (0, 0, 0)  # (wL, hL, dpr*100) 用于判断缓存是否失效
+        self._scaled_key = (0, 0, 0)
         self._repaint_timer = QTimer(self)
         self._repaint_timer.setSingleShot(True)
-        self._repaint_timer.setInterval(8)  # ~60 FPS 节流
+        self._repaint_timer.setInterval(16)
         self._pending_dirty: QRect | None = None
 
-        # 不透明绘制，减少底层重绘
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
 
     def _current_screen(self):
@@ -58,7 +57,7 @@ class CropLabel(QLabel):
     def _apply_refresh_rate(self, *args, **kwargs):
         screen = self._current_screen()
         rate = screen.refreshRate() or 60.0
-        # 以 1x 帧率节流，可按需改为 0.5x（*2）
+        # 以 1x 帧率节流
         interval_ms = min(33, int(1000.0 / rate))
         self._repaint_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self._repaint_timer.setInterval(interval_ms)
@@ -378,7 +377,8 @@ class CropLabel(QLabel):
             return None
         for idx, corner in enumerate(self._corners(self.crop_rect)):
             hit = QRect(
-                corner - QPoint(self.HANDLE_LENGTH // 2, self.HANDLE_LENGTH // 2),
+                corner - QPoint(self.HANDLE_LENGTH // 2,
+                                self.HANDLE_LENGTH // 2),
                 QSize(self.HANDLE_LENGTH, self.HANDLE_LENGTH)
             )
             if hit.contains(pos):

@@ -15,6 +15,7 @@ from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign
 from .fetch_login import FetchLoginWorker
+from .fetch_usernames import FetchUsernamesWorker
 from ..states import LoginState
 
 
@@ -24,6 +25,7 @@ class CredentialManagerWorker(BaseWorker):
         self.cookie_index = cookie_index
         self.is_new = is_new
         self.logger = get_logger(self.__class__.__name__)
+        self.cookies_index: list[str] | None = None
 
     @staticmethod
     def obs_settings_default():
@@ -86,8 +88,17 @@ class CredentialManagerWorker(BaseWorker):
     @staticmethod
     def add_cookie():
         """
-        Adding cookie from config.cookies_dict to keyring
-        :return:
+        Adds a new cookie credential to the credential manager.
+
+        This static method adds a unique cookie credential to the credential manager,
+        using the combination of a user ID and the application configuration dictionary.
+        If the cookie credential already exists, a duplicate error is raised.
+        The credential is stored securely alongside the index of cookie credentials.
+
+        :raises CredentialDuplicatedError: If the cookie credential already exists in
+            the credential manager.
+        :return: The unique key for the added cookie credential.
+        :rtype: str
         """
         uid = config.cookies_dict["DedeUserID"]
         cookie_key = f"cookies|{uid}"
@@ -95,10 +106,12 @@ class CredentialManagerWorker(BaseWorker):
         if cookie_key in cookies_index:
             raise CredentialDuplicatedError(cookie_key)
         cookies_index.append(cookie_key)
+        config.usernames[cookie_key] = cookie_key
         set_password(KEYRING_SERVICE_NAME, cookie_key,
                      dumps(config.cookies_dict))
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
                      dumps(cookies_index))
+        return cookie_key
 
     @Slot()
     @run_wrapper
@@ -136,12 +149,14 @@ class CredentialManagerWorker(BaseWorker):
                          dumps(saved_cookies))
             self.logger.info(f"cookies index created")
 
-        cookies_index = self.get_cookies_index()
-        self.logger.info(f"cookies index loaded: {cookies_index}")
-        if not cookies_index or (
+        self.cookies_index = self.get_cookies_index()
+        self.logger.info(f"cookies index loaded: {self.cookies_index}")
+        config.usernames.clear()
+        config.usernames.update({i: i for i in self.cookies_index})
+        if not self.cookies_index or (
                 saved_cookies := get_password(
                     KEYRING_SERVICE_NAME,
-                    cookies_index[
+                    self.cookies_index[
                         self.cookie_index])) is None:
             return
         saved_cookies = loads(saved_cookies)
@@ -165,14 +180,24 @@ class CredentialManagerWorker(BaseWorker):
         response = response.json()
         if response["code"] != 0:
             raise CredentialExpiredError("登录凭据过期, 请重新登录")
+        if (current_username := self.cookies_index[
+            self.cookie_index]) in config.usernames:
+            config.usernames[
+                current_username] = USERNAME_DISPLAY_TEMPLATE.format(
+                response["data"]["uname"],
+                response["data"]["mid"]
+            )
         config.cookies_dict.clear()
         config.cookies_dict.update(saved_cookies)
         config.scan_status["scanned"] = True
 
-    @staticmethod
     @Slot()
-    def on_finished(parent_window: "MainWindow", state: LoginState):
+    def on_finished(self, parent_window: "MainWindow", state: LoginState):
         FetchLoginWorker.post_login(parent_window, state)
+        if self.cookies_index is not None:
+            parent_window.add_thread(
+                FetchUsernamesWorker(self.cookies_index[self.cookie_index])
+            )
         state.credentialLoaded.emit()
         panel = parent_window.panel
         panel.host_input.setText(
