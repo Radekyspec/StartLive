@@ -1,14 +1,15 @@
 from PySide6.QtCore import (
-    Qt, QRect, QPoint, QSize, QVariantAnimation, QEasingCurve
+    Qt, QRect, QPoint, QSize, QVariantAnimation, QEasingCurve, QTimer
 )
-from PySide6.QtGui import QPixmap, QPainter, QPen, QColor
+from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QGuiApplication
 from PySide6.QtWidgets import (
     QLabel, QRubberBand
 )
 
 
 class CropLabel(QLabel):
-    HANDLE_SIZE = 20
+    HANDLE_LENGTH = 20
+    HANDLE_WIDTH = 8
     SNAP_MARGIN = 10
 
     def __init__(self, ratio: tuple[int, int], /, *args, **kwargs):
@@ -38,6 +39,71 @@ class CropLabel(QLabel):
 
         self.setScaledContents(False)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._scaled_pixmap: QPixmap | None = None
+        self._scaled_key = (0, 0, 0)  # (wL, hL, dpr*100) 用于判断缓存是否失效
+        self._repaint_timer = QTimer(self)
+        self._repaint_timer.setSingleShot(True)
+        self._repaint_timer.setInterval(8)  # ~60 FPS 节流
+        self._pending_dirty: QRect | None = None
+
+        # 不透明绘制，减少底层重绘
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+
+    def _current_screen(self):
+        # 优先用窗口句柄的屏幕；退化到主屏
+        if self.windowHandle() and self.windowHandle().screen():
+            return self.windowHandle().screen()
+        return QGuiApplication.primaryScreen()
+
+    def _apply_refresh_rate(self, *args, **kwargs):
+        screen = self._current_screen()
+        rate = screen.refreshRate() or 60.0
+        # 以 1x 帧率节流，可按需改为 0.5x（*2）
+        interval_ms = min(33, int(1000.0 / rate))
+        self._repaint_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._repaint_timer.setInterval(interval_ms)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        self._apply_refresh_rate()
+        scr = self._current_screen()
+        scr.refreshRateChanged.disconnect(self._apply_refresh_rate)
+        scr.refreshRateChanged.connect(self._apply_refresh_rate)
+
+    def enterEvent(self, e):
+        # 窗口拖到另一块屏幕后刷新
+        self._apply_refresh_rate()
+        return super().enterEvent(e)
+
+    def _ensure_scaled_pixmap(self):
+        if not self._orig_pixmap:
+            self._scaled_pixmap = None
+            self._disp_rect = QRect()
+            return
+
+        wL, hL = self.width(), self.height()
+        dpr = self.devicePixelRatioF()
+        key = (wL, hL, int(dpr * 100))
+        if self._scaled_pixmap is not None and key == self._scaled_key:
+            return  # 缓存有效
+
+        # 计算显示区域（保持原图比例铺满最短边）
+        w0 = self._orig_pixmap.width() / dpr
+        h0 = self._orig_pixmap.height() / dpr
+        scale = min(wL / w0, hL / h0)
+        new_w, new_h = int(w0 * scale), int(h0 * scale)
+        x = (wL - new_w) // 2
+        y = (hL - new_h) // 2
+        self._disp_rect = QRect(x, y, new_w, new_h)
+
+        # 只在这里缩放一次并缓存（高质量缩放成本转移到低频路径）
+        self._scaled_pixmap = self._orig_pixmap.scaled(
+            int(new_w * dpr), int(new_h * dpr),
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        self._scaled_pixmap.setDevicePixelRatio(dpr)
+        self._scaled_key = key
 
     def setPixmap(self, pixmap: QPixmap):
         pixmap.setDevicePixelRatio(self.devicePixelRatioF())
@@ -50,6 +116,8 @@ class CropLabel(QLabel):
         self.active_handle = None
         self.move_offset = QPoint()
         self._disp_rect = QRect()
+        self._scaled_pixmap = None
+        self._scaled_key = (0, 0, 0)
         self.update()
         super().setPixmap(pixmap)
 
@@ -86,23 +154,9 @@ class CropLabel(QLabel):
         painter = QPainter(self)
         painter.fillRect(self.rect(), Qt.GlobalColor.black)
 
-        if self._orig_pixmap:
-            wL, hL = self.width(), self.height()
-            w0 = self._orig_pixmap.size().width() / self.devicePixelRatioF()
-            h0 = self._orig_pixmap.size().height() / self.devicePixelRatioF()
-            scale = min(wL / w0, hL / h0)
-            new_w, new_h = int(w0 * scale), int(h0 * scale)
-            x = (wL - new_w) // 2
-            y = (hL - new_h) // 2
-            self._disp_rect = QRect(x, y, new_w, new_h)
-
-            scaled = self._orig_pixmap.scaled(
-                int(new_w * self.devicePixelRatioF()),
-                int(new_h * self.devicePixelRatioF()),
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            painter.drawPixmap(x, y, scaled)
+        self._ensure_scaled_pixmap()
+        if self._scaled_pixmap:
+            painter.drawPixmap(self._disp_rect.topLeft(), self._scaled_pixmap)
 
         if not self.crop_rect.isNull():
             pen = painter.pen()
@@ -113,6 +167,30 @@ class CropLabel(QLabel):
 
             painter.setBrush(Qt.GlobalColor.blue)
             self._draw_corner_l(painter)
+
+    def _schedule_dirty_update(self, new_rect: QRect,
+                               old_rect: QRect | None = None):
+        margin = self.HANDLE_LENGTH + self.HANDLE_WIDTH
+        dirty = new_rect.adjusted(-margin, -margin, margin, margin)
+        if old_rect:
+            dirty = dirty.united(
+                old_rect.adjusted(-margin, -margin, margin, margin))
+
+        self._pending_dirty = dirty if self._pending_dirty is None else self._pending_dirty.united(
+            dirty)
+        if not self._repaint_timer.isActive():
+            self._repaint_timer.timeout.connect(self._flush_dirty_update)
+            self._repaint_timer.start()
+
+    def _flush_dirty_update(self):
+        if self._pending_dirty is not None:
+            self.update(self._pending_dirty)
+        self._pending_dirty = None
+
+    def resizeEvent(self, e):
+        # 尺寸变化时仅标记缓存失效，不在此处立刻重建，延后到下一次 paint
+        self._scaled_pixmap = None
+        return super().resizeEvent(e)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
@@ -151,11 +229,17 @@ class CropLabel(QLabel):
         self.rubber.setGeometry(self.crop_rect)
         self.rubber.show()
 
+        self.update()
+        self._pending_dirty = None
+        self._repaint_timer.stop()
+        return super().mousePressEvent(event)
+
     def mouseMoveEvent(self, event):
         if not self._orig_pixmap:
             return super().mouseMoveEvent(event)
 
         raw_pos = self._clamp(event.position().toPoint())
+        old = self.crop_rect
 
         if self.moving:
             size = self.crop_rect.size()
@@ -167,31 +251,29 @@ class CropLabel(QLabel):
             rect = QRect(QPoint(x, y), size)
             self.crop_rect = rect
             self.rubber.setGeometry(rect)
-            self.update()
+            self._schedule_dirty_update(rect, old)
             return
 
         if self.dragging or self.resizing:
-            # pos = self._apply_aspect(self.origin, raw_pos)
-            # base_rect = QRect(self.origin, pos).normalized().intersected(
-            #     self._disp_rect)
-            # rect = self._snap_and_keep_aspect(base_rect)
             base_rect = QRect(self.origin, raw_pos).normalized().intersected(
                 self._disp_rect)
             rect = self._snap_and_keep_aspect(base_rect)
             self.crop_rect = rect
             self.rubber.setGeometry(rect)
-            self.update()
+            self._schedule_dirty_update(rect, old)
             return
 
         return super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        self.update()
+        self._pending_dirty = None
+        self._repaint_timer.stop()
         if event.button() == Qt.MouseButton.LeftButton and (
                 self.dragging or self.resizing or self.moving):
             self.dragging = self.resizing = self.moving = False
-            self.update()
         else:
-            super().mouseReleaseEvent(event)
+            return super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton or not self._orig_pixmap:
@@ -247,8 +329,8 @@ class CropLabel(QLabel):
             self.update()
 
     def _draw_corner_l(self, painter: QPainter):
-        handle_len = 20
-        handle_w = 8
+        handle_len = self.HANDLE_LENGTH
+        handle_w = self.HANDLE_WIDTH
         color = QColor(255, 105, 180)
 
         pen = QPen(color)
@@ -296,8 +378,8 @@ class CropLabel(QLabel):
             return None
         for idx, corner in enumerate(self._corners(self.crop_rect)):
             hit = QRect(
-                corner - QPoint(self.HANDLE_SIZE // 2, self.HANDLE_SIZE // 2),
-                QSize(self.HANDLE_SIZE, self.HANDLE_SIZE)
+                corner - QPoint(self.HANDLE_LENGTH // 2, self.HANDLE_LENGTH // 2),
+                QSize(self.HANDLE_LENGTH, self.HANDLE_LENGTH)
             )
             if hit.contains(pos):
                 return idx
