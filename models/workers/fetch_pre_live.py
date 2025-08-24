@@ -84,7 +84,9 @@ class FetchPreLiveWorker(BaseWorker):
             parent_window.key_input.setText(
                 config.stream_status["stream_key"])
             parent_window.start_btn.setEnabled(False)
+            parent_window.parent_window.tray_start_live_action.setEnabled(False)
             parent_window.stop_btn.setEnabled(True)
+            parent_window.parent_window.tray_stop_live_action.setEnabled(True)
         parent_window.cover_audit_state()
         if config.room_info["cover_status"] == 0:
             # add updating logic

@@ -243,7 +243,9 @@ class StreamConfigPanel(QWidget):
         if not self._valid_area() or not self.start_btn.isEnabled():
             return
         self.start_btn.setEnabled(False)
+        self.parent_window.tray_start_live_action.setEnabled(False)
         self.stop_btn.setEnabled(True)
+        self.parent_window.tray_stop_live_action.setEnabled(True)
         # self.parent_combo.setEnabled(False)
         # self.child_combo.setEnabled(False)
         self.save_area_btn.setEnabled(False)
@@ -263,7 +265,9 @@ class StreamConfigPanel(QWidget):
         if not self.stop_btn.isEnabled():
             return
         self.start_btn.setEnabled(True)
+        self.parent_window.tray_start_live_action.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        self.parent_window.tray_stop_live_action.setEnabled(False)
         # self.parent_combo.setEnabled(True)
         # self.child_combo.setEnabled(True)
         config.stream_status["stream_key"] = None

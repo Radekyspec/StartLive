@@ -109,7 +109,9 @@ class StartLiveWorker(BaseWorker):
     @Slot()
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
         parent_window.start_btn.setEnabled(True)
+        parent_window.parent_window.tray_start_live_action.setEnabled(True)
         parent_window.stop_btn.setEnabled(False)
+        parent_window.parent_window.tray_stop_live_action.setEnabled(False)
         # parent_window.parent_combo.setEnabled(True)
         # parent_window.child_combo.setEnabled(True)
         parent_window.save_area_btn.setEnabled(True)

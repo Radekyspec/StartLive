@@ -58,10 +58,12 @@ class MainWindow(SingleInstanceWindow):
     login_label: QLabel
     status_label: ClickableLabel
     qr_label: QLabel
-    panel: StreamConfigPanel
+    panel: StreamConfigPanel | None
     credential_worker: CredentialManagerWorker
     login_worker: Optional[FetchLoginWorker]
     face_window: Optional[FaceQRWidget]
+    tray_start_live_action: QAction
+    tray_stop_live_action: QAction
 
     def __init__(self, host, port, first_run, no_const_update, /):
         super().__init__()
@@ -74,6 +76,7 @@ class MainWindow(SingleInstanceWindow):
         self._no_const_update = no_const_update
         self._thread_pool = QThreadPool()
         self._current_cookie_idx = 0
+        self._cookie_index_len = len(CredentialManagerWorker.get_cookies_index())
         self._managed_workers = []
         # Long live workers
         self._ll_workers = []
@@ -93,9 +96,19 @@ class MainWindow(SingleInstanceWindow):
 
         tray_menu = QMenu()
         restore_action = QAction("显示窗口", self)
+        self.tray_curr_user = QAction("", self)
+        self.tray_start_live_action = QAction("开始直播", self)
+        self.tray_stop_live_action = QAction("停止直播", self)
+        self.tray_stop_live_action.setEnabled(False)
         quit_action = QAction("退出", self)
         tray_menu.addAction(restore_action)
+        tray_menu.addAction(self.tray_curr_user)
+        tray_menu.addSeparator()
+        tray_menu.addAction(self.tray_start_live_action)
+        tray_menu.addAction(self.tray_stop_live_action)
+        tray_menu.addSeparator()
         tray_menu.addAction(quit_action)
+        tray_menu.aboutToShow.connect(self._populate_tray_menu)
         self.tray_icon.setContextMenu(tray_menu)
         restore_action.triggered.connect(self._show_normal)
         quit_action.triggered.connect(QApplication.quit)
@@ -153,6 +166,7 @@ class MainWindow(SingleInstanceWindow):
                                     f"StartLive开播器 版本{VERSION} 安装成功\n"
                                     "之后再运行请使用桌面或开始菜单里的快捷方式。")
         # Widgets for login phase
+        self.panel = None
         self.setup_ui()
         self._init_http_server()
 
@@ -161,11 +175,16 @@ class MainWindow(SingleInstanceWindow):
             worker.stop()
         if config.obs_client is not None:
             ObsDaemonWorker.disconnect_obs(self.panel.obs_btn_state)
-        # self.timer.deleteLater()
-        # with suppress(AttributeError):
-        #     self.panel.deleteLater()
+        if self.panel is not None:
+            self.tray_start_live_action.triggered.disconnect(
+                self.panel.start_live)
+            self.tray_stop_live_action.triggered.disconnect(
+                self.panel.stop_live)
+
         self._login_state = LoginState()
         self.panel = StreamConfigPanel(self)
+        self.tray_start_live_action.triggered.connect(self.panel.start_live)
+        self.tray_stop_live_action.triggered.connect(self.panel.stop_live)
         config.session.headers.clear()
         config.session.headers.update(constant.HEADERS_WEB)
         self.login_label = QLabel("正在获取保存的登录凭证...")
@@ -358,6 +377,16 @@ class MainWindow(SingleInstanceWindow):
         add_new_account.triggered.connect(self._add_new_account)
         self.account_menu.addAction(add_new_account)
 
+    def _populate_tray_menu(self):
+        if self._current_cookie_idx == self._cookie_index_len:
+            self.tray_curr_user.setText("当前账号未登录")
+            self.tray_curr_user.setEnabled(False)
+            return
+        cookie_indices = CredentialManagerWorker.get_cookies_index()
+        self.tray_curr_user.setText(
+            f"当前账号：{config.usernames[cookie_indices[self._current_cookie_idx]]}")
+        self.tray_curr_user.setEnabled(True)
+
     def _add_new_account(self):
         if self._cookie_index_len == 0 or self._current_cookie_idx == self._cookie_index_len:
             return
@@ -524,7 +553,9 @@ class MainWindow(SingleInstanceWindow):
     def popup_face_widget(self, face_url: str):
         config.stream_status["required_face"] = False
         self.panel.start_btn.setEnabled(True)
+        self.tray_start_live_action.setEnabled(True)
         self.panel.stop_btn.setEnabled(False)
+        self.tray_stop_live_action.setEnabled(False)
         self.panel.parent_combo.setEnabled(True)
         self.panel.child_combo.setEnabled(True)
         self.face_window = FaceQRWidget()

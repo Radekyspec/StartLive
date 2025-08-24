@@ -38,7 +38,7 @@ class FetchUsernamesWorker(BaseWorker):
             session.get = partial(session.get, verify=True, timeout=5)
             session.post = partial(session.post, verify=True, timeout=5)
             session.trust_env = False
-        for idx, key in enumerate(config.usernames):
+        for key in config.usernames:
             if key == self._current_user or (
             cookies := get_password(KEYRING_SERVICE_NAME,
                                     key)) is None:
