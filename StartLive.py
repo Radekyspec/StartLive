@@ -47,6 +47,7 @@ class MainWindow(SingleInstanceWindow):
     _thread_pool: QThreadPool
     _host: str
     _port: int
+    _cred_deleted: bool
     _no_const_update: bool
     _server_started: bool
     _server_thread: Optional[HttpServerWorker]
@@ -73,6 +74,7 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info(f"App created with host={host}, port={port}")
         self._host = host
         self._port = port
+        self._cred_deleted = False
         self._no_const_update = no_const_update
         self._thread_pool = QThreadPool()
         self._current_cookie_idx = 0
@@ -278,6 +280,12 @@ class MainWindow(SingleInstanceWindow):
     def closeEvent(self, event):
         # 关闭窗口时退出应用
         self.logger.info("closeEvent triggered. Exiting application.")
+        if self._cred_deleted:
+            self.logger.info("Credentials deleted. Exiting application.")
+            event.accept()
+            return
+        if self.panel is not None:
+            self.panel.stop_live()
         if config.obs_settings.internal:
             self.logger.info("Saving OBS connection settings.")
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
@@ -340,6 +348,7 @@ class MainWindow(SingleInstanceWindow):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX)
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
+        self._cred_deleted = True
         QMessageBox.information(self, "凭据清空",
                                 "已清空全部凭据, 程序即将退出")
         for worker in self._ll_workers:
