@@ -97,9 +97,14 @@ class FetchLoginWorker(LongLiveWorker):
         if not self.is_running:
             return
         FetchLoginWorker.post_login(parent_window, self.state)
+        from .credential_manager import CredentialManagerWorker
+        cookie_indices = CredentialManagerWorker.get_cookies_index()
         if self.cookie_key is not None:
-            from .credential_manager import CredentialManagerWorker
-            parent_window.add_thread(
-                FetchUsernamesWorker(
-                    CredentialManagerWorker.get_cookies_index()[-1])
-            )
+            if len(cookie_indices) <= 1:
+                parent_window.add_thread(
+                        FetchUsernamesWorker("")
+                )
+            else:
+                parent_window.add_thread(
+                    FetchUsernamesWorker(cookie_indices[-1])
+                )
