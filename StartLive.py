@@ -190,6 +190,13 @@ class MainWindow(SingleInstanceWindow):
         self.login_label = QLabel("正在获取保存的登录凭证...")
         self.status_label = ClickableLabel("等待登录中...")
         self.qr_label = QLabel()
+        self._login_state.areaUpdated.connect(self._post_scan_setup)
+        self._login_state.constUpdated.connect(self._post_scan_setup)
+        self._login_state.credentialLoaded.connect(self.load_credentials)
+        self._login_state.roomUpdated.connect(self._post_scan_setup)
+        self._login_state.qrScanned.connect(self._post_scan_setup)
+        self._login_state.qrExpired.connect(self._qr_expired)
+        self._login_state.qrNotConfirmed.connect(self._qr_not_confirmed)
 
         self.logger.info("StreamConfig initialized.")
         # Styling and alignment
@@ -220,13 +227,6 @@ class MainWindow(SingleInstanceWindow):
                                             self, self._login_state))
 
         self.face_window: Optional[FaceQRWidget] = None
-        self._login_state.areaUpdated.connect(self._post_scan_setup)
-        self._login_state.constUpdated.connect(self._post_scan_setup)
-        self._login_state.credentialLoaded.connect(self.load_credentials)
-        self._login_state.roomUpdated.connect(self._post_scan_setup)
-        self._login_state.qrScanned.connect(self._post_scan_setup)
-        self._login_state.qrExpired.connect(self._qr_expired)
-        self._login_state.qrNotConfirmed.connect(self._qr_not_confirmed)
         if self._no_const_update:
             self.logger.info("Constant update disabled.")
             config.scan_status["const_updated"] = True

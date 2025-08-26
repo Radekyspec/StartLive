@@ -194,11 +194,11 @@ class CredentialManagerWorker(BaseWorker):
     @Slot()
     def on_finished(self, parent_window: "MainWindow", state: LoginState):
         FetchLoginWorker.post_login(parent_window, state)
-        if self.cookies_index is not None:
+        state.credentialLoaded.emit()
+        if self.cookies_index is not None and self.cookies_index:
             parent_window.add_thread(
                 FetchUsernamesWorker(self.cookies_index[self.cookie_index])
             )
-        state.credentialLoaded.emit()
         panel = parent_window.panel
         panel.host_input.setText(
             config.obs_settings.get("ip_addr", "localhost"))
