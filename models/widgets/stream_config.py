@@ -80,7 +80,7 @@ class StreamConfigPanel(QWidget):
         obs_layout.addWidget(QLabel("服务器密码:"), 1, 4)
         self.pass_input = QLineEdit()
         self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.pass_input.editingFinished.connect(_password_save)
+        self.pass_input.textEdited.connect(_password_save)
         obs_layout.addWidget(self.pass_input, 1, 5)
 
         self.connect_btn = QPushButton("连接")
