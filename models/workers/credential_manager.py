@@ -25,7 +25,7 @@ class CredentialManagerWorker(BaseWorker):
         self.cookie_index = cookie_index
         self.is_new = is_new
         self.logger = get_logger(self.__class__.__name__)
-        self.cookies_index: list[str] | None = None
+        self.cookies_index: list[str] = []
 
     @staticmethod
     def obs_settings_default():
@@ -149,7 +149,7 @@ class CredentialManagerWorker(BaseWorker):
                          dumps(saved_cookies))
             self.logger.info(f"cookies index created")
 
-        self.cookies_index = self.get_cookies_index()
+        self.cookies_index.extend(self.get_cookies_index())
         self.logger.info(f"cookies index loaded: {self.cookies_index}")
         config.usernames.clear()
         config.usernames.update({i: i for i in self.cookies_index})
@@ -195,7 +195,7 @@ class CredentialManagerWorker(BaseWorker):
     def on_finished(self, parent_window: "MainWindow", state: LoginState):
         FetchLoginWorker.post_login(parent_window, state)
         state.credentialLoaded.emit()
-        if self.cookies_index is not None and self.cookies_index:
+        if self.cookies_index:
             parent_window.add_thread(
                 FetchUsernamesWorker(self.cookies_index[self.cookie_index])
             )
