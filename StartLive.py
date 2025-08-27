@@ -15,7 +15,7 @@ from typing import Optional, Callable
 from PIL import ImageQt
 from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool, QUrl, Slot)
 from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup, \
-    QDesktopServices
+    QDesktopServices, QFont
 from PySide6.QtWidgets import (QLabel, QMessageBox, QVBoxLayout, QWidget,
                                QApplication, QSystemTrayIcon, QMenu
                                )
@@ -78,7 +78,8 @@ class MainWindow(SingleInstanceWindow):
         self._no_const_update = no_const_update
         self._thread_pool = QThreadPool()
         self._current_cookie_idx = 0
-        self._cookie_index_len = len(CredentialManagerWorker.get_cookies_index())
+        self._cookie_index_len = len(
+            CredentialManagerWorker.get_cookies_index())
         self._managed_workers = []
         # Long live workers
         self._ll_workers = []
@@ -86,7 +87,7 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("Thread Pool initialized.")
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
         self.windowTitle()
-        self.setGeometry(300, 200, 520, 480)
+        self.setGeometry(300, 200, 520, 470)
         self.tray_icon = QSystemTrayIcon(self)
         # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
         self.tray_icon.setIcon(QIcon(
@@ -604,7 +605,11 @@ if __name__ == '__main__':
     args, qt_args = parser.parse_known_args()
     enable_hi_dpi()
     app = QApplication(qt_args)
+    app.setFont(QFont(
+        "Open Sans,.AppleSystemUIFont,Helvetica,Arial,MS Shell Dlg,sans-serif",
+        9))
     setup_theme("auto")
+    print(app.font().family(), app.font().pointSize())
     window = MainWindow(args.web_host, args.web_port, args.first_run,
                         args.no_update)
     window.show()
