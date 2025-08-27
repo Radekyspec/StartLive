@@ -11,6 +11,7 @@ from subprocess import Popen
 from traceback import format_exception
 from typing import Optional, Callable
 
+import darkdetect
 # package import
 from PIL import ImageQt
 from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool, QUrl, Slot)
@@ -19,7 +20,7 @@ from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup, \
 from PySide6.QtWidgets import (QLabel, QMessageBox, QVBoxLayout, QWidget,
                                QApplication, QSystemTrayIcon, QMenu
                                )
-from darkdetect import isDark
+from darkdetect import isLight
 from keyring import set_password, delete_password
 from keyring.errors import PasswordDeleteError
 from qdarktheme import setup_theme, enable_hi_dpi
@@ -493,10 +494,10 @@ class MainWindow(SingleInstanceWindow):
         qr = QRCode(box_size=4, border=1)
         qr.add_data(data)
         qr.make(fit=True)
-        if isDark():
-            img = qr.make_image(fill_color="white", back_color="black")
-        else:
+        if isLight():
             img = qr.make_image(fill_color="black", back_color="white")
+        else:
+            img = qr.make_image(fill_color="white", back_color="black")
         return img.convert("RGB")
 
     @classmethod
@@ -589,7 +590,7 @@ if __name__ == '__main__':
             app_path = join(install_path, f"app-{VERSION}")
             if exists(updater_path) and isdir(app_path):
                 Popen([updater_path, "--update=https://startlive.vtbs.ai/"])
-        except:
+        except NameError:
             pass
     parser = ArgumentParser()
 
@@ -608,8 +609,10 @@ if __name__ == '__main__':
     app.setFont(QFont(
         "Open Sans,.AppleSystemUIFont,Helvetica,Arial,MS Shell Dlg,sans-serif",
         9))
-    setup_theme("auto")
-    print(app.font().family(), app.font().pointSize())
+    if isLight():
+        setup_theme("light", additional_qss=LIGHT_CSS)
+    else:
+        setup_theme("dark", additional_qss=DARK_CSS)
     window = MainWindow(args.web_host, args.web_port, args.first_run,
                         args.no_update)
     window.show()
