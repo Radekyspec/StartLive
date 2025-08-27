@@ -16,7 +16,7 @@ import darkdetect
 from PIL import ImageQt
 from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool, QUrl, Slot)
 from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup, \
-    QDesktopServices, QFont
+    QDesktopServices, QFont, QPalette, QGuiApplication
 from PySide6.QtWidgets import (QLabel, QMessageBox, QVBoxLayout, QWidget,
                                QApplication, QSystemTrayIcon, QMenu
                                )
@@ -578,6 +578,14 @@ class MainWindow(SingleInstanceWindow):
                                             self.face_window))
         self.face_window.show()
 
+    @staticmethod
+    def apply_color_scheme(scheme: Qt.ColorScheme):
+        if scheme == Qt.ColorScheme.Light:
+            setup_theme("light", additional_qss=LIGHT_CSS)
+        elif scheme == Qt.ColorScheme.Dark:
+            setup_theme("dark", additional_qss=DARK_CSS)
+        else:
+            setup_theme("light", additional_qss=LIGHT_CSS)
 
 # Entry point
 if __name__ == '__main__':
@@ -609,10 +617,8 @@ if __name__ == '__main__':
     app.setFont(QFont(
         "Open Sans,.AppleSystemUIFont,Helvetica,Arial,MS Shell Dlg,sans-serif",
         9))
-    if isLight():
-        setup_theme("light", additional_qss=LIGHT_CSS)
-    else:
-        setup_theme("dark", additional_qss=DARK_CSS)
+    MainWindow.apply_color_scheme(app.styleHints().colorScheme())
+    app.styleHints().colorSchemeChanged.connect(MainWindow.apply_color_scheme)
     window = MainWindow(args.web_host, args.web_port, args.first_run,
                         args.no_update)
     window.show()
