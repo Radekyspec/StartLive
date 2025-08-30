@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QLabel,
 )
 
-from models.classes import CropLabel
+from models.widgets import CropLabel
 from models.workers import CoverUploadWorker
 
 

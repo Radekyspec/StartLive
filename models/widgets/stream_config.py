@@ -18,9 +18,9 @@ import config
 from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
 from models.states import ObsBtnState, StreamState
+from models.window.cover_crop import CoverCropWidget
 from models.workers import *
 from models.workers.announce_update import AnnounceUpdateWorker
-from .cover_crop import CoverCropWidget
 
 
 class StreamConfigPanel(QWidget):
