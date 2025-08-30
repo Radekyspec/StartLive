@@ -11,14 +11,14 @@ from subprocess import Popen
 from traceback import format_exception
 from typing import Optional, Callable
 
-import darkdetect
 # package import
 from PIL import ImageQt
 from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool, QUrl, Slot)
 from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup, \
-    QDesktopServices, QFont, QPalette, QGuiApplication
+    QDesktopServices, QFont
 from PySide6.QtWidgets import (QLabel, QMessageBox, QVBoxLayout, QWidget,
-                               QApplication, QSystemTrayIcon, QMenu
+                               QApplication, QSystemTrayIcon, QMenu,
+                               QStackedWidget, QButtonGroup, QHBoxLayout
                                )
 from darkdetect import isLight
 from keyring import set_password, delete_password
@@ -72,7 +72,7 @@ class MainWindow(SingleInstanceWindow):
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         init_logger()
         self.logger = get_logger(self.__class__.__name__)
-        self.logger.info(f"App created with host={host}, port={port}")
+        self.logger.info(f"App {VERSION} created with host={host}, port={port}")
         self._host = host
         self._port = port
         self._cred_deleted = False
@@ -87,8 +87,25 @@ class MainWindow(SingleInstanceWindow):
         self._worker_typeset = set()
         self.logger.info("Thread Pool initialized.")
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
-        self.windowTitle()
-        self.setGeometry(300, 200, 520, 470)
+        self._color_scheme = None
+        self._stack = QStackedWidget(self)
+        self._side_bar = SideBar(self, expanded_width=100, collapsed_width=56,
+                                 icon_path=abspath(
+                                     join(dirname(__file__), "resources")))
+        btn_group = QButtonGroup(self)
+        btn_group.setExclusive(True)
+        btn_group.addButton(self._side_bar.btn_theme)
+        self._side_bar.btn_theme.clicked.connect(self._change_color_scheme)
+        mapping = [
+            (self._side_bar.btn_home, 1),
+            (self._side_bar.btn_settings, 2),
+        ]
+        for btn, idx in mapping:
+            btn_group.addButton(btn)
+            btn.clicked.connect(
+                lambda _=False, i=idx: self._stack.setCurrentIndex(i))
+        self._side_bar.btn_home.setChecked(True)
+        self.setGeometry(300, 200, 610, 470)
         self.tray_icon = QSystemTrayIcon(self)
         # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
         self.tray_icon.setIcon(QIcon(
@@ -212,15 +229,31 @@ class MainWindow(SingleInstanceWindow):
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Layout
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(self)
         layout.addWidget(self.login_label)
         layout.addWidget(self.qr_label)
         layout.addWidget(self.status_label)
 
-        central = QWidget()
-        central.setLayout(layout)
+        login_widget = QWidget(self)
+        login_widget.setLayout(layout)
+        # self.setCentralWidget(central)
+        if (w := self._stack.widget(0)) is not None:
+            self._stack.removeWidget(w)
+        self._stack.insertWidget(0, login_widget)
+        if (w := self._stack.widget(1)) is not None:
+            self._stack.removeWidget(w)
+        self._stack.insertWidget(1, self.panel)
+        self._stack.setCurrentIndex(0)
+
+        central = QWidget(self)
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._side_bar)
+        root.addWidget(self._stack, 1)
+        central.setLayout(root)
         self.setCentralWidget(central)
-        self.logger.info("Main QR layout initialized.")
+        self.logger.info("Main UI initialized.")
 
         # Start fetching QR and begin polling thread
         self.credential_worker = CredentialManagerWorker(
@@ -513,7 +546,7 @@ class MainWindow(SingleInstanceWindow):
         config.session.headers.update(constant.HEADERS_APP)
         self.panel.parent_combo.clear()
         self.panel.parent_combo.addItems(config.parent_area)
-        self.setCentralWidget(self.panel)
+        self._stack.setCurrentIndex(1)
         if config.obs_settings.get("auto_connect", False):
             self.panel.connect_btn.click()
         self.panel.parent_combo.setCurrentText(
@@ -578,14 +611,30 @@ class MainWindow(SingleInstanceWindow):
                                             self.face_window))
         self.face_window.show()
 
-    @staticmethod
-    def apply_color_scheme(scheme: Qt.ColorScheme):
+    def apply_color_scheme(self, scheme: Qt.ColorScheme):
+        self._color_scheme = scheme
         if scheme == Qt.ColorScheme.Light:
-            setup_theme("light", additional_qss=LIGHT_CSS)
-        elif scheme == Qt.ColorScheme.Dark:
-            setup_theme("dark", additional_qss=DARK_CSS)
+            self._apply_light_scheme()
         else:
-            setup_theme("light", additional_qss=LIGHT_CSS)
+            self._apply_dark_scheme()
+
+    def _apply_dark_scheme(self):
+        setup_theme("dark", additional_qss=DARK_CSS)
+        self._side_bar.apply_dark_mode()
+
+    def _apply_light_scheme(self):
+        setup_theme("light", additional_qss=LIGHT_CSS)
+        self._side_bar.apply_light_mode()
+
+    def _change_color_scheme(self):
+        scheme = self._color_scheme
+        if scheme == Qt.ColorScheme.Dark:
+            self._color_scheme = Qt.ColorScheme.Light
+            self._apply_light_scheme()
+        else:
+            self._color_scheme = Qt.ColorScheme.Dark
+            self._apply_dark_scheme()
+
 
 # Entry point
 if __name__ == '__main__':
@@ -617,9 +666,9 @@ if __name__ == '__main__':
     app.setFont(QFont(
         "Open Sans,.AppleSystemUIFont,Helvetica,Arial,MS Shell Dlg,sans-serif",
         9))
-    MainWindow.apply_color_scheme(app.styleHints().colorScheme())
-    app.styleHints().colorSchemeChanged.connect(MainWindow.apply_color_scheme)
     window = MainWindow(args.web_host, args.web_port, args.first_run,
                         args.no_update)
+    window.apply_color_scheme(app.styleHints().colorScheme())
+    app.styleHints().colorSchemeChanged.connect(window.apply_color_scheme)
     window.show()
     sys.exit(app.exec())

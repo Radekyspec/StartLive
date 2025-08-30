@@ -26,7 +26,7 @@ from .cover_crop import CoverCropWidget
 class StreamConfigPanel(QWidget):
 
     def __init__(self, parent_window, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(parent_window, *args, **kwargs)
         self.parent_window = parent_window
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self._mutex = QMutex()
