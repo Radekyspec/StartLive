@@ -319,8 +319,6 @@ class MainWindow(SingleInstanceWindow):
             self.logger.info("Credentials deleted. Exiting application.")
             event.accept()
             return
-        if self.panel is not None:
-            self.panel.stop_live()
         if config.obs_settings.internal:
             self.logger.info("Saving OBS connection settings.")
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
