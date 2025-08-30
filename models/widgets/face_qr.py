@@ -6,11 +6,14 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from models.workers import FaceAuthWorker
+
 
 class FaceQRWidget(QWidget):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, worker: FaceAuthWorker, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setWindowTitle("人脸认证")
+        self.worker = worker
         self.setWindowFlags(
             Qt.WindowType.Window | Qt.WindowType.WindowCloseButtonHint)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
@@ -25,3 +28,7 @@ class FaceQRWidget(QWidget):
         layout.addWidget(self.face_hint)
         layout.addWidget(self.face_qr)
         self.setLayout(layout)
+
+    def closeEvent(self, event):
+        self.worker.stop()
+        event.accept()

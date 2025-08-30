@@ -12,9 +12,8 @@ from models.workers.base import LongLiveWorker, run_wrapper
 
 
 class FaceAuthWorker(LongLiveWorker):
-    def __init__(self, qr_window: "FaceQRWidget"):
+    def __init__(self, ):
         super().__init__(name="人脸认证")
-        self.qr_window = qr_window
         self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
@@ -29,7 +28,7 @@ class FaceAuthWorker(LongLiveWorker):
             "visit_id": "",
         }
         verified = False
-        while self.is_running and not verified and self.qr_window:
+        while self.is_running and not verified:
             self.logger.info("IsUserIdentifiedByFaceAuth Request")
             response = config.session.post(url, data=verify_data)
             response.encoding = "utf-8"

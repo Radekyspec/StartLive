@@ -52,9 +52,7 @@ DARK_CSS = """QComboBox {
     height: 22 + 8 - 4px * 2;
 }
 
-QLineEdit,
-QTextEdit,
-QPlainTextEdit {
+QLineEdit, QTextEdit, QPlainTextEdit {
     background-color: #3C404D;
     border: none;
     border-radius: 4px;
@@ -64,25 +62,17 @@ QPlainTextEdit {
     height: 22 + 8 - 4px * 2;
 }
 
-QLineEdit:hover,
-QTextEdit:hover,
-QPlainTextEdit:hover {
+QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover {
     background-color: #3C404D;
     border-color: #5B6273;
 }
 
-QLineEdit:focus,
-QTextEdit:focus,
-QPlainTextEdit:focus {
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
     background-color: #3C404D;
     border-color: #284CB8;
 }
 
-QDialog,
-QMainWindow,
-QStatusBar,
-QMenuBar,
-QMenu {
+QDialog, QMainWindow, QStatusBar, QMenuBar, QMenu {
     background-color: #1D1F26;
 }
 
@@ -117,10 +107,7 @@ QMenu::item {
     padding-right: 20px;
 }
 
-QListWidget,
-QMenu,
-SceneTree,
-SourceTree {
+QListWidget, QMenu, SceneTree, SourceTree {
     padding: 2px;
 }
 
@@ -132,42 +119,22 @@ QMenu::item {
     padding-right: 20px;
 }
 
-QListWidget::item,
-SourceTreeItem,
-QMenu::item,
-SceneTree::item {
+QListWidget::item, SourceTreeItem, QMenu::item, SceneTree::item {
     border-radius: 5px;
     color: #FFFFFF;
     border: 1px solid transparent;
 }
 
-QMenu::item:selected,
-QListWidget::item:selected,
-SceneTree::item:selected,
-SourceTree::item:selected {
+QMenu::item:selected {
     background-color: #284CB8;
 }
 
-QMenu::item:hover,
-QListWidget::item:hover,
-SceneTree::item:hover,
-SourceTree::item:hover,
-QMenu::item:selected:hover,
-QListWidget::item:selected:hover,
-SceneTree::item:selected:hover,
-SourceTree::item:selected:hover {
+QMenu::item:hover, QMenu::item:selected:hover {
     background-color: #476BD7;
     color: #FFFFFF;
 }
 
-QMenu::item:focus,
-QListWidget::item:focus,
-SceneTree::item:focus,
-SourceTree::item:focus,
-QMenu::item:selected:focus,
-QListWidget::item:selected:focus,
-SceneTree::item:selected:focus,
-SourceTree::item:selected:focus {
+QMenu::item:focus, QMenu::item:selected:focus {
     border: 1px solid "transparent";
 }"""
 LIGHT_CSS = """QComboBox {

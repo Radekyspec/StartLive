@@ -102,7 +102,7 @@ class FetchLoginWorker(LongLiveWorker):
         if self.cookie_key is not None:
             if len(cookie_indices) <= 1:
                 parent_window.add_thread(
-                        FetchUsernamesWorker("")
+                    FetchUsernamesWorker("")
                 )
             else:
                 parent_window.add_thread(

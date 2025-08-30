@@ -40,8 +40,8 @@ class FetchUsernamesWorker(BaseWorker):
             session.trust_env = False
         for key in config.usernames:
             if key == self._current_user or (
-            cookies := get_password(KEYRING_SERVICE_NAME,
-                                    key)) is None:
+                    cookies := get_password(KEYRING_SERVICE_NAME,
+                                            key)) is None:
                 continue
             sleep(1)
             cookies = loads(cookies)

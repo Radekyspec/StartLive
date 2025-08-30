@@ -600,10 +600,9 @@ class MainWindow(SingleInstanceWindow):
         self.tray_stop_live_action.setEnabled(False)
         self.panel.parent_combo.setEnabled(True)
         self.panel.child_combo.setEnabled(True)
-        self.face_window = FaceQRWidget()
+        auth_worker = FaceAuthWorker()
+        self.face_window = FaceQRWidget(auth_worker)
         self.face_window.face_qr.setPixmap(self._qpixmap_from_str(face_url))
-        auth_worker = FaceAuthWorker(self.face_window)
-        self.face_window.destroyed.connect(auth_worker.stop)
         self.add_thread(auth_worker,
                         on_finished=partial(auth_worker.on_finished,
                                             self.face_window))
