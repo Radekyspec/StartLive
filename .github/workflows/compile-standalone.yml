@@ -39,7 +39,7 @@ jobs:
           noinclude-setuptools-mode: "nofollow"
           noinclude-pytest-mode: "nofollow"
           noinclude-unittest-mode: "nofollow"
-          include-data-files: "resources/\.(?:png|svg)$=resources/"
+          include-data-files: "resources/\\.(?:png|svg)$=resources/"
           deployment: true
 
       - name: Flatten output
