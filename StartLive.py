@@ -103,7 +103,7 @@ class MainWindow(SingleInstanceWindow):
         for btn, idx in mapping:
             btn_group.addButton(btn)
             btn.clicked.connect(
-                lambda _=False, i=idx: self._stack.setCurrentIndex(i))
+                lambda _=False, i=idx: self._stack_switch(i))
         self._side_bar.btn_home.setChecked(True)
         self.setGeometry(300, 200, 610, 470)
         self.tray_icon = QSystemTrayIcon(self)
@@ -634,6 +634,12 @@ class MainWindow(SingleInstanceWindow):
         else:
             self._color_scheme = Qt.ColorScheme.Dark
             self._apply_dark_scheme()
+
+    def _stack_switch(self, i: int):
+        if i == 1 and not config.scan_status["scanned"]:
+            self._stack.setCurrentIndex(0)
+            return
+        self._stack.setCurrentIndex(i)
 
 
 # Entry point
