@@ -388,7 +388,8 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon.setIcon(QIcon(
             join(self._base_path, "resources",
                  "icon_cr.png")))
-        QMessageBox.information(self, "设置清空", "APP设置清除成功")
+        QMessageBox.information(self, "设置清空", "APP设置清除成功\n"
+                                                  "字体相关设置需要重启生效")
 
     def _delete_cred(self):
         with suppress(PasswordDeleteError):
