@@ -18,13 +18,14 @@ class SideBar(QFrame):
         self._expanded = False
         self.setObjectName("SideBar")
         self.setFixedWidth(self._collapsed_width)
-        self.sidebar_btn = []
         self._light_icons = [QIcon(join(icon_path, "light-theme.svg")),
                              QIcon(join(icon_path, "light-home.svg")),
+                             QIcon(join(icon_path, "light-log.svg")),
                              QIcon(join(icon_path, "light-settings.svg")), ]
-        self._dark_icons = [QIcon(join(icon_path, "dark-theme.png")),
-                            QIcon(join(icon_path, "dark-home.png")),
-                            QIcon(join(icon_path, "dark-settings.png")), ]
+        self._dark_icons = [QIcon(join(icon_path, "dark-theme.svg")),
+                            QIcon(join(icon_path, "dark-home.svg")),
+                            QIcon(join(icon_path, "dark-log.svg")),
+                            QIcon(join(icon_path, "dark-settings.svg")), ]
 
         self.toggle_btn = QToolButton()
         self.toggle_btn.setText("☰")
@@ -52,9 +53,8 @@ class SideBar(QFrame):
 
         self.btn_theme = mk_btn("", 0, False)
         self.btn_home = mk_btn(" 主界面", 1)
-        self.btn_settings = mk_btn(" 设置", 2)
-        self.sidebar_btn = [self.btn_theme, self.btn_home,
-                            self.btn_settings]
+        self.btn_log = mk_btn(" 日志", 2)
+        self.btn_settings = mk_btn(" 设置", 3)
 
         v = QVBoxLayout(self)
         v.setContentsMargins(6, 6, 6, 6)
@@ -63,12 +63,13 @@ class SideBar(QFrame):
         v.addWidget(self.btn_theme)
         v.addWidget(self.btn_home)
         v.addStretch(1)
+        v.addWidget(self.btn_log)
         v.addWidget(self.btn_settings)
 
         self._anim = QVariantAnimation(self, duration=200)
         self._anim.valueChanged.connect(self._on_anim_value)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._menu_buttons = [self.btn_theme, self.btn_home,
+        self._menu_buttons = [self.btn_theme, self.btn_home, self.btn_log,
                               self.btn_settings]
 
     def _on_anim_value(self, val):
@@ -104,9 +105,9 @@ class SideBar(QFrame):
             self._apply_collapsed_ui(False)
 
     def apply_dark_mode(self):
-        for idx, btn in enumerate(self.sidebar_btn):
+        for idx, btn in enumerate(self._menu_buttons):
             btn.setIcon(self._dark_icons[idx])
 
     def apply_light_mode(self):
-        for idx, btn in enumerate(self.sidebar_btn):
+        for idx, btn in enumerate(self._menu_buttons):
             btn.setIcon(self._light_icons[idx])

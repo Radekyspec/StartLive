@@ -30,6 +30,7 @@ from models.log import init_logger, get_logger, get_log_path
 from models.states import LoginState
 from models.widgets import *
 from models.window.face_qr import FaceQRWidget
+from models.window.log_viewer import LogViewer
 from models.window.settings_page import SettingsPage
 from models.workers import *
 from models.workers.base import *
@@ -67,7 +68,9 @@ class MainWindow(SingleInstanceWindow):
                  base_path: str):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-        init_logger()
+        _, gui_handler = init_logger()
+        self._log_viewer = LogViewer(self)
+        gui_handler.recordUpdated.connect(self._log_viewer.append_line)
         self.logger = get_logger(self.__class__.__name__)
         self.logger.info(f"App {VERSION} created with host={host}, port={port}")
         self._host = host
@@ -95,7 +98,8 @@ class MainWindow(SingleInstanceWindow):
         self._side_bar.btn_theme.clicked.connect(self._change_color_scheme)
         mapping = [
             (self._side_bar.btn_home, 1),
-            (self._side_bar.btn_settings, 2),
+            (self._side_bar.btn_log, 2),
+            (self._side_bar.btn_settings, 3),
         ]
         for btn, idx in mapping:
             btn_group.addButton(btn)
@@ -249,8 +253,10 @@ class MainWindow(SingleInstanceWindow):
         if (w := self._stack.widget(1)) is not None:
             self._stack.removeWidget(w)
         self._stack.insertWidget(1, self.panel)
+        if self._stack.indexOf(self._log_viewer) == -1:
+            self._stack.insertWidget(2, self._log_viewer)
         if self._stack.indexOf(self._settings_page) == -1:
-            self._stack.insertWidget(2, self._settings_page)
+            self._stack.insertWidget(3, self._settings_page)
         self._stack.setCurrentIndex(0)
         self._side_bar.btn_home.setChecked(True)
 
