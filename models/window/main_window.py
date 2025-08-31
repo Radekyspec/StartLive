@@ -1,7 +1,7 @@
 # module import
 from contextlib import suppress
 from functools import partial
-from os.path import join
+from os.path import join, abspath
 from traceback import format_exception
 from typing import Optional, Callable
 
@@ -30,6 +30,7 @@ from models.log import init_logger, get_logger, get_log_path
 from models.states import LoginState
 from models.widgets import *
 from models.window.face_qr import FaceQRWidget
+from models.window.settings_page import SettingsPage
 from models.workers import *
 from models.workers.base import *
 from web_server import HttpServerWorker
@@ -101,12 +102,17 @@ class MainWindow(SingleInstanceWindow):
             btn.clicked.connect(
                 lambda _=False, i=idx: self._stack_switch(i))
         self._side_bar.btn_home.setChecked(True)
+        self._settings_page = SettingsPage(self)
         self.setGeometry(300, 200, 610, 470)
         self.tray_icon = QSystemTrayIcon(self)
         # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
-        self.tray_icon.setIcon(QIcon(
-            join(self._base_path, "resources",
-                 "icon_cr.png")))
+        if config.app_settings["custom_tray_icon"]:
+            self.tray_icon.setIcon(QIcon(
+                abspath(config.app_settings["custom_tray_icon"])))
+        else:
+            self.tray_icon.setIcon(QIcon(
+                join(self._base_path, "resources",
+                     "icon_cr.png")))
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
         self.logger.info("System tray icon initialized.")
@@ -144,6 +150,10 @@ class MainWindow(SingleInstanceWindow):
         delete_settings_action.triggered.connect(self._delete_settings)
         setting_menu.addAction(delete_settings_action)
 
+        delete_app_settings = QAction("清除APP设置", self)
+        delete_app_settings.triggered.connect(self._delete_app_settings)
+        setting_menu.addAction(delete_app_settings)
+
         delete_cred = QAction("清空所有凭据", self)
         delete_cred.triggered.connect(self._delete_cred)
         setting_menu.addAction(delete_cred)
@@ -156,26 +166,26 @@ class MainWindow(SingleInstanceWindow):
         menu_bar.addMenu(self.account_menu)
         self.account_menu.aboutToShow.connect(self._populate_account_menu)
 
-        self.proxy_menu = QMenu("代理设置", self)
-        menu_bar.addMenu(self.proxy_menu)
-        # self.proxy_menu.aboutToShow.connect(self._populate_proxy_menu)
-        proxy_group = QActionGroup(
-            self,
-            exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive
-        )
-        proxy_group.triggered.connect(self._switch_proxy)
-        no_proxy = QAction("不使用代理", self, checkable=True)
-        no_proxy.setData(False)
-        proxy_group.addAction(no_proxy)
-        self.proxy_menu.addAction(no_proxy)
-        system_proxy = QAction("使用系统代理", self, checkable=True)
-        system_proxy.setData(True)
-        proxy_group.addAction(system_proxy)
-        self.proxy_menu.addAction(system_proxy)
-        if config.app_settings["use_proxy"]:
-            system_proxy.setChecked(True)
-        else:
-            no_proxy.setChecked(True)
+        # self.proxy_menu = QMenu("代理设置", self)
+        # menu_bar.addMenu(self.proxy_menu)
+        # # self.proxy_menu.aboutToShow.connect(self._populate_proxy_menu)
+        # proxy_group = QActionGroup(
+        #     self,
+        #     exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive
+        # )
+        # proxy_group.triggered.connect(self._switch_proxy)
+        # no_proxy = QAction("不使用代理", self, checkable=True)
+        # no_proxy.setData(False)
+        # proxy_group.addAction(no_proxy)
+        # self.proxy_menu.addAction(no_proxy)
+        # system_proxy = QAction("使用系统代理", self, checkable=True)
+        # system_proxy.setData(True)
+        # proxy_group.addAction(system_proxy)
+        # self.proxy_menu.addAction(system_proxy)
+        # if config.app_settings["use_proxy"]:
+        #     system_proxy.setChecked(True)
+        # else:
+        #     no_proxy.setChecked(True)
         self.logger.info("Menu bar initialized.")
 
         if first_run:
@@ -239,7 +249,10 @@ class MainWindow(SingleInstanceWindow):
         if (w := self._stack.widget(1)) is not None:
             self._stack.removeWidget(w)
         self._stack.insertWidget(1, self.panel)
+        if self._stack.indexOf(self._settings_page) == -1:
+            self._stack.insertWidget(2, self._settings_page)
         self._stack.setCurrentIndex(0)
+        self._side_bar.btn_home.setChecked(True)
 
         central = QWidget(self)
         root = QHBoxLayout(self)
@@ -367,6 +380,13 @@ class MainWindow(SingleInstanceWindow):
         self.panel.reset_obs_settings()
         QMessageBox.information(self, "设置清空", "OBS连接设置清除成功")
 
+    def _delete_app_settings(self):
+        with suppress(PasswordDeleteError):
+            delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
+        CredentialManagerWorker.app_settings_default()
+        self._settings_page.reset_default()
+        QMessageBox.information(self, "设置清空", "APP设置清除成功")
+
     def _delete_cred(self):
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
@@ -433,8 +453,8 @@ class MainWindow(SingleInstanceWindow):
         self.setup_ui(is_new=True)
 
     @staticmethod
-    def _switch_proxy(action: QAction):
-        use_proxy = action.data()
+    def switch_proxy(_id: int):
+        use_proxy = _id == 1
         config.app_settings["use_proxy"] = use_proxy
         if use_proxy:
             config.session.get = partial(config.session.get, verify=False)
@@ -444,6 +464,11 @@ class MainWindow(SingleInstanceWindow):
             config.session.get = partial(config.session.get, verify=True)
             config.session.post = partial(config.session.post, verify=True)
             config.session.trust_env = False
+
+    def switch_tray_icon(self, icon_path: str):
+        config.app_settings["custom_tray_icon"] = icon_path
+        self.tray_icon.setIcon(QIcon(icon_path))
+
 
     def load_credentials(self):
         if config.scan_status["scanned"]:
@@ -541,6 +566,7 @@ class MainWindow(SingleInstanceWindow):
         self.panel.parent_combo.clear()
         self.panel.parent_combo.addItems(config.parent_area)
         self._stack.setCurrentIndex(1)
+        self._side_bar.btn_home.setChecked(True)
         if config.obs_settings.get("auto_connect", False):
             self.panel.connect_btn.click()
         self.panel.parent_combo.setCurrentText(

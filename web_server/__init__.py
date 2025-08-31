@@ -53,8 +53,8 @@ class HttpServerWorker(QThread):
                     self.end_headers()
                     self.wfile.write(b"Not Found.")
 
-            def log_message(self, format, *args):
-                logger.info(format % args)
+            def log_message(self, format_s, *args):
+                logger.info(format_s % args)
 
         return EmitSignalHandler
 

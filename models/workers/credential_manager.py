@@ -38,6 +38,13 @@ class CredentialManagerWorker(BaseWorker):
         })
 
     @staticmethod
+    def app_settings_default():
+        config.app_settings.update({
+            "use_proxy": False,
+            "custom_tray_icon": ""
+        })
+
+    @staticmethod
     def get_cookies_index() -> list[str]:
         if (cookies_index := get_password(KEYRING_SERVICE_NAME,
                                           KEYRING_COOKIES_INDEX)) is not None:

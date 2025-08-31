@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
                                QLabel, QLineEdit, QPushButton,
                                QVBoxLayout, QWidget,
-                               QApplication)
+                               QApplication, QFrame)
 
 # local package import
 import config
@@ -95,7 +95,7 @@ class StreamConfigPanel(QWidget):
         obs_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         obs_layout.addWidget(obs_hint, 0, 0, 1, 7)
 
-        obs_auto_start = QWidget()
+        obs_auto_start = QFrame()
         obs_auto_start_layout = QHBoxLayout()
         obs_auto_start_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.obs_auto_live_checkbox = QCheckBox("自动推流")
