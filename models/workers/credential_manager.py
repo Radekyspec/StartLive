@@ -41,7 +41,8 @@ class CredentialManagerWorker(BaseWorker):
     def app_settings_default():
         config.app_settings.update({
             "use_proxy": False,
-            "custom_tray_icon": ""
+            "custom_tray_icon": "",
+            "custom_font": ""
         })
 
     @staticmethod

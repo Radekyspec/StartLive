@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QApplication
 from qdarktheme import enable_hi_dpi
 
 # local package import
+import config
 from constant import *
 from models.window import MainWindow
 
@@ -44,9 +45,13 @@ if __name__ == '__main__':
     args, qt_args = parser.parse_known_args()
     enable_hi_dpi()
     app = QApplication(qt_args)
-    app.setFont(QFont(
-        "Open Sans,.AppleSystemUIFont,Helvetica,Arial,MS Shell Dlg,sans-serif",
-        9))
+    if (font := config.app_settings["custom_font"]) and (
+    f := QFont()).fromString(font):
+        app.setFont(f)
+    else:
+        app.setFont(QFont(
+            "Open Sans,.AppleSystemUIFont,Helvetica,Arial,MS Shell Dlg,sans-serif",
+            9))
     window = MainWindow(args.web_host, args.web_port, args.first_run,
                         args.no_update, base_path=abspath(dirname(__file__)))
     window.apply_color_scheme(app.styleHints().colorScheme())

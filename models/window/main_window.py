@@ -385,6 +385,9 @@ class MainWindow(SingleInstanceWindow):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
         CredentialManagerWorker.app_settings_default()
         self._settings_page.reset_default()
+        self.tray_icon.setIcon(QIcon(
+            join(self._base_path, "resources",
+                 "icon_cr.png")))
         QMessageBox.information(self, "设置清空", "APP设置清除成功")
 
     def _delete_cred(self):

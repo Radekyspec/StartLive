@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt, QSize
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QRadioButton, QButtonGroup, QCheckBox,
-    QPushButton, QFrame, QFileDialog
+    QPushButton, QFrame, QFileDialog, QFontDialog, QApplication
 )
 
 import config
@@ -40,6 +40,8 @@ class SettingsPage(QWidget):
         )
         self.tray_icon_edit.textChanged.connect(self._parent_window.switch_tray_icon)
 
+        self.font_edit, self.font_btn = self.add_font_picker_item(
+            "自定义显示字体（重启生效）", options=(QFontDialog.FontDialogOption.DontUseNativeDialog | QFontDialog.FontDialogOption.ScalableFonts))
         self.main_vbox.addStretch(1)
 
     def add_section_title(self, text: str):
@@ -200,6 +202,50 @@ class SettingsPage(QWidget):
 
         self.main_vbox.addWidget(frame)
         return path_edit, pick_btn
+
+    def add_font_picker_item(self, label: str, *, dialog_title="选择字体",
+                             options
+                             ) -> tuple[QLineEdit, QPushButton]:
+        frame = QFrame()
+        v = QVBoxLayout(frame)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(6)
+
+        lbl = QLabel(label)
+        lbl.setFont(self.title_font)
+        v.addWidget(lbl)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        font_edit = QLineEdit()
+        font_edit.setReadOnly(True)
+        font_edit.setPlaceholderText(QApplication.font().family())
+
+        font_btn = QPushButton("选择字体")
+        font_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        def open_dialog():
+            ok, font = QFontDialog.getFont(
+                QApplication.font(),  # initial
+                self._parent_window,
+                dialog_title,  # title
+                options  # options
+            )
+            if ok:
+                font_edit.setText(font.family())
+                config.app_settings["custom_font"] = font.toString()
+
+        font_btn.clicked.connect(
+            open_dialog)
+
+        row.addWidget(font_edit, 1)
+        row.addWidget(font_btn, 0)
+        v.addLayout(row)
+
+        self.main_vbox.addWidget(frame)
+        return font_edit, font_btn
 
     def reset_default(self):
         self.proxy_group.button(0).setChecked(True)

@@ -44,6 +44,7 @@ stream_status = ThreadSafeDict({
 app_settings = ThreadSafeDict({
     "use_proxy": False,
     "custom_tray_icon": "",
+    "custom_font": "",
 })
 if (app := get_password(KEYRING_SERVICE_NAME,
                         KEYRING_APP_SETTINGS)) is not None:
