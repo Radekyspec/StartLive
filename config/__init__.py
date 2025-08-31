@@ -62,6 +62,8 @@ if (app := get_password(KEYRING_SERVICE_NAME,
 room_info = ThreadSafeDict({})
 obs_settings = ThreadSafeDict({})
 usernames = ThreadSafeDict({})
+# A cache of cookie indices
+cookie_indices = []
 
 # Area (category) selections for live stream configuration
 parent_area = ["请选择"]

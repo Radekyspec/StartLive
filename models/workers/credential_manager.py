@@ -46,10 +46,15 @@ class CredentialManagerWorker(BaseWorker):
         })
 
     @staticmethod
-    def get_cookies_index() -> list[str]:
+    def get_cookie_indices() -> list[str]:
         if (cookies_index := get_password(KEYRING_SERVICE_NAME,
                                           KEYRING_COOKIES_INDEX)) is not None:
             cookies_index = loads(cookies_index)
+            if not isinstance(cookies_index, list):
+                return []
+            # valid, update cache
+            config.cookie_indices.clear()
+            config.cookie_indices.extend(cookies_index)
             return cookies_index
         return []
 
@@ -110,15 +115,15 @@ class CredentialManagerWorker(BaseWorker):
         """
         uid = config.cookies_dict["DedeUserID"]
         cookie_key = f"cookies|{uid}"
-        cookies_index = CredentialManagerWorker.get_cookies_index()
-        if cookie_key in cookies_index:
+        CredentialManagerWorker.get_cookie_indices()
+        if cookie_key in config.cookie_indices:
             raise CredentialDuplicatedError(cookie_key)
-        cookies_index.append(cookie_key)
+        config.cookie_indices.append(cookie_key)
         config.usernames[cookie_key] = cookie_key
         set_password(KEYRING_SERVICE_NAME, cookie_key,
                      dumps(config.cookies_dict))
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
-                     dumps(cookies_index))
+                     dumps(config.cookie_indices))
         return cookie_key
 
     @Slot()
@@ -157,7 +162,7 @@ class CredentialManagerWorker(BaseWorker):
                          dumps(saved_cookies))
             self.logger.info(f"cookies index created")
 
-        self.cookies_index.extend(self.get_cookies_index())
+        self.cookies_index.extend(self.get_cookie_indices())
         self.logger.info(f"cookies index loaded: {self.cookies_index}")
         config.usernames.clear()
         config.usernames.update({i: i for i in self.cookies_index})

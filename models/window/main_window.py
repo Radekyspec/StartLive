@@ -81,7 +81,7 @@ class MainWindow(SingleInstanceWindow):
         self._thread_pool = QThreadPool()
         self._current_cookie_idx = 0
         self._cookie_index_len = len(
-            CredentialManagerWorker.get_cookies_index())
+            CredentialManagerWorker.get_cookie_indices())
         self._managed_workers = []
         # Long live workers
         self._ll_workers = []
@@ -367,7 +367,7 @@ class MainWindow(SingleInstanceWindow):
     def _delete_cookies(self):
         if not config.scan_status["scanned"]:
             return
-        cookie_index = CredentialManagerWorker.get_cookies_index()
+        cookie_index = CredentialManagerWorker.get_cookie_indices()
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME,
                             cookie_index[self._current_cookie_idx])
@@ -400,7 +400,7 @@ class MainWindow(SingleInstanceWindow):
     def _delete_cred(self):
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
-        for cookie in CredentialManagerWorker.get_cookies_index():
+        for cookie in CredentialManagerWorker.get_cookie_indices():
             with suppress(PasswordDeleteError):
                 delete_password(KEYRING_SERVICE_NAME, cookie)
         with suppress(PasswordDeleteError):
@@ -417,12 +417,20 @@ class MainWindow(SingleInstanceWindow):
     def _switch_account(self, action: QAction):
         idx = action.data()
         self.logger.info(f"select account index: {idx}")
-        if idx == self._cookie_index_len:
+        if idx == self._cookie_index_len or not self._ready_switch_account():
             return
         elif idx != self._current_cookie_idx:
             self._current_cookie_idx = idx
             CredentialManagerWorker.reset_default()
             self.setup_ui()
+
+    @staticmethod
+    def _ready_switch_account():
+        return all([config.scan_status["area_updated"],
+                    config.scan_status["room_updated"],
+                    config.scan_status["const_updated"],
+                    config.scan_status["announce_updated"]
+                    ])
 
     def _populate_account_menu(self):
         self.account_menu.clear()
@@ -430,7 +438,7 @@ class MainWindow(SingleInstanceWindow):
                                           exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
         self.account_group.triggered.connect(self._switch_account)
 
-        cookie_indices = CredentialManagerWorker.get_cookies_index()
+        cookie_indices = config.cookie_indices
         self._cookie_index_len = len(cookie_indices)
         self.logger.info(f"cookie index length: {self._cookie_index_len}")
         for idx, cookie_index in enumerate(cookie_indices):
@@ -446,11 +454,12 @@ class MainWindow(SingleInstanceWindow):
         self.account_menu.addAction(add_new_account)
 
     def _populate_tray_menu(self):
+        cookie_indices = config.cookie_indices
+        self._cookie_index_len = len(cookie_indices)
         if self._current_cookie_idx == self._cookie_index_len:
             self.tray_curr_user.setText("当前账号未登录")
             self.tray_curr_user.setEnabled(False)
             return
-        cookie_indices = CredentialManagerWorker.get_cookies_index()
         self.tray_curr_user.setText(
             f"当前账号：{config.usernames[cookie_indices[self._current_cookie_idx]]}")
         self.tray_curr_user.setEnabled(True)
@@ -478,7 +487,6 @@ class MainWindow(SingleInstanceWindow):
     def switch_tray_icon(self, icon_path: str):
         config.app_settings["custom_tray_icon"] = icon_path
         self.tray_icon.setIcon(QIcon(icon_path))
-
 
     def load_credentials(self):
         if config.scan_status["scanned"]:
