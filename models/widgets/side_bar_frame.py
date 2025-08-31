@@ -51,8 +51,8 @@ class SideBar(QFrame):
             return b
 
         self.btn_theme = mk_btn("", 0, False)
-        self.btn_home = mk_btn("  主界面", 1)
-        self.btn_settings = mk_btn("    设置", 2)
+        self.btn_home = mk_btn(" 主界面", 1)
+        self.btn_settings = mk_btn(" 设置", 2)
         self.sidebar_btn = [self.btn_theme, self.btn_home,
                             self.btn_settings]
 
