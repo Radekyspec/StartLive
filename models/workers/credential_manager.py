@@ -207,7 +207,7 @@ class CredentialManagerWorker(BaseWorker):
     def on_finished(self, parent_window: "MainWindow", state: LoginState):
         FetchLoginWorker.post_login(parent_window, state)
         state.credentialLoaded.emit()
-        if config.cookie_indices:
+        if not self.is_new:
             parent_window.add_thread(
                 FetchUsernamesWorker(config.cookie_indices[self.cookie_index])
             )
