@@ -170,6 +170,7 @@ class CredentialManagerWorker(BaseWorker):
                     KEYRING_SERVICE_NAME,
                     config.cookie_indices[
                         self.cookie_index])) is None:
+            self.is_new = True
             return
         saved_cookies = loads(saved_cookies)
         config.session.cookies.clear()

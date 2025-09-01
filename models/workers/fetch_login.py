@@ -97,9 +97,6 @@ class FetchLoginWorker(LongLiveWorker):
         if not self.is_running:
             return
         FetchLoginWorker.post_login(parent_window, self.state)
-        from .credential_manager import CredentialManagerWorker
-        cookie_indices = CredentialManagerWorker.get_cookie_indices()
-        print(cookie_indices)
         if self.cookie_key is not None:
             parent_window.add_thread(
                 FetchUsernamesWorker("")  # Update all usernames
