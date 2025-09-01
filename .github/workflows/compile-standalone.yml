@@ -17,7 +17,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12.10' # Version range or exact version of a Python version to use, using SemVer's version range syntax
+          python-version: '3.13.7' # Version range or exact version of a Python version to use, using SemVer's version range syntax
           architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
           cache: 'pip'
           cache-dependency-path: |
@@ -32,7 +32,10 @@ jobs:
         with:
           nuitka-version: main
           script-name: StartLive.py
-          mingw64: true
+          # mingw64: true
+          # Nuitka currently do not support mingw64 for Python 3.13
+          # Wait for update in future
+          msvc: latest
           mode: standalone
           enable-plugins: pyside6
           windows-console-mode: "disable"
