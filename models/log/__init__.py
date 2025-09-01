@@ -37,7 +37,7 @@ def init_logger(name: str = LOGGER_NAME) -> tuple[Logger, QSignalLogHandler]:
     logger.setLevel(DEBUG)
     log_dir, log_path = get_log_path()
     fh = TimedRotatingFileHandler(
-        log_path, when="midnight", interval=1, backupCount=30, encoding="utf-8"
+        log_path, when="midnight", interval=1, backupCount=14, encoding="utf-8"
     )
     gui_handler = QSignalLogHandler()
     fh.suffix = "%Y-%m-%d.log"
