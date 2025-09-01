@@ -71,6 +71,7 @@ if __name__ == '__main__':
 
     p = {
     }
+    print(livehime_sign(p)["sign"])
     for i in get_all_subsets_with_itertools(p.keys()):
         j = {}
         for k in i:
