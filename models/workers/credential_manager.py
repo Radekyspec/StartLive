@@ -25,7 +25,6 @@ class CredentialManagerWorker(BaseWorker):
         self.cookie_index = cookie_index
         self.is_new = is_new
         self.logger = get_logger(self.__class__.__name__)
-        self.cookies_index: list[str] = []
 
     @staticmethod
     def obs_settings_default():
@@ -162,14 +161,14 @@ class CredentialManagerWorker(BaseWorker):
                          dumps(saved_cookies))
             self.logger.info(f"cookies index created")
 
-        self.cookies_index.extend(self.get_cookie_indices())
-        self.logger.info(f"cookies index loaded: {self.cookies_index}")
+        self.get_cookie_indices()
+        self.logger.info(f"cookies index loaded: {config.cookie_indices}")
         config.usernames.clear()
-        config.usernames.update({i: i for i in self.cookies_index})
-        if not self.cookies_index or (
+        config.usernames.update({i: i for i in config.cookie_indices})
+        if not config.cookie_indices or (
                 saved_cookies := get_password(
                     KEYRING_SERVICE_NAME,
-                    self.cookies_index[
+                    config.cookie_indices[
                         self.cookie_index])) is None:
             return
         saved_cookies = loads(saved_cookies)
@@ -193,7 +192,7 @@ class CredentialManagerWorker(BaseWorker):
         response = response.json()
         if response["code"] != 0:
             raise CredentialExpiredError("登录凭据过期, 请重新登录")
-        if (current_username := self.cookies_index[
+        if (current_username := config.cookie_indices[
             self.cookie_index]) in config.usernames:
             config.usernames[
                 current_username] = USERNAME_DISPLAY_TEMPLATE.format(
@@ -208,9 +207,9 @@ class CredentialManagerWorker(BaseWorker):
     def on_finished(self, parent_window: "MainWindow", state: LoginState):
         FetchLoginWorker.post_login(parent_window, state)
         state.credentialLoaded.emit()
-        if self.cookies_index:
+        if config.cookie_indices:
             parent_window.add_thread(
-                FetchUsernamesWorker(self.cookies_index[self.cookie_index])
+                FetchUsernamesWorker(config.cookie_indices[self.cookie_index])
             )
         panel = parent_window.panel
         panel.host_input.setText(
