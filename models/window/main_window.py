@@ -424,13 +424,13 @@ class MainWindow(SingleInstanceWindow):
             CredentialManagerWorker.reset_default()
             self.setup_ui()
 
-    @staticmethod
-    def _ready_switch_account():
-        return all([config.scan_status["area_updated"],
-                    config.scan_status["room_updated"],
-                    config.scan_status["const_updated"],
-                    config.scan_status["announce_updated"]
-                    ])
+    def _ready_switch_account(self):
+        return self._current_cookie_idx == self._cookie_index_len or all(
+            [config.scan_status["area_updated"],
+             config.scan_status["room_updated"],
+             config.scan_status["const_updated"],
+             config.scan_status["announce_updated"]
+             ])
 
     def _populate_account_menu(self):
         self.account_menu.clear()
