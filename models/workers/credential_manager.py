@@ -55,7 +55,7 @@ class CredentialManagerWorker(BaseWorker):
             # valid, update cache
             config.cookie_indices.clear()
             config.cookie_indices.extend(cookies_index)
-            return cookies_index
+            return config.cookie_indices
         return []
 
     @staticmethod
