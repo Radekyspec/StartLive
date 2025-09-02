@@ -143,32 +143,33 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("Tray menu initialized.")
 
         menu_bar = self.menuBar()
-        setting_menu = QMenu("缓存设置", self)
-        menu_bar.addMenu(setting_menu)
+        self._setting_menu = QMenu("缓存设置", self)
+        menu_bar.addMenu(self._setting_menu)
 
         delete_cookies_action = QAction("退出账号登录", self)
         delete_cookies_action.triggered.connect(self._delete_cookies)
-        setting_menu.addAction(delete_cookies_action)
+        self._setting_menu.addAction(delete_cookies_action)
 
         delete_settings_action = QAction("清除OBS连接设置", self)
         delete_settings_action.triggered.connect(self._delete_settings)
-        setting_menu.addAction(delete_settings_action)
+        self._setting_menu.addAction(delete_settings_action)
 
         delete_app_settings = QAction("清除APP设置", self)
         delete_app_settings.triggered.connect(self._delete_app_settings)
-        setting_menu.addAction(delete_app_settings)
+        self._setting_menu.addAction(delete_app_settings)
 
         delete_cred = QAction("清空所有凭据", self)
         delete_cred.triggered.connect(self._delete_cred)
-        setting_menu.addAction(delete_cred)
+        self._setting_menu.addAction(delete_cred)
 
-        open_log_folder = QAction("显示日志文件", self)
-        open_log_folder.triggered.connect(self._open_log_folder)
-        menu_bar.addAction(open_log_folder)
+        self._open_log_folder_action = QAction("显示日志文件", self)
+        self._open_log_folder_action.triggered.connect(self._open_log_folder)
+        menu_bar.addAction(self._open_log_folder_action)
 
         self.account_menu = QMenu("账号切换", self)
         menu_bar.addMenu(self.account_menu)
         self.account_menu.aboutToShow.connect(self._populate_account_menu)
+        self._populate_account_menu()
 
         # self.proxy_menu = QMenu("代理设置", self)
         # menu_bar.addMenu(self.proxy_menu)
@@ -360,10 +361,12 @@ class MainWindow(SingleInstanceWindow):
             self._show_normal()
 
     @staticmethod
+    @Slot()
     def _open_log_folder():
         log_dir, _ = get_log_path(is_makedir=False)
         QDesktopServices.openUrl(QUrl.fromLocalFile(log_dir))
 
+    @Slot()
     def _delete_cookies(self):
         if not config.scan_status["scanned"]:
             return
@@ -380,12 +383,14 @@ class MainWindow(SingleInstanceWindow):
         QMessageBox.information(self, "账号退出", "账号退出成功")
         self.setup_ui(is_new=self._cookie_index_len == 0)
 
+    @Slot()
     def _delete_settings(self):
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
         self.panel.reset_obs_settings()
         QMessageBox.information(self, "设置清空", "OBS连接设置清除成功")
 
+    @Slot()
     def _delete_app_settings(self):
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
@@ -397,6 +402,7 @@ class MainWindow(SingleInstanceWindow):
         QMessageBox.information(self, "设置清空", "APP设置清除成功\n"
                                                   "字体相关设置需要重启生效")
 
+    @Slot()
     def _delete_cred(self):
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
@@ -414,6 +420,7 @@ class MainWindow(SingleInstanceWindow):
             worker.stop()
         QApplication.quit()
 
+    @Slot()
     def _switch_account(self, action: QAction):
         idx = action.data()
         self.logger.info(f"select account index: {idx}")
@@ -432,6 +439,7 @@ class MainWindow(SingleInstanceWindow):
              config.scan_status["announce_updated"]
              ])
 
+    @Slot()
     def _populate_account_menu(self):
         self.account_menu.clear()
         self.account_group = QActionGroup(self,
@@ -453,6 +461,7 @@ class MainWindow(SingleInstanceWindow):
         add_new_account.triggered.connect(self._add_new_account)
         self.account_menu.addAction(add_new_account)
 
+    @Slot()
     def _populate_tray_menu(self):
         cookie_indices = config.cookie_indices
         self._cookie_index_len = len(cookie_indices)
@@ -472,6 +481,7 @@ class MainWindow(SingleInstanceWindow):
         self.setup_ui(is_new=True)
 
     @staticmethod
+    @Slot()
     def switch_proxy(_id: int):
         use_proxy = _id == 1
         config.app_settings["use_proxy"] = use_proxy
@@ -484,10 +494,12 @@ class MainWindow(SingleInstanceWindow):
             config.session.post = partial(config.session.post, verify=True)
             config.session.trust_env = False
 
+    @Slot()
     def switch_tray_icon(self, icon_path: str):
         config.app_settings["custom_tray_icon"] = icon_path
         self.tray_icon.setIcon(QIcon(icon_path))
 
+    @Slot()
     def load_credentials(self):
         if config.scan_status["scanned"]:
             self._post_scan_setup()
