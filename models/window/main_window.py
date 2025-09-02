@@ -162,9 +162,11 @@ class MainWindow(SingleInstanceWindow):
         delete_cred.triggered.connect(self._delete_cred)
         self._setting_menu.addAction(delete_cred)
 
-        self._open_log_folder_action = QAction("显示日志文件", self)
-        self._open_log_folder_action.triggered.connect(self._open_log_folder)
-        menu_bar.addAction(self._open_log_folder_action)
+        self._tools_menu = QMenu("工具", self)
+        _open_log_folder_action = QAction("显示日志文件", self)
+        _open_log_folder_action.triggered.connect(self._open_log_folder)
+        self._tools_menu.addAction(_open_log_folder_action)
+        menu_bar.addMenu(self._tools_menu)
 
         self.account_menu = QMenu("账号切换", self)
         menu_bar.addMenu(self.account_menu)
@@ -450,7 +452,7 @@ class MainWindow(SingleInstanceWindow):
         self._cookie_index_len = len(cookie_indices)
         self.logger.info(f"cookie index length: {self._cookie_index_len}")
         for idx, cookie_index in enumerate(cookie_indices):
-            act = QAction(config.usernames[cookie_index], self, checkable=True)
+            act = QAction(config.usernames.get(cookie_index, cookie_index), self, checkable=True)
             act.setData(idx)
             self.account_group.addAction(act)
             self.account_menu.addAction(act)
