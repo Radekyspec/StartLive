@@ -10,6 +10,10 @@ jobs:
   build:
     runs-on: windows-latest
 
+    env:
+      UPX_VERSION: "5.0.2"
+      UPX_DIR: "${{ github.workspace }}/tools/upx"
+
     steps:
       - name: Check-out repository
         uses: actions/checkout@v4
@@ -27,6 +31,17 @@ jobs:
         run: |
           pip install -r requirements.txt git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
 
+      - name: Download UPX (Windows)
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\upx.zip"
+          Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v${env:UPX_VERSION}/upx-${env:UPX_VERSION}-win64.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP\upx -Force
+          $exepath = Get-ChildItem -Path $env:RUNNER_TEMP\upx -Recurse -Filter upx.exe | Select-Object -First 1
+          New-Item -ItemType Directory -Force -Path $env:UPX_DIR | Out-Null
+          Copy-Item $exepath.FullName -Destination "$env:UPX_DIR\upx.exe" -Force
+          echo "$env:UPX_DIR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Build Executable for Windows
         uses: Nuitka/Nuitka-Action@main
         with:
@@ -37,7 +52,7 @@ jobs:
           # Wait for update in future
           msvc: latest
           mode: standalone
-          enable-plugins: pyside6
+          enable-plugins: pyside6,upx
           windows-console-mode: "disable"
           noinclude-setuptools-mode: "nofollow"
           noinclude-pytest-mode: "nofollow"
