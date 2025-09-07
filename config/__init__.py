@@ -6,6 +6,7 @@ from typing import Optional
 from keyring import get_password
 from obsws_python import ReqClient
 from requests import Session
+from requests.cookies import cookiejar_from_dict
 
 import constant
 from constant import *
@@ -13,12 +14,6 @@ from models.classes import ThreadSafeDict
 
 dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))
-
-# Global session for HTTP requests
-session = Session()
-session.trust_env = False
-session.headers.update(constant.HEADERS_WEB)
-session.cookies.set("appkey", constant.APP_KEY, domain="bilibili.com", path="/")
 
 # Queue to communicate with OBS in a separate thread
 obs_req_queue = Queue()
@@ -49,14 +44,7 @@ app_settings = ThreadSafeDict({
 if (app := get_password(KEYRING_SERVICE_NAME,
                         KEYRING_APP_SETTINGS)) is not None:
     app_settings.update(loads(app))
-    if app_settings["use_proxy"]:
-        session.get = partial(session.get, verify=False, timeout=5)
-        session.post = partial(session.post, verify=False, timeout=5)
-        session.trust_env = True
-    else:
-        session.get = partial(session.get, verify=True, timeout=5)
-        session.post = partial(session.post, verify=True, timeout=5)
-        session.trust_env = False
+
 
 # Managed by models.workers.credential_manager
 room_info = ThreadSafeDict({})
@@ -77,3 +65,22 @@ obs_connecting = False
 
 # Store cookies after login
 cookies_dict = {}
+
+
+def create_session() -> Session:
+    session = Session()
+    session.headers.update(constant.HEADERS_APP)
+    cookiejar_from_dict(cookies_dict,
+                        cookiejar=session.cookies)
+    session.cookies.set("appkey", constant.APP_KEY, domain="bilibili.com",
+                        path="/")
+    if app_settings["use_proxy"]:
+        session.get = partial(session.get, verify=False, timeout=5)
+        session.post = partial(session.post, verify=False, timeout=5)
+        session.trust_env = True
+    else:
+        session.get = partial(session.get, verify=True, timeout=5)
+        session.post = partial(session.post, verify=True, timeout=5)
+        session.trust_env = False
+
+    return session

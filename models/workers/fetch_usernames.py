@@ -28,16 +28,6 @@ class FetchUsernamesWorker(BaseWorker):
         if not config.scan_status["scanned"]:
             return
         url = "https://api.bilibili.com/x/web-interface/nav"
-        session = Session()
-        session.headers.update(constant.HEADERS_APP)
-        if config.app_settings["use_proxy"]:
-            session.get = partial(session.get, verify=False, timeout=5)
-            session.post = partial(session.post, verify=False, timeout=5)
-            session.trust_env = True
-        else:
-            session.get = partial(session.get, verify=True, timeout=5)
-            session.post = partial(session.post, verify=True, timeout=5)
-            session.trust_env = False
         for key in config.usernames:
             if key == self._current_user or (
                     cookies := get_password(KEYRING_SERVICE_NAME,
@@ -46,12 +36,12 @@ class FetchUsernamesWorker(BaseWorker):
             sleep(1)
             cookies = loads(cookies)
             self.logger.info(f"fetch username of {key} Request")
-            session.cookies.clear()
-            session.cookies.update(cookies)
-            session.cookies.set("appkey", constant.APP_KEY,
+            self._session.cookies.clear()
+            self._session.cookies.update(cookies)
+            self._session.cookies.set("appkey", constant.APP_KEY,
                                 domain="bilibili.com",
                                 path="/")
-            response = session.get(
+            response = self._session.get(
                 url,
                 params=livehime_sign({},
                                      access_key=False,
@@ -67,3 +57,7 @@ class FetchUsernamesWorker(BaseWorker):
                 response["data"]["mid"]
             )
             self.logger.info(f"fetch username of {key} Completed")
+
+    @Slot()
+    def on_finished(self):
+        self._session.close()

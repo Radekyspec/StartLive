@@ -255,10 +255,12 @@ class StreamConfigPanel(QWidget):
         area_code = config.area_codes[self.child_combo.currentText()]
         config.room_info["parent_area"] = self.parent_combo.currentText()
         config.room_info["area"] = self.child_combo.currentText()
+        start_live_worker = StartLiveWorker(self.stream_state,
+                            mutex=self._mutex, cond=self._cond, area=area_code)
         self.parent_window.add_thread(
-            StartLiveWorker(self.stream_state,
-                            mutex=self._mutex, cond=self._cond, area=area_code),
-            on_exception=partial(StartLiveWorker.on_exception, self)
+            start_live_worker,
+            on_finished=start_live_worker.on_finished,
+            on_exception=partial(start_live_worker.on_exception, self),
         )
 
     def _stop_live(self):
@@ -277,9 +279,11 @@ class StreamConfigPanel(QWidget):
         if config.obs_client is not None:
             if self.obs_auto_live_checkbox.isChecked():
                 config.obs_req_queue.put(("StopStream", {}))
+        stop_live_worker = StopLiveWorker()
         self.parent_window.add_thread(
-            StopLiveWorker(),
-            on_exception=partial(StopLiveWorker.on_exception, self)
+            stop_live_worker,
+            on_finished=stop_live_worker.on_finished,
+            on_exception=partial(stop_live_worker.on_exception, self)
         )
 
     def fill_stream_info(self, addr: str, key: str):
@@ -351,9 +355,11 @@ class StreamConfigPanel(QWidget):
 
     def _save_title(self):
         self.save_title_btn.setEnabled(False)
+        title_updater = TitleUpdateWorker(self.title_input.text())
         self.parent_window.add_thread(
-            TitleUpdateWorker(self.title_input.text()),
-            on_exception=partial(TitleUpdateWorker.on_exception, self)
+            title_updater,
+            on_finished=title_updater.on_finished,
+            on_exception=partial(title_updater.on_exception, self)
         )
 
     def _edit_cover(self):
@@ -362,9 +368,10 @@ class StreamConfigPanel(QWidget):
         self.cover_edit_btn.setEnabled(False)
         self.cover_crop_widget = CoverCropWidget(self)
         self.cover_crop_widget.destroyed.connect(self._on_cover_exit)
+        fetch_cover_worker = FetchCoverWorker()
         self.parent_window.add_thread(
-            FetchCoverWorker(),
-            on_finished=partial(FetchCoverWorker.on_finished,
+            fetch_cover_worker,
+            on_finished=partial(fetch_cover_worker.on_finished,
                                 self.cover_crop_widget),
         )
         self.cover_crop_widget.show()
@@ -379,9 +386,11 @@ class StreamConfigPanel(QWidget):
 
     def _save_announce(self):
         self.save_announce_btn.setEnabled(False)
+        announce_updater = AnnounceUpdateWorker(self.announce_input.text())
         self.parent_window.add_thread(
-            AnnounceUpdateWorker(self.announce_input.text()),
-            on_exception=partial(AnnounceUpdateWorker.on_exception, self)
+            announce_updater,
+            on_exception=partial(announce_updater.on_exception, self),
+            on_finished=announce_updater.on_finished
         )
 
     def _valid_area(self):
@@ -394,8 +403,9 @@ class StreamConfigPanel(QWidget):
     def _save_area(self):
         if self._valid_area():
             self.save_area_btn.setEnabled(False)
+            area_updater = AreaUpdateWorker(self.child_combo.currentText())
             self.parent_window.add_thread(
-                AreaUpdateWorker(self.child_combo.currentText()),
-                on_finished=partial(AreaUpdateWorker.on_finished, self),
-                on_exception=partial(AreaUpdateWorker.on_exception, self)
+                area_updater,
+                on_finished=partial(area_updater.on_finished, self),
+                on_exception=partial(area_updater.on_exception, self)
             )

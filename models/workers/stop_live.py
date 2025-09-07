@@ -40,7 +40,7 @@ class StopLiveWorker(BaseWorker):
             })
             stop_data = order_payload(stop_data)
         self.logger.info(f"stopLive Request")
-        response = config.session.post(url, data=stop_data)
+        response = self._session.post(url, data=stop_data)
         response.encoding = "utf-8"
         self.logger.info("stopLive Response")
         response = response.json()
@@ -58,3 +58,6 @@ class StopLiveWorker(BaseWorker):
         # parent_window.parent_combo.setEnabled(False)
         # parent_window.child_combo.setEnabled(False)
         parent_window.save_area_btn.setEnabled(True)
+
+    def on_finished(self):
+        self._session.close()

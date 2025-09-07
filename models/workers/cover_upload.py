@@ -24,8 +24,8 @@ class CoverUploadWorker(BaseWorker):
     def run(self, /) -> None:
         url = "https://api.bilibili.com/x/upload/web/image"
         self.logger.info("CoverUpload Request")
-        config.session.headers.clear()
-        config.session.headers.update(constant.HEADERS_WEB)
+        self._session.headers.clear()
+        self._session.headers.update(constant.HEADERS_WEB)
         params = {
             "csrf": config.cookies_dict["bili_jct"],
         }
@@ -34,7 +34,7 @@ class CoverUploadWorker(BaseWorker):
             "dir": (None, "new_room_cover"),
             "file": ("blob", self.data, "image/png")
         }
-        response = config.session.post(url, params=params, files=upload_data)
+        response = self._session.post(url, params=params, files=upload_data)
         self.logger.info("CoverUpload Response")
         response.raise_for_status()
         response = response.json()
@@ -57,9 +57,7 @@ class CoverUploadWorker(BaseWorker):
             "csrf": config.cookies_dict["bili_jct"],
             "visit_id": "",
         }
-        response = config.session.post(url, data=data)
-        config.session.headers.clear()
-        config.session.headers.update(constant.HEADERS_APP)
+        response = self._session.post(url, data=data)
         self.logger.info("UpdatePreLiveInfo Response")
         response.raise_for_status()
         response = response.json()
@@ -74,16 +72,17 @@ class CoverUploadWorker(BaseWorker):
                 "audit_title_status"],
         })
 
-    @staticmethod
     @Slot()
-    def on_finished(parent_window: "StreamConfigPanel"):
+    def on_finished(self, parent_window: "StreamConfigPanel"):
         parent_window.cover_audit_state()
         parent_window.cover_crop_widget.close()
+        cover_state_updater = CoverStateUpdateWorker()
         parent_window.parent_window.add_thread(
-            CoverStateUpdateWorker(),
+            cover_state_updater,
             on_finished=partial(
-                CoverStateUpdateWorker.on_finished, parent_window),
+                cover_state_updater.on_finished, parent_window),
         )
+        self._session.close()
 
     @staticmethod
     @Slot()

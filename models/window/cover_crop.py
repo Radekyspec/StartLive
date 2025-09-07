@@ -75,9 +75,10 @@ class CoverCropWidget(QWidget):
         buf.open(QIODevice.OpenModeFlag.WriteOnly)
         pixmap.save(buf, "PNG")
         buf.close()
+        cover_uploader = CoverUploadWorker(ba.data())
         self.parent_window.parent_window.add_thread(
-            CoverUploadWorker(ba.data()),
-            on_finished=partial(CoverUploadWorker.on_finished,
+            cover_uploader,
+            on_finished=partial(cover_uploader.on_finished,
                                 self.parent_window),
-            on_exception=partial(CoverUploadWorker.on_exception, self)
+            on_exception=partial(cover_uploader.on_exception, self)
         )

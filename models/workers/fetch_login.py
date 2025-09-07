@@ -28,17 +28,21 @@ class FetchLoginWorker(LongLiveWorker):
     @staticmethod
     def post_login(parent: "MainWindow", state: LoginState):
         if config.scan_status["scanned"]:
+            fetch_status = FetchRoomStatusWorker()
             parent.add_thread(
-                FetchRoomStatusWorker()
+                fetch_status,
+                on_finished=fetch_status.on_finished
             )
+            fetch_prelive = FetchPreLiveWorker()
             parent.add_thread(
-                FetchPreLiveWorker(),
-                on_finished=partial(FetchPreLiveWorker.on_finished,
+                fetch_prelive,
+                on_finished=partial(fetch_prelive.on_finished,
                                     parent.panel, state)
             )
+            fetch_announce = FetchAnnounceWorker()
             parent.add_thread(
-                FetchAnnounceWorker(),
-                on_finished=partial(FetchAnnounceWorker.on_finished,
+                fetch_announce,
+                on_finished=partial(fetch_announce.on_finished,
                                     parent.panel)
             )
             area_worker = FetchAreaWorker(state)
@@ -60,7 +64,7 @@ class FetchLoginWorker(LongLiveWorker):
         }
         while not config.scan_status["scanned"] and self.is_running:
             self.logger.info("QR poll Request")
-            response = config.session.get(check_url, params=params)
+            response = self._session.get(check_url, params=params)
             response.encoding = "utf-8"
             self.logger.info("QR poll Response")
             result = response.json()
@@ -81,7 +85,8 @@ class FetchLoginWorker(LongLiveWorker):
                     sleep(1)
                     continue
                 case 0:  # Login successful
-                    config.cookies_dict = response.cookies.get_dict()
+                    config.cookies_dict.clear()
+                    config.cookies_dict.update(response.cookies.get_dict())
                     # config.cookies_dict["refresh_token"] = result["data"][
                     #     "refresh_token"]
                     from .credential_manager import CredentialManagerWorker
@@ -98,6 +103,9 @@ class FetchLoginWorker(LongLiveWorker):
             return
         FetchLoginWorker.post_login(parent_window, self.state)
         if self.cookie_key is not None:
+            fetch_usernames = FetchUsernamesWorker("")
             parent_window.add_thread(
-                FetchUsernamesWorker("")  # Update all usernames
+                fetch_usernames,
+                on_finished=fetch_usernames.on_finished
             )
+        self._session.close()

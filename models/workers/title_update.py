@@ -26,7 +26,7 @@ class TitleUpdateWorker(BaseWorker):
             "title": self.title,
         }
         self.logger.info(f"updateV2 Request")
-        response = config.session.post(url, params=livehime_sign({}),
+        response = self._session.post(url, params=livehime_sign({}),
                                        data=title_data)
         response.encoding = "utf-8"
         self.logger.info("updateV2 Response")
@@ -40,3 +40,7 @@ class TitleUpdateWorker(BaseWorker):
     @Slot()
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
         parent_window.save_title_btn.setEnabled(True)
+
+    @Slot()
+    def on_finished(self):
+        self._session.close()

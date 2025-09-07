@@ -32,7 +32,7 @@ class AnnounceUpdateWorker(BaseWorker):
         )
         announce_data = order_payload(announce_data)
         self.logger.info(f"AnnounceCommit Request")
-        response = config.session.post(url, data=announce_data)
+        response = self._session.post(url, data=announce_data)
         response.encoding = "utf-8"
         self.logger.info("AnnounceCommit Response")
         # print(response.text)
@@ -47,3 +47,7 @@ class AnnounceUpdateWorker(BaseWorker):
     @Slot()
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
         parent_window.save_announce_btn.setEnabled(True)
+
+    @Slot()
+    def on_finished(self):
+        self._session.close()

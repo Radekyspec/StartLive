@@ -2,6 +2,8 @@ from typing import Optional, Callable
 
 from PySide6.QtCore import QRunnable, QObject, Signal
 
+from config import create_session
+
 
 class BaseWorker(QRunnable):
     class Signals(QObject):
@@ -19,6 +21,7 @@ class BaseWorker(QRunnable):
         self.finished = False
         self.exception = None
         self.signals = self.Signals()
+        self._session = create_session()
 
     @staticmethod
     def on_exception(*args, **kwargs):

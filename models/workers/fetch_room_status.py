@@ -18,7 +18,7 @@ class FetchRoomStatusWorker(BaseWorker):
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/index/GetRoomPreLiveStatus"
         self.logger.info(f"GetRoomPreLiveStatus Request")
-        response = config.session.get(url, params=livehime_sign({},
+        response = self._session.get(url, params=livehime_sign({},
                                                                 access_key=False))
         response.encoding = "utf-8"
         self.logger.info("GetRoomPreLiveStatus Response")
@@ -26,3 +26,7 @@ class FetchRoomStatusWorker(BaseWorker):
         self.logger.info(f"GetRoomPreLiveStatus Result: {response}")
         if response["code"] != 0:
             raise RoomStatusError(response["message"])
+
+    @Slot()
+    def on_finished(self):
+        self._session.close()

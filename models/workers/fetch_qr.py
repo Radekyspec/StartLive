@@ -29,7 +29,7 @@ class FetchQRWorker(BaseWorker):
             "web_location": "0.0"
         }
         self.logger.info(f"QRGenerate Request")
-        response = config.session.get(generate_url, params=gen_data)
+        response = self._session.get(generate_url, params=gen_data)
         response.encoding = "utf-8"
         self.logger.info("QRGenerate Response")
         response = response.json()
@@ -37,7 +37,7 @@ class FetchQRWorker(BaseWorker):
         config.scan_status["qr_key"] = response["data"]["qrcode_key"]
         config.scan_status["qr_url"] = response["data"]["url"]
 
-    @staticmethod
     @Slot()
-    def on_finished(parent_window: "MainWindow"):
+    def on_finished(self, parent_window: "MainWindow"):
         parent_window.update_qr_image(config.scan_status["qr_url"])
+        self._session.close()

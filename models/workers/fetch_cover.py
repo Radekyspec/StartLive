@@ -18,14 +18,14 @@ class FetchCoverWorker(BaseWorker):
     def run(self, /) -> None:
         url = config.room_info["cover_url"]
         self.logger.info(f"cover data Request")
-        response = config.session.get(url)
+        response = self._session.get(url)
         self.logger.info("cover data Response")
         config.room_info["cover_data"] = response.content
 
-    @staticmethod
     @Slot()
-    def on_finished(parent: "CoverCropWidget"):
+    def on_finished(self, parent: "CoverCropWidget"):
         pix = QPixmap()
         pix.loadFromData(config.room_info["cover_data"])
         config.room_info["cover_data"] = None
         parent.label.setPixmap(pix)
+        self._session.close()

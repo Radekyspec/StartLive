@@ -39,8 +39,8 @@ class ObsDaemonWorker(LongLiveWorker):
         config.obs_client = None
         config.obs_op = False
 
-    @classmethod
     @Slot()
-    def on_finished(cls, state: ObsBtnState):
+    def on_finished(self, state: ObsBtnState):
+        self._session.close()
         if config.obs_client is not None:
-            cls.disconnect_obs(state)
+            self.disconnect_obs(state)

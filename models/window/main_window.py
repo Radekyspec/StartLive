@@ -162,7 +162,7 @@ class MainWindow(SingleInstanceWindow):
         delete_cred.triggered.connect(self._delete_cred)
         self._setting_menu.addAction(delete_cred)
 
-        self._tools_menu = QMenu("工具", self)
+        self._tools_menu = QMenu("文件", self)
         _open_log_folder_action = QAction("显示日志文件", self)
         _open_log_folder_action.triggered.connect(self._open_log_folder)
         self._tools_menu.addAction(_open_log_folder_action)
@@ -215,12 +215,12 @@ class MainWindow(SingleInstanceWindow):
             self.tray_stop_live_action.triggered.disconnect(
                 self.panel.stop_live)
 
+        self.tray_start_live_action.setEnabled(True)
+        self.tray_stop_live_action.setEnabled(False)
         self._login_state = LoginState()
         self.panel = StreamConfigPanel(self)
         self.tray_start_live_action.triggered.connect(self.panel.start_live)
         self.tray_stop_live_action.triggered.connect(self.panel.stop_live)
-        config.session.headers.clear()
-        config.session.headers.update(constant.HEADERS_WEB)
         self.login_label = QLabel("正在获取保存的登录凭证...")
         self.status_label = ClickableLabel("等待登录中...")
         self.qr_label = QLabel()
@@ -487,14 +487,6 @@ class MainWindow(SingleInstanceWindow):
     def switch_proxy(_id: int):
         use_proxy = _id == 1
         config.app_settings["use_proxy"] = use_proxy
-        if use_proxy:
-            config.session.get = partial(config.session.get, verify=False)
-            config.session.post = partial(config.session.post, verify=False)
-            config.session.trust_env = True
-        else:
-            config.session.get = partial(config.session.get, verify=True)
-            config.session.post = partial(config.session.post, verify=True)
-            config.session.trust_env = False
 
     @Slot()
     def switch_tray_icon(self, icon_path: str):
@@ -593,8 +585,6 @@ class MainWindow(SingleInstanceWindow):
         self.qr_label.setPixmap(self._qpixmap_from_str(qr_url))  # Show in UI
 
     def _after_login_success(self):
-        config.session.headers.clear()
-        config.session.headers.update(constant.HEADERS_APP)
         self.panel.parent_combo.clear()
         self.panel.parent_combo.addItems(config.parent_area)
         self._stack.setCurrentIndex(1)

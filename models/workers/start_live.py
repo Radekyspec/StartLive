@@ -25,7 +25,7 @@ class StartLiveWorker(BaseWorker):
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
-        result = self.start_live(self.area)
+        result = self.start_live(self._session, self.area)
         match result:
             case 0:
                 with QMutexLocker(self._mutex):
@@ -39,7 +39,7 @@ class StartLiveWorker(BaseWorker):
                     config.stream_status["face_url"])
 
     @classmethod
-    def start_live(cls, area) -> int:
+    def start_live(cls, session, area) -> int:
         logger = get_logger(cls.__name__)
         live_url = "https://api.live.bilibili.com/room/v1/Room/startLive"
         # self.fetch_upstream()
@@ -65,7 +65,7 @@ class StartLiveWorker(BaseWorker):
             })
             live_data = order_payload(live_data)
         logger.info(f"startLive Request")
-        response = config.session.post(live_url, data=live_data)
+        response = session.post(live_url, data=live_data)
         response.encoding = "utf-8"
         logger.info("startLive Response")
         response = response.json()
@@ -87,8 +87,7 @@ class StartLiveWorker(BaseWorker):
                 logger.error(f"startLive Response error: {response}")
                 raise StartLiveError(response["message"])
 
-    @staticmethod
-    def fetch_upstream():
+    def fetch_upstream(self):
         warn("fetch_upstream is deprecated", DeprecationWarning)
         stream_url = "https://api.live.bilibili.com/xlive/app-blink/v1/live/FetchWebUpStreamAddr"
         stream_data = livehime_sign({
@@ -99,7 +98,7 @@ class StartLiveWorker(BaseWorker):
             "csrf": config.cookies_dict["bili_jct"]
         })
         stream_data = order_payload(stream_data)
-        response = config.session.post(stream_url, data=stream_data)
+        response = self._session.post(stream_url, data=stream_data)
         response.encoding = "utf-8"
         response = response.json()
         return response["data"]["addr"]["addr"], response["data"]["addr"][
@@ -115,3 +114,7 @@ class StartLiveWorker(BaseWorker):
         # parent_window.parent_combo.setEnabled(True)
         # parent_window.child_combo.setEnabled(True)
         parent_window.save_area_btn.setEnabled(True)
+
+    @Slot()
+    def on_finished(self):
+        self._session.close()

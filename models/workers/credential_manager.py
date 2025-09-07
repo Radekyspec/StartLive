@@ -145,6 +145,7 @@ class CredentialManagerWorker(BaseWorker):
 
         if self.is_new:
             self.logger.info(f"new credentials created, exiting")
+            config.cookies_dict.clear()
             return
 
         # Old version cookie storage, change to index
@@ -173,16 +174,12 @@ class CredentialManagerWorker(BaseWorker):
             self.is_new = True
             return
         saved_cookies = loads(saved_cookies)
-        config.session.cookies.clear()
         cookiejar_from_dict(saved_cookies,
-                            cookiejar=config.session.cookies)
-        config.session.cookies.set("appkey", constant.APP_KEY,
-                                   domain="bilibili.com", path="/")
-        config.session.headers.clear()
-        config.session.headers.update(constant.HEADERS_APP)
+                            cookiejar=self._session.cookies)
+        self._session.headers.update(constant.HEADERS_WEB)
         nav_url = "https://api.bilibili.com/x/web-interface/nav"
         self.logger.info(f"nav Request")
-        response = config.session.get(
+        response = self._session.get(
             nav_url,
             params=livehime_sign({},
                                  access_key=False,
@@ -194,7 +191,7 @@ class CredentialManagerWorker(BaseWorker):
         if response["code"] != 0:
             raise CredentialExpiredError("登录凭据过期, 请重新登录")
         if (current_username := config.cookie_indices[
-            self.cookie_index]) in config.usernames:
+                self.cookie_index]) in config.usernames:
             config.usernames[
                 current_username] = USERNAME_DISPLAY_TEMPLATE.format(
                 response["data"]["uname"],
@@ -209,8 +206,10 @@ class CredentialManagerWorker(BaseWorker):
         FetchLoginWorker.post_login(parent_window, state)
         state.credentialLoaded.emit()
         if not self.is_new:
+            fetch_usernames = FetchUsernamesWorker(config.cookie_indices[self.cookie_index])
             parent_window.add_thread(
-                FetchUsernamesWorker(config.cookie_indices[self.cookie_index])
+                fetch_usernames,
+                on_finished=fetch_usernames.on_finished,
             )
         panel = parent_window.panel
         panel.host_input.setText(
@@ -221,3 +220,4 @@ class CredentialManagerWorker(BaseWorker):
             config.obs_settings.get("auto_live", False))
         panel.obs_auto_connect_checkbox.setChecked(
             config.obs_settings.get("auto_connect", False))
+        self._session.close()

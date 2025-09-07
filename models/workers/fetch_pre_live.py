@@ -23,7 +23,7 @@ class FetchPreLiveWorker(BaseWorker):
         info_data = livehime_sign({"uId": config.cookies_dict["DedeUserID"]})
         info_data = order_payload(info_data)
         self.logger.info("live_info Request")
-        response = config.session.get(live_info_url, params=info_data)
+        response = self._session.get(live_info_url, params=info_data)
         response.encoding = "utf-8"
         self.logger.info("live_info Response")
         response = response.json()
@@ -42,7 +42,7 @@ class FetchPreLiveWorker(BaseWorker):
             # The API only returns a message="重复开播" with streaming address
             # Which seems like have no other side effect
             # Subject to change if there is an unknown side effect
-            StartLiveWorker.start_live(response["data"]["area_v2_id"])
+            StartLiveWorker.start_live(self._session, response["data"]["area_v2_id"])
         config.scan_status["room_updated"] = True
 
     @Slot()
@@ -59,7 +59,7 @@ class FetchPreLiveWorker(BaseWorker):
             "title": "true",
         })
         self.logger.info("PreLive Request")
-        response = config.session.get(url, params=params)
+        response = self._session.get(url, params=params)
         response.encoding = "utf-8"
         self.logger.info("PreLive Response")
         response = response.json()
@@ -72,9 +72,8 @@ class FetchPreLiveWorker(BaseWorker):
         })
         self._fetch_room_info()
 
-    @staticmethod
     @Slot()
-    def on_finished(parent_window: "StreamConfigPanel", state: LoginState):
+    def on_finished(self, parent_window: "StreamConfigPanel", state: LoginState):
         parent_window.title_input.setText(config.room_info["title"])
         parent_window.title_input.textEdited.connect(
             lambda: parent_window.save_title_btn.setEnabled(True))
@@ -90,9 +89,11 @@ class FetchPreLiveWorker(BaseWorker):
         parent_window.cover_audit_state()
         if config.room_info["cover_status"] == 0:
             # add updating logic
+            cover_state_updater = CoverStateUpdateWorker()
             parent_window.parent_window.add_thread(
-                CoverStateUpdateWorker(),
+                cover_state_updater,
                 on_finished=partial(
-                    CoverStateUpdateWorker.on_finished, parent_window),
+                    cover_state_updater.on_finished, parent_window),
             )
         state.roomUpdated.emit()
+        self._session.close()

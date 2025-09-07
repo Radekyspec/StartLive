@@ -55,11 +55,13 @@ class ObsConnectorWorker(BaseWorker):
 
     @Slot()
     def on_finished(self, parent_window, state: ObsBtnState):
+        self._session.close()
         if config.obs_client is not None:
             state.obsConnected.emit()
             self.logger.info("OBS connected")
             parent_window.obs_auto_live_checkbox.setEnabled(True)
+            obs_daemon = ObsDaemonWorker()
             parent_window.parent_window.add_thread(
-                ObsDaemonWorker(),
-                on_finished=partial(ObsDaemonWorker.on_finished, state)
+                obs_daemon,
+                on_finished=partial(obs_daemon.on_finished, state)
             )

@@ -31,7 +31,7 @@ class CoverStateUpdateWorker(LongLiveWorker):
                 "title": "true",
             })
             self.logger.info("PreLive Request")
-            response = config.session.get(url, params=params)
+            response = self._session.get(url, params=params)
             response.encoding = "utf-8"
             self.logger.info("PreLive Response")
             response = response.json()
@@ -44,7 +44,7 @@ class CoverStateUpdateWorker(LongLiveWorker):
             })
             sleep(3)
 
-    @staticmethod
     @Slot()
-    def on_finished(parent_window: "StreamConfigPanel"):
+    def on_finished(self, parent_window: "StreamConfigPanel"):
         parent_window.cover_audit_state()
+        self._session.close()

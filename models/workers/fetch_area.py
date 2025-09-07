@@ -19,7 +19,7 @@ class FetchAreaWorker(BaseWorker):
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/room/v1/Area/getList"
         self.logger.info(f"Area/getList Request")
-        response = config.session.get(url)
+        response = self._session.get(url)
         response.encoding = "utf-8"
         self.logger.info("Area/getList Response")
         response = response.json()
@@ -34,3 +34,4 @@ class FetchAreaWorker(BaseWorker):
     @Slot()
     def on_finished(self):
         self.state.areaUpdated.emit()
+        self._session.close()

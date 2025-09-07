@@ -31,7 +31,7 @@ class AreaUpdateWorker(BaseWorker):
             "room_id": config.room_info["room_id"],
         }
         self.logger.info(f"AnchorChangeRoomArea Request")
-        response = config.session.post(url, params=livehime_sign({}),
+        response = self._session.post(url, params=livehime_sign({}),
                                        data=area_data)
         response.encoding = "utf-8"
         self.logger.info("AnchorChangeRoomArea Response")
@@ -42,13 +42,13 @@ class AreaUpdateWorker(BaseWorker):
         if response["code"] != 0:
             raise AreaUpdateError(response["message"])
 
-    @staticmethod
     @Slot()
-    def on_finished(parent_window: "StreamConfigPanel"):
+    def on_finished(self, parent_window: "StreamConfigPanel"):
         config.room_info[
             "parent_area"] = parent_window.parent_combo.currentText()
         config.room_info[
             "area"] = parent_window.child_combo.currentText()
+        self._session.close()
 
     @staticmethod
     @Slot()

@@ -23,7 +23,7 @@ class ConstantUpdateWorker(BaseWorker):
         # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
         url = "https://gh.vtbs.ai/https://raw.githubusercontent.com/Radekyspec/StartLive/refs/heads/master/resources/version.json"
         self.logger.info(f"version.json Request")
-        response = config.session.get(url)
+        response = self._session.get(url)
         response.encoding = "utf-8"
         self.logger.info("version.json Response")
         response = response.json()
@@ -41,3 +41,4 @@ class ConstantUpdateWorker(BaseWorker):
     @Slot()
     def on_finished(self):
         self.state.constUpdated.emit()
+        self._session.close()

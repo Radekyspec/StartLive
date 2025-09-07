@@ -30,7 +30,7 @@ class FaceAuthWorker(LongLiveWorker):
         verified = False
         while self.is_running and not verified:
             self.logger.info("IsUserIdentifiedByFaceAuth Request")
-            response = config.session.post(url, data=verify_data)
+            response = self._session.post(url, data=verify_data)
             response.encoding = "utf-8"
             self.logger.info("IsUserIdentifiedByFaceAuth Response")
             response = response.json()
@@ -39,8 +39,8 @@ class FaceAuthWorker(LongLiveWorker):
                 verified = True
             sleep(1)
 
-    @staticmethod
     @Slot()
-    def on_finished(qr_window: "FaceQRWidget"):
+    def on_finished(self, qr_window: "FaceQRWidget"):
         with suppress(RuntimeError):
             qr_window.deleteLater()
+        self._session.close()
