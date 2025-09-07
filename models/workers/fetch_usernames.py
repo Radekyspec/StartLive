@@ -19,6 +19,8 @@ class FetchUsernamesWorker(BaseWorker):
         super().__init__(name="用户名更新")
         self._current_user = skip_user
         self.logger = get_logger(self.__class__.__name__)
+        self._session.headers.clear()
+        self._session.headers.update(constant.HEADERS_WEB)
 
     @Slot()
     @run_wrapper

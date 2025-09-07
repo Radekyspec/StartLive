@@ -7,6 +7,7 @@ from PySide6.QtCore import Slot
 
 # local package import
 import config
+import constant
 from exceptions import LoginError
 from models.log import get_logger
 from models.states import LoginState
@@ -24,6 +25,8 @@ class FetchLoginWorker(LongLiveWorker):
         self.state = state
         self.logger = get_logger(self.__class__.__name__)
         self.cookie_key = None
+        self._session.headers.clear()
+        self._session.headers.update(constant.HEADERS_WEB)
 
     @staticmethod
     def post_login(parent: "MainWindow", state: LoginState):

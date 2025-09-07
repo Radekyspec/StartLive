@@ -18,14 +18,14 @@ class CoverUploadWorker(BaseWorker):
         super().__init__(name="封面上传")
         self.data = data
         self.logger = get_logger(self.__class__.__name__)
+        self._session.headers.clear()
+        self._session.headers.update(constant.HEADERS_WEB)
 
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
         url = "https://api.bilibili.com/x/upload/web/image"
         self.logger.info("CoverUpload Request")
-        self._session.headers.clear()
-        self._session.headers.update(constant.HEADERS_WEB)
         params = {
             "csrf": config.cookies_dict["bili_jct"],
         }

@@ -6,6 +6,7 @@ from PySide6.QtCore import Slot
 
 # local package import
 import config
+import constant
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 
@@ -14,6 +15,8 @@ class FetchQRWorker(BaseWorker):
     def __init__(self):
         super().__init__(name="登录二维码")
         self.logger = get_logger(self.__class__.__name__)
+        self._session.headers.clear()
+        self._session.headers.update(constant.HEADERS_WEB)
 
     @Slot()
     @run_wrapper
