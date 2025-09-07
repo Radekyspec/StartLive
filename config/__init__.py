@@ -45,7 +45,6 @@ if (app := get_password(KEYRING_SERVICE_NAME,
                         KEYRING_APP_SETTINGS)) is not None:
     app_settings.update(loads(app))
 
-
 # Managed by models.workers.credential_manager
 room_info = ThreadSafeDict({})
 obs_settings = ThreadSafeDict({})

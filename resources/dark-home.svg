@@ -1,7 +1,9 @@
 <?xml version="1.0"?>
-<svg width="24" height="24" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
- <g class="layer">
-  <title>Layer 1</title>
-  <path d="m12,5.69l5,4.5l0,7.81l-2,0l0,-6l-6,0l0,6l-2,0l0,-7.81l5,-4.5m0,-2.69l-10,9l3,0l0,8l6,0l0,-6l2,0l0,6l6,0l0,-8l3,0" fill="#ffffff" id="svg_1"/>
- </g>
+<svg width="24" height="24" xmlns="http://www.w3.org/2000/svg"
+>
+    <g class="layer">
+        <title>Layer 1</title>
+        <path d="m12,5.69l5,4.5l0,7.81l-2,0l0,-6l-6,0l0,6l-2,0l0,-7.81l5,-4.5m0,-2.69l-10,9l3,0l0,8l6,0l0,-6l2,0l0,6l6,0l0,-8l3,0"
+              fill="#ffffff" id="svg_1"/>
+    </g>
 </svg>

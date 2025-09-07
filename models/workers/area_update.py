@@ -32,7 +32,7 @@ class AreaUpdateWorker(BaseWorker):
         }
         self.logger.info(f"AnchorChangeRoomArea Request")
         response = self._session.post(url, params=livehime_sign({}),
-                                       data=area_data)
+                                      data=area_data)
         response.encoding = "utf-8"
         self.logger.info("AnchorChangeRoomArea Response")
         # print(response.text)

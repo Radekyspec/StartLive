@@ -191,7 +191,7 @@ class CredentialManagerWorker(BaseWorker):
         if response["code"] != 0:
             raise CredentialExpiredError("登录凭据过期, 请重新登录")
         if (current_username := config.cookie_indices[
-                self.cookie_index]) in config.usernames:
+            self.cookie_index]) in config.usernames:
             config.usernames[
                 current_username] = USERNAME_DISPLAY_TEMPLATE.format(
                 response["data"]["uname"],
@@ -206,7 +206,8 @@ class CredentialManagerWorker(BaseWorker):
         FetchLoginWorker.post_login(parent_window, state)
         state.credentialLoaded.emit()
         if not self.is_new:
-            fetch_usernames = FetchUsernamesWorker(config.cookie_indices[self.cookie_index])
+            fetch_usernames = FetchUsernamesWorker(
+                config.cookie_indices[self.cookie_index])
             parent_window.add_thread(
                 fetch_usernames,
                 on_finished=fetch_usernames.on_finished,

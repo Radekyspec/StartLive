@@ -1,11 +1,9 @@
 # module import
-from functools import partial
 from json import loads
 from time import sleep
 
 from PySide6.QtCore import Slot
 from keyring import get_password
-from requests import Session
 
 # local package import
 import config
@@ -39,8 +37,8 @@ class FetchUsernamesWorker(BaseWorker):
             self._session.cookies.clear()
             self._session.cookies.update(cookies)
             self._session.cookies.set("appkey", constant.APP_KEY,
-                                domain="bilibili.com",
-                                path="/")
+                                      domain="bilibili.com",
+                                      path="/")
             response = self._session.get(
                 url,
                 params=livehime_sign({},

@@ -46,7 +46,7 @@ if __name__ == '__main__':
     enable_hi_dpi()
     app = QApplication(qt_args)
     if (font := config.app_settings["custom_font"]) and (
-    f := QFont()).fromString(font):
+            f := QFont()).fromString(font):
         app.setFont(f)
     else:
         app.setFont(QFont(

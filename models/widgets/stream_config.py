@@ -256,7 +256,8 @@ class StreamConfigPanel(QWidget):
         config.room_info["parent_area"] = self.parent_combo.currentText()
         config.room_info["area"] = self.child_combo.currentText()
         start_live_worker = StartLiveWorker(self.stream_state,
-                            mutex=self._mutex, cond=self._cond, area=area_code)
+                                            mutex=self._mutex, cond=self._cond,
+                                            area=area_code)
         self.parent_window.add_thread(
             start_live_worker,
             on_finished=start_live_worker.on_finished,

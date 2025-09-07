@@ -27,7 +27,7 @@ class TitleUpdateWorker(BaseWorker):
         }
         self.logger.info(f"updateV2 Request")
         response = self._session.post(url, params=livehime_sign({}),
-                                       data=title_data)
+                                      data=title_data)
         response.encoding = "utf-8"
         self.logger.info("updateV2 Response")
         response = response.json()

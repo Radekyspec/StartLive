@@ -22,7 +22,6 @@ from qrcode.main import QRCode
 
 # local package import
 import config
-import constant
 from config import dumps
 from constant import *
 from models.classes import ClickableLabel, SingleInstanceWindow
@@ -452,7 +451,8 @@ class MainWindow(SingleInstanceWindow):
         self._cookie_index_len = len(cookie_indices)
         self.logger.info(f"cookie index length: {self._cookie_index_len}")
         for idx, cookie_index in enumerate(cookie_indices):
-            act = QAction(config.usernames.get(cookie_index, cookie_index), self, checkable=True)
+            act = QAction(config.usernames.get(cookie_index, cookie_index),
+                          self, checkable=True)
             act.setData(idx)
             self.account_group.addAction(act)
             self.account_menu.addAction(act)

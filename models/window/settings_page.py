@@ -29,7 +29,8 @@ class SettingsPage(QWidget):
         self.title_font.setBold(True)
 
         self.proxy_group = self.add_multi_choice_item(
-            "代理设置", ["不使用代理", "使用系统代理"], default=(1 if config.app_settings["use_proxy"] else 0)
+            "代理设置", ["不使用代理", "使用系统代理"],
+            default=(1 if config.app_settings["use_proxy"] else 0)
         )
         self.proxy_group.idClicked.connect(self._parent_window.switch_proxy)
 
@@ -38,10 +39,12 @@ class SettingsPage(QWidget):
             name_filter="图片文件 (*.jfif;*.pjpeg;*.jpeg;*.pjp;*.jpg;*.png);;所有文件 (*)",
             placeholder=config.app_settings["custom_tray_icon"]
         )
-        self.tray_icon_edit.textChanged.connect(self._parent_window.switch_tray_icon)
+        self.tray_icon_edit.textChanged.connect(
+            self._parent_window.switch_tray_icon)
 
         self.font_edit, self.font_btn = self.add_font_picker_item(
-            "自定义显示字体（重启生效）", options=(QFontDialog.FontDialogOption.DontUseNativeDialog | QFontDialog.FontDialogOption.ScalableFonts))
+            "自定义显示字体（重启生效）", options=(
+                    QFontDialog.FontDialogOption.DontUseNativeDialog | QFontDialog.FontDialogOption.ScalableFonts))
         self.main_vbox.addStretch(1)
 
     def add_section_title(self, text: str):
@@ -80,7 +83,8 @@ class SettingsPage(QWidget):
         self.main_vbox.addWidget(frame)
         return edit
 
-    def add_multi_choice_item(self, label: str, options: list[str], *, default: int = 0):
+    def add_multi_choice_item(self, label: str, options: list[str], *,
+                              default: int = 0):
         """
         Adds a multiple-choice item to the user interface. This method allows the user
         to select from a set of options where one choice is exclusive. The layout
@@ -141,7 +145,8 @@ class SettingsPage(QWidget):
 
     def add_file_picker_item(self, label: str, *, dialog_title="选择文件",
                              name_filter="All Files (*)", start_dir="",
-                             placeholder: str = "") -> tuple[QLineEdit, QPushButton]:
+                             placeholder: str = "") -> tuple[
+        QLineEdit, QPushButton]:
         """
         Adds a file picker item to the user interface.
 

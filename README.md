@@ -22,7 +22,7 @@ winget install Radekyspec.StartLive
 
 ## 使用方法
 
-[点我查看教程](https://docs.qq.com/doc/DTHVMdkhtUWJjRFhv?scene=4edcd4a61e4d506148e0f879bN4Lu1)
+[点我查看教程（腾讯文档）](https://docs.qq.com/doc/DTHVMdkhtUWJjRFhv?scene=4edcd4a61e4d506148e0f879bN4Lu1)
 
 ## 从源代码运行/开发
 
@@ -30,9 +30,12 @@ winget install Radekyspec.StartLive
 
 ### 前置要求
 
-* `3.10 <= Python <= 3.12`
-* `Python 3.13` 及之后的版本未经测试, 推荐使用`3.12.10`
+* `3.10 <= Python <= 3.13`
+* `Python 3.13.7` 经测试可用, 推荐使用`3.12.10`
 * 桌面端环境
+* 受 [keyring](https://pypi.org/project/keyring/) 支持的密钥后端存储服务
+  - 在 `Windows` 上通常为系统自带的 [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)
+  - 在 `macOS` 上通常为系统自带的 [Keychain钥匙串](https://en.wikipedia.org/wiki/Keychain_%28software%29)
 
 ### 安装依赖
 

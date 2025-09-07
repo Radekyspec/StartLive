@@ -42,7 +42,8 @@ class FetchPreLiveWorker(BaseWorker):
             # The API only returns a message="重复开播" with streaming address
             # Which seems like have no other side effect
             # Subject to change if there is an unknown side effect
-            StartLiveWorker.start_live(self._session, response["data"]["area_v2_id"])
+            StartLiveWorker.start_live(self._session,
+                                       response["data"]["area_v2_id"])
         config.scan_status["room_updated"] = True
 
     @Slot()
@@ -73,7 +74,8 @@ class FetchPreLiveWorker(BaseWorker):
         self._fetch_room_info()
 
     @Slot()
-    def on_finished(self, parent_window: "StreamConfigPanel", state: LoginState):
+    def on_finished(self, parent_window: "StreamConfigPanel",
+                    state: LoginState):
         parent_window.title_input.setText(config.room_info["title"])
         parent_window.title_input.textEdited.connect(
             lambda: parent_window.save_title_btn.setEnabled(True))

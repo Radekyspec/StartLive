@@ -1,7 +1,6 @@
 from PySide6.QtCore import Slot
 
 # local package import
-import config
 from exceptions import RoomStatusError
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
@@ -19,7 +18,7 @@ class FetchRoomStatusWorker(BaseWorker):
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/index/GetRoomPreLiveStatus"
         self.logger.info(f"GetRoomPreLiveStatus Request")
         response = self._session.get(url, params=livehime_sign({},
-                                                                access_key=False))
+                                                               access_key=False))
         response.encoding = "utf-8"
         self.logger.info("GetRoomPreLiveStatus Response")
         response = response.json()

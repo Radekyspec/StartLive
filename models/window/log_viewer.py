@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QPlainTextEdit, QCheckBox, QPushButton, QHBoxLayout, QVBoxLayout
-from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Slot
+from PySide6.QtWidgets import QPlainTextEdit, QVBoxLayout
+from PySide6.QtWidgets import QWidget
 
 
 class LogViewer(QWidget):
