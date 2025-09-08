@@ -16,6 +16,7 @@ class ConstantUpdateWorker(BaseWorker):
         super().__init__(name="配置更新")
         self.state = state
         self.logger = get_logger(self.__class__.__name__)
+        self._session.cookies.clear()
 
     @Slot()
     @run_wrapper
