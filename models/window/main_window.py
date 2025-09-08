@@ -116,7 +116,10 @@ class MainWindow(SingleInstanceWindow):
             self.tray_icon.setIcon(QIcon(
                 join(self._base_path, "resources",
                      "icon_cr.png")))
-        self.tray_icon.setToolTip("你所热爱的 就是你的生活")
+        if config.app_settings["custom_tray_hint"]:
+            self.tray_icon.setToolTip(config.app_settings["custom_tray_hint"])
+        else:
+            self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
         self.logger.info("System tray icon initialized.")
 
@@ -142,6 +145,13 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("Tray menu initialized.")
 
         menu_bar = self.menuBar()
+
+        self._tools_menu = QMenu("文件", self)
+        _open_log_folder_action = QAction("显示日志文件", self)
+        _open_log_folder_action.triggered.connect(self._open_log_folder)
+        self._tools_menu.addAction(_open_log_folder_action)
+        menu_bar.addMenu(self._tools_menu)
+
         self._setting_menu = QMenu("缓存设置", self)
         menu_bar.addMenu(self._setting_menu)
 
@@ -160,12 +170,6 @@ class MainWindow(SingleInstanceWindow):
         delete_cred = QAction("清空所有凭据", self)
         delete_cred.triggered.connect(self._delete_cred)
         self._setting_menu.addAction(delete_cred)
-
-        self._tools_menu = QMenu("文件", self)
-        _open_log_folder_action = QAction("显示日志文件", self)
-        _open_log_folder_action.triggered.connect(self._open_log_folder)
-        self._tools_menu.addAction(_open_log_folder_action)
-        menu_bar.addMenu(self._tools_menu)
 
         self.account_menu = QMenu("账号切换", self)
         menu_bar.addMenu(self.account_menu)
@@ -400,6 +404,7 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon.setIcon(QIcon(
             join(self._base_path, "resources",
                  "icon_cr.png")))
+        self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         QMessageBox.information(self, "设置清空", "APP设置清除成功\n"
                                                   "字体相关设置需要重启生效")
 
@@ -492,6 +497,10 @@ class MainWindow(SingleInstanceWindow):
     def switch_tray_icon(self, icon_path: str):
         config.app_settings["custom_tray_icon"] = icon_path
         self.tray_icon.setIcon(QIcon(icon_path))
+
+    def switch_tray_hint(self, hint: str):
+        config.app_settings["custom_tray_hint"] = hint
+        self.tray_icon.setToolTip(hint)
 
     @Slot()
     def load_credentials(self):

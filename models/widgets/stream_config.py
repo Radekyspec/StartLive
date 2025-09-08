@@ -84,6 +84,7 @@ class StreamConfigPanel(QWidget):
         obs_layout.addWidget(self.pass_input, 1, 5)
 
         self.connect_btn = QPushButton("连接")
+        self.connect_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.connect_btn.clicked.connect(self._connect_obs)
         obs_layout.addWidget(self.connect_btn, 1, 6)
         # self._obs_timer.timeout.connect(self._obs_btn_state)
@@ -99,6 +100,7 @@ class StreamConfigPanel(QWidget):
         obs_auto_start_layout = QHBoxLayout()
         obs_auto_start_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.obs_auto_live_checkbox = QCheckBox("自动推流")
+        self.obs_auto_live_checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
         self.obs_auto_live_checkbox.setToolTip(
             "勾选此项后，软件内点击开播时会自动点击OBS的推流"
         )
@@ -107,6 +109,8 @@ class StreamConfigPanel(QWidget):
         self.obs_auto_live_checkbox.checkStateChanged.connect(_auto_live_save)
         obs_auto_start_layout.addWidget(self.obs_auto_live_checkbox)
         self.obs_auto_connect_checkbox = QCheckBox("自动连接OBS")
+        self.obs_auto_connect_checkbox.setCursor(
+            Qt.CursorShape.PointingHandCursor)
         self.obs_auto_connect_checkbox.setToolTip(
             "勾选此项后，软件打开时会自动尝试连接OBS"
         )
@@ -131,6 +135,7 @@ class StreamConfigPanel(QWidget):
         self.addr_input.setReadOnly(True)
         stream_layout.addWidget(self.addr_input, 0, 1, 1, 6)
         self.copy_addr_btn = QPushButton("复制")
+        self.copy_addr_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         stream_layout.addWidget(self.copy_addr_btn, 0, 8)
 
         stream_layout.addWidget(QLabel("串流密钥:"), 1, 0, 1, 1)
@@ -138,6 +143,7 @@ class StreamConfigPanel(QWidget):
         self.key_input.setReadOnly(True)
         stream_layout.addWidget(self.key_input, 1, 1, 1, 6)
         self.copy_key_btn = QPushButton("复制")
+        self.copy_key_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         stream_layout.addWidget(self.copy_key_btn, 1, 8)
 
         stream_group.setLayout(stream_layout)
@@ -150,6 +156,7 @@ class StreamConfigPanel(QWidget):
         self.title_input = QLineEdit()
         area_group_layout.addWidget(self.title_input, 0, 1, 1, 6)
         self.save_title_btn = QPushButton("保存")
+        self.save_title_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_title_btn.clicked.connect(self._save_title)
         area_group_layout.addWidget(self.save_title_btn, 0, 8)
 
@@ -157,6 +164,7 @@ class StreamConfigPanel(QWidget):
         self.announce_input = QLineEdit()
         area_group_layout.addWidget(self.announce_input, 1, 1, 1, 6)
         self.save_announce_btn = QPushButton("保存")
+        self.save_announce_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_announce_btn.clicked.connect(self._save_announce)
         area_group_layout.addWidget(self.save_announce_btn, 1, 8)
 
@@ -168,6 +176,7 @@ class StreamConfigPanel(QWidget):
         self.child_combo.setEnabled(False)
         area_group_layout.addWidget(self.child_combo, 2, 4, 1, 3)
         self.save_area_btn = QPushButton("保存")
+        self.save_area_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_area_btn.setEnabled(False)
         self.save_area_btn.clicked.connect(self._save_area)
         self.parent_combo.editTextChanged.connect(self._activate_area_save)
@@ -179,6 +188,7 @@ class StreamConfigPanel(QWidget):
         self.cover_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         area_group_layout.addWidget(self.cover_status, 3, 1, 1, 6)
         self.cover_edit_btn = QPushButton("修改")
+        self.cover_edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cover_edit_btn.clicked.connect(self._edit_cover)
         area_group_layout.addWidget(self.cover_edit_btn, 3, 8)
 
@@ -189,6 +199,8 @@ class StreamConfigPanel(QWidget):
         control_layout = QHBoxLayout()
         self.start_btn = QPushButton("开始直播")
         self.stop_btn = QPushButton("停止直播")
+        self.start_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.stop_btn.setEnabled(False)
 
         control_layout.addStretch()

@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, Slot
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QRadioButton, QButtonGroup, QCheckBox,
@@ -42,10 +42,20 @@ class SettingsPage(QWidget):
         self.tray_icon_edit.textChanged.connect(
             self._parent_window.switch_tray_icon)
 
+        custom_tray_hint = config.app_settings["custom_tray_hint"]
+        self.tray_hint_edit, self.tray_hint_btn = self.add_text_item(
+            "自定义托盘图标提示",
+            "你所热爱的 就是你的生活" if custom_tray_hint == "" else custom_tray_hint)
+        self.tray_hint_btn.clicked.connect(self._switch_tray_hint)
+
         self.font_edit, self.font_btn = self.add_font_picker_item(
             "自定义显示字体（重启生效）", options=(
                     QFontDialog.FontDialogOption.DontUseNativeDialog | QFontDialog.FontDialogOption.ScalableFonts))
         self.main_vbox.addStretch(1)
+
+    @Slot()
+    def _switch_tray_hint(self):
+        self._parent_window.switch_tray_hint(self.tray_hint_edit.text())
 
     def add_section_title(self, text: str):
         frame = QFrame()
@@ -58,7 +68,8 @@ class SettingsPage(QWidget):
         self.main_vbox.addWidget(frame)
         return frame
 
-    def add_text_item(self, label: str, placeholder: str = ""):
+    def add_text_item(self, label: str, placeholder: str = "") -> tuple[
+        QLineEdit, QPushButton]:
         """
         Adds a text item to the user interface consisting of a label and an editable text field.
         The label displays the given text, and the text field optionally contains placeholder text.
@@ -68,23 +79,36 @@ class SettingsPage(QWidget):
         :param placeholder: Optional placeholder text shown in the text field when it is empty.
         :type placeholder: str
         :return: The editable text field (QLineEdit) added to the interface.
-        :rtype: QLineEdit
+        :rtype: QLineEdit, QPushButton
         """
         frame = QFrame()
         v = QVBoxLayout(frame)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(6)
+
         lbl = QLabel(label)
         lbl.setFont(self.title_font)
         v.addWidget(lbl)
-        edit = QLineEdit()
-        edit.setPlaceholderText(placeholder)
-        v.addWidget(edit)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        text_edit = QLineEdit()
+        text_edit.setPlaceholderText(placeholder)
+
+        save_btn = QPushButton("保存更改")
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        row.addWidget(text_edit, 1)
+        row.addWidget(save_btn, 0)
+        v.addLayout(row)
+
         self.main_vbox.addWidget(frame)
-        return edit
+        return text_edit, save_btn
 
     def add_multi_choice_item(self, label: str, options: list[str], *,
-                              default: int = 0):
+                              default: int = 0) -> QButtonGroup:
         """
         Adds a multiple-choice item to the user interface. This method allows the user
         to select from a set of options where one choice is exclusive. The layout
@@ -123,7 +147,7 @@ class SettingsPage(QWidget):
         self.main_vbox.addWidget(frame)
         return group
 
-    def add_switch_item(self, label: str, checked: bool = False):
+    def add_switch_item(self, label: str, checked: bool = False) -> QCheckBox:
         frame = QFrame()
         v = QVBoxLayout(frame)
         v.setContentsMargins(0, 0, 0, 0)
@@ -254,4 +278,5 @@ class SettingsPage(QWidget):
 
     def reset_default(self):
         self.proxy_group.button(0).setChecked(True)
-        self.tray_icon_edit.setText(config.app_settings["custom_tray_icon"])
+        self.tray_icon_edit.setText("")
+        self.tray_hint_edit.setText("你所热爱的 就是你的生活")

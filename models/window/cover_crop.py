@@ -24,6 +24,7 @@ class CoverCropWidget(QWidget):
         self.label = CropLabel((16, 9), self)
 
         btn_load = QPushButton("更换封面")
+        btn_load.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_load.clicked.connect(self.load_image)
 
         text_hint = QLabel("封面选区操作：\n"
@@ -36,6 +37,7 @@ class CoverCropWidget(QWidget):
         text_hint.setStyleSheet("font-size: 12pt")
 
         self.btn_upload = QPushButton("保存封面")
+        self.btn_upload.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_upload.clicked.connect(self.save_crop)
 
         layout = QGridLayout(self)
