@@ -17,7 +17,7 @@ from models.workers.base import LongLiveWorker, run_wrapper
 
 class ObsDaemonWorker(LongLiveWorker):
     def __init__(self):
-        super().__init__(name="OBS交互")
+        super().__init__(name="OBS交互", with_session=False)
 
     @Slot()
     @run_wrapper
@@ -41,6 +41,5 @@ class ObsDaemonWorker(LongLiveWorker):
 
     @Slot()
     def on_finished(self, state: ObsBtnState):
-        self._session.close()
         if config.obs_client is not None:
             self.disconnect_obs(state)

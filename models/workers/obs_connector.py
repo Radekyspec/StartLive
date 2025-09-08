@@ -15,7 +15,7 @@ from .obs_daemon import ObsDaemonWorker
 class ObsConnectorWorker(BaseWorker):
     def __init__(self, state: ObsBtnState, /, mutex: QMutex,
                  cond: QWaitCondition, *, host, port, password):
-        super().__init__(name="OBS通讯")
+        super().__init__(name="OBS通讯", with_session=False)
         self._mutex = mutex
         self._cond = cond
         self.host = host
@@ -55,7 +55,6 @@ class ObsConnectorWorker(BaseWorker):
 
     @Slot()
     def on_finished(self, parent_window, state: ObsBtnState):
-        self._session.close()
         if config.obs_client is not None:
             state.obsConnected.emit()
             self.logger.info("OBS connected")

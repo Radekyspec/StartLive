@@ -15,16 +15,16 @@ class BaseWorker(QRunnable):
     exception: Optional[Exception]
     signals: Signals
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, *, with_session: bool = True):
         super().__init__()
         self.name = name
         self.finished = False
         self.exception = None
         self.signals = self.Signals()
-        self._session = create_session()
+        if with_session:
+            self._session = create_session()
 
-    @staticmethod
-    def on_exception(*args, **kwargs):
+    def on_exception(self, *args, **kwargs):
         """
         Handles an exception for the method or operation that has been implemented. It
         serves as a placeholder that requires concrete behavior in derived classes or
@@ -57,8 +57,7 @@ class BaseWorker(QRunnable):
 
         return wrapped
 
-    @staticmethod
-    def on_finished(*args, **kwargs):
+    def on_finished(self, *args, **kwargs):
         """
         Handles the finalization or cleanup processes after a specific event or task
         has been completed. This method is expected to be overridden by derived
