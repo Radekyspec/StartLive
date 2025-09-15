@@ -23,6 +23,7 @@ class BaseWorker(QRunnable):
         self.finished = False
         self.exception = None
         self.signals = self.Signals()
+        self.setAutoDelete(True)
         if with_session:
             self._session = create_session()
         else:
