@@ -1,8 +1,20 @@
+<!-- markdownlint-disable -->
+<div align="center">
+
+<img alt="LOGO" src="https://startlive.vtbs.ai/icon_left.png" width="256" height="256" />
+
 # StartLive
 
 绕过强制使用直播姬开播的要求
 
 下载/更新/答疑QQ群：[1022778201](https://qm.qq.com/q/fPBktdfdrG)
+
+</div>
+<!-- markdownlint-restore -->
+
+## 声明
+- 本软件使用 [GNU General Public License 3.0](https://www.gnu.org/licenses/gpl-3.0.zh-cn.html) 协议开源
+- 本软件 logo 并非使用 GPL-3.0 协议开源，画师[花漫酱](https://space.bilibili.com/49468802)及软件开发者保留所有权利。不得以 GPL-3.0 协议已授权为由在未经授权的情况下使用本软件 logo，不得在未经授权的情况下将本软件 logo 用于任何商业用途。
 
 ## 安装
 

@@ -115,7 +115,7 @@ class MainWindow(SingleInstanceWindow):
         else:
             self.tray_icon.setIcon(QIcon(
                 join(self._base_path, "resources",
-                     "icon_cr.png")))
+                     "icon_left.ico")))
         if config.app_settings["custom_tray_hint"]:
             self.tray_icon.setToolTip(config.app_settings["custom_tray_hint"])
         else:
@@ -403,7 +403,7 @@ class MainWindow(SingleInstanceWindow):
         self._settings_page.reset_default()
         self.tray_icon.setIcon(QIcon(
             join(self._base_path, "resources",
-                 "icon_cr.png")))
+                 "icon_left.ico")))
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         QMessageBox.information(self, "设置清空", "APP设置清除成功\n"
                                                   "字体相关设置需要重启生效")

@@ -76,6 +76,9 @@ jobs:
           msvc: latest
           mode: app
           enable-plugins: pyside6,upx
+          company-name: "Radekyspec"
+          product-name: "StartLive开播器"
+          windows-icon-from-ico: "resources/icon_left.ico"
           windows-console-mode: "disable"
           noinclude-setuptools-mode: "nofollow"
           noinclude-pytest-mode: "nofollow"
@@ -92,6 +95,9 @@ jobs:
           script-name: StartLive.py
           mode: app
           enable-plugins: pyside6
+          company-name: "Radekyspec"
+          product-name: "StartLive开播器"
+          macos-app-icon: "resources/icon_left.ico"
           noinclude-setuptools-mode: "nofollow"
           noinclude-pytest-mode: "nofollow"
           noinclude-unittest-mode: "nofollow"

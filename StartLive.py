@@ -8,7 +8,7 @@ from platform import system
 from subprocess import Popen
 
 # package import
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (QApplication
                                )
 from qdarktheme import enable_hi_dpi
@@ -45,6 +45,9 @@ if __name__ == '__main__':
     args, qt_args = parser.parse_known_args()
     enable_hi_dpi()
     app = QApplication(qt_args)
+    base_path = abspath(dirname(__file__))
+    app.setWindowIcon(
+        QIcon(join(base_path, "resources", "icon_left.ico")))
     if (font := config.app_settings["custom_font"]) and (
             f := QFont()).fromString(font):
         app.setFont(f)
@@ -53,7 +56,7 @@ if __name__ == '__main__':
             "Open Sans,.AppleSystemUIFont,Helvetica,Arial,MS Shell Dlg,sans-serif",
             9))
     window = MainWindow(args.web_host, args.web_port, args.first_run,
-                        args.no_update, base_path=abspath(dirname(__file__)))
+                        args.no_update, base_path=base_path)
     window.apply_color_scheme(app.styleHints().colorScheme())
     app.styleHints().colorSchemeChanged.connect(window.apply_color_scheme)
     window.show()

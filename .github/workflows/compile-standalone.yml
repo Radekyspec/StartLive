@@ -53,6 +53,9 @@ jobs:
           msvc: latest
           mode: standalone
           enable-plugins: pyside6,upx
+          company-name: "Radekyspec"
+          product-name: "StartLive开播器"
+          windows-icon-from-ico: "resources/icon_left.ico"
           windows-console-mode: "disable"
           noinclude-setuptools-mode: "nofollow"
           noinclude-pytest-mode: "nofollow"
