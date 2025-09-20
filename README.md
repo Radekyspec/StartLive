@@ -9,7 +9,7 @@ Bypass the requirement to use Bilibili’s official "LiveHime" client to start s
 
 Download / Update / Q&A QQ Group: <a href="https://qm.qq.com/q/fPBktdfdrG">1022778201</a>
 
-<a href="./README_zh.md">🇨🇳 简体中文版</a>
+<a href="./docs/README_zh.md">🇨🇳 简体中文版</a>
 
 </div>
 <!-- markdownlint-restore -->

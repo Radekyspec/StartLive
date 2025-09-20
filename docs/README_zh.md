@@ -1,7 +1,7 @@
 <!-- markdownlint-disable -->
 <div align="center">
 
-<img alt="LOGO" src="./docs/images/icon_left.png" width="256" height="256" />
+<img alt="LOGO" src="./images/icon_left.png" width="256" height="256" />
 
 # StartLive
 
