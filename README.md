@@ -5,72 +5,75 @@
 
 # StartLive
 
-绕过强制使用直播姬开播的要求
+Bypass the requirement to use Bilibili’s official "LiveHime" client to start streaming.
 
-下载/更新/答疑QQ群：[1022778201](https://qm.qq.com/q/fPBktdfdrG)
+Download / Update / Q&A QQ Group: <a href="https://qm.qq.com/q/fPBktdfdrG">1022778201</a>
+
+<a href="./README_zh.md">🇨🇳 简体中文版</a>
 
 </div>
 <!-- markdownlint-restore -->
 
-## 声明
-- 本软件使用 [GNU General Public License 3.0](https://www.gnu.org/licenses/gpl-3.0.zh-cn.html) 协议开源
-- 本软件 logo 并非使用 GPL-3.0 协议开源，画师[花漫酱](https://space.bilibili.com/49468802)及软件开发者保留所有权利。不得以 GPL-3.0 协议已授权为由在未经授权的情况下使用本软件 logo，不得在未经授权的情况下将本软件 logo 用于任何商业用途。
+## Disclaimer
 
-## 安装
+- This software is open-sourced under the [GNU General Public License 3.0](https://www.gnu.org/licenses/gpl-3.0.en.html).
+- The software **logo is not licensed under GPL-3.0**. All rights are reserved by the artist [花漫酱](https://space.bilibili.com/49468802) and the software developer. You may not claim GPL-3.0 authorization to use the logo without permission, nor use it for any commercial purpose without authorization.
 
-### 通过 Releases 下载
+## Install
 
-下载链接：[点击这里下载](https://github.com/Radekyspec/StartLive/releases/latest)
+### Download via Releases
 
-### 通过 Windows Package Manager (winget) 下载
+Download link: **[Click here to download](https://github.com/Radekyspec/StartLive/releases/latest)**
+
+### Install via Windows Package Manager (winget)
 
 ```shell
 winget install Radekyspec.StartLive
 ```
 
-## 软件截图
+## Screenshots
 
 ![2bf8d9d51186e774903b6cd26831f355](https://github.com/user-attachments/assets/974b0dbb-fcd5-4b26-be76-42db728b8942)
 
-## 使用方法
+## How to Use
 
-[点我查看教程（腾讯文档）](https://docs.qq.com/doc/DTHVMdkhtUWJjRFhv?scene=4edcd4a61e4d506148e0f879bN4Lu1)
+**[Open the step-by-step guide (Tencent Docs)](https://docs.qq.com/doc/DTHVMdkhtUWJjRFhv?scene=4edcd4a61e4d506148e0f879bN4Lu1)**
 
-## 从源代码运行/开发
+## Run from Source / Development
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Radekyspec/StartLive)
 
-### 前置要求
+### Prerequisites
 
-* `3.10 <= Python <= 3.13`
-* `Python 3.13.7` 经测试可用, 推荐使用`3.12.10`
-* 桌面端环境
-* `PySide6 (Qt for Python)` [支持的架构](https://wiki.qt.io/Qt_for_Python)
-* 受 [keyring](https://pypi.org/project/keyring/) 支持的密钥后端存储服务
-  - 在 `Windows` 上通常为系统自带的 [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)
-  - 在 `macOS` 上通常为系统自带的 [Keychain钥匙串](https://en.wikipedia.org/wiki/Keychain_%28software%29)
+- `3.10 <= Python <= 3.13`
+- Tested on **Python 3.13.7**; **Python 3.12.10** recommended
+- Desktop environment
+- `PySide6 (Qt for Python)` [supported platforms/architectures](https://wiki.qt.io/Qt_for_Python)
+- A keyring backend supported by the [`keyring`](https://pypi.org/project/keyring/) package  
+  - On **Windows**: typically the built-in [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)  
+  - On **macOS**: typically the system `Keychain`  
 
-### 安装依赖
+### Install dependencies
 
-* 创建虚拟环境
+Create a virtual environment:
 
 ```shell
 python -m venv venv
 ```
 
-* `Windows`: 可以直接双击运行 `install-requirements.bat`
+- **Windows**: simply double-click `install-requirements.bat`.
 
-* `MacOS` / `Linux`:
+- **macOS / Linux**:
 
 ```shell
 ./venv/bin/pip install -r ./requirements.txt
 ./venv/bin/pip install git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
 ```
 
-### 运行app
+### Run the app
 
 ```shell
 python StartLive.py
 ```
 
-请注意，Bilibili目前没有对所有用户支持HEVC编码推流，如果推流失败可以检查一下编码。
+> Note: Bilibili does **not** enable **HEVC (High Efficiency Video Coding)** streaming for all users. If pushing the stream fails, please check your encoder/codec settings.
