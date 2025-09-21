@@ -137,6 +137,7 @@ class CredentialManagerWorker(BaseWorker):
         self.logger.info("nav Response")
         response = response.json()
         if response["code"] != 0:
+            config.scan_status["expired"] = True
             raise CredentialExpiredError("登录凭据过期, 请重新登录")
         if (current_username := config.cookie_indices[
             self.cookie_index]) in config.usernames:

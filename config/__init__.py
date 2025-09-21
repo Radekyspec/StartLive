@@ -30,6 +30,7 @@ _OBS_SETTINGS_INITIALIZATION = {
 }
 _SCAN_STATUS_INITIALIZATION = {
     "scanned": False, "qr_key": None, "qr_url": None,
+    "expired": False, "cred_loaded": False,
     "timeout": False, "wait_for_confirm": False,
     "area_updated": False, "room_updated": False,
     "const_updated": True, "announce_updated": False

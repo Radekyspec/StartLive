@@ -438,12 +438,26 @@ class MainWindow(SingleInstanceWindow):
             self.setup_ui()
 
     def _ready_switch_account(self):
+        """
+        Determines whether the system is ready to switch the account based on the current
+        cookie index or the scanning status configuration.
+
+        This function evaluates multiple conditions, including whether all required
+        scanning-related flags are updated to decide if switching accounts is feasible.
+
+        If an error occurs during the scan, the function returns True to allow retrying.
+
+        :return: A boolean indicating if the system is ready to switch accounts.
+        :rtype: bool
+        """
         return self._current_cookie_idx == self._cookie_index_len or all(
-            [config.scan_status["area_updated"],
+            [config.scan_status["scanned"],
+             config.scan_status["area_updated"],
              config.scan_status["room_updated"],
              config.scan_status["const_updated"],
              config.scan_status["announce_updated"]
-             ])
+             ]) or (config.scan_status["cred_loaded"] and not
+        config.scan_status["expired"] and not config.scan_status["scanned"])
 
     @Slot()
     def _populate_account_menu(self):
@@ -498,11 +512,15 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot()
     def load_credentials(self):
+        config.scan_status["cred_loaded"] = True
         if config.scan_status["scanned"]:
             self._post_scan_setup()
         else:
             # Needs update credential
-            self._fetch_qr()
+            if config.scan_status["expired"]:
+                self._fetch_qr()
+                return
+            self.login_label.setText("登录时发生错误！请重试...")
 
     def _fetch_qr(self, retry: bool = False):
         # Start fetching QR and begin polling thread
