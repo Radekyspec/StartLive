@@ -218,7 +218,7 @@ class StreamConfigPanel(QWidget):
         self.stop_btn.clicked.connect(self._stop_live)
 
     def reset_obs_settings(self):
-        CredentialManagerWorker.obs_settings_default()
+        config.obs_settings_default()
         self.host_input.setText(config.obs_settings["ip_addr"])
         self.port_input.setText(config.obs_settings["port"])
         self.pass_input.setText(config.obs_settings["password"])

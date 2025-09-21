@@ -28,11 +28,30 @@ class SettingsPage(QWidget):
         self.title_font.setPointSize(14)
         self.title_font.setBold(True)
 
+        proxy_mode = config.app_settings.get("proxy_mode", "none")
+        default_index = {"none": 0, "system": 1, "custom": 2}.get(proxy_mode, 0)
+
         self.proxy_group = self.add_multi_choice_item(
-            "代理设置", ["不使用代理", "使用系统代理"],
-            default=(1 if config.app_settings["use_proxy"] else 0)
+            "代理设置",
+            ["不使用代理", "使用系统代理", "使用自定义代理"],
+            default=default_index
         )
-        self.proxy_group.idClicked.connect(self._parent_window.switch_proxy)
+
+        self.proxy_addr_edit, self.proxy_addr_btn = self.add_text_item(
+            "自定义代理服务器地址（URL）",
+            placeholder=config.app_settings.get("custom_proxy_url",
+                                                "http://127.0.0.1:7890")
+        )
+        self.proxy_addr_edit.setToolTip(
+            "代理协议支持 http://，https://，socks5://，socks5h://")
+        self.proxy_addr_edit.setText(
+            config.app_settings.get("custom_proxy_url", ""))
+        self.proxy_addr_btn.setText("保存并应用")
+        self.proxy_addr_btn.clicked.connect(self._save_custom_proxy)
+
+        self.proxy_group.idClicked.connect(self._on_proxy_mode_changed)
+
+        self._on_proxy_mode_changed(self.proxy_group.checkedId())
 
         self.tray_icon_edit, self.tray_icon_btn = self.add_file_picker_item(
             "自定义托盘图标", dialog_title="选择托盘图标图片",
@@ -56,6 +75,29 @@ class SettingsPage(QWidget):
     @Slot()
     def _switch_tray_hint(self):
         self._parent_window.switch_tray_hint(self.tray_hint_edit.text())
+
+    @Slot(int)
+    def _on_proxy_mode_changed(self, _id: int):
+        is_custom = (_id == 2)
+        self.proxy_addr_edit.setEnabled(is_custom)
+        self.proxy_addr_btn.setEnabled(is_custom)
+        match _id:
+            case 0:
+                config.app_settings["proxy_mode"] = "none"
+            case 1:
+                config.app_settings["proxy_mode"] = "system"
+            case 2:
+                config.app_settings["proxy_mode"] = "custom"
+
+    @Slot()
+    def _save_custom_proxy(self):
+        url = self.proxy_addr_edit.text().strip()
+        config.app_settings["custom_proxy_url"] = url
+
+        if self.proxy_group.checkedId() != 2:
+            btn = self.proxy_group.button(2)
+            if btn:
+                btn.setChecked(True)
 
     def add_section_title(self, text: str):
         frame = QFrame()
@@ -216,6 +258,7 @@ class SettingsPage(QWidget):
         pick_btn = QPushButton("选择文件")
         pick_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
+        @Slot()
         def open_dialog():
             path, _ = QFileDialog.getOpenFileName(self, dialog_title, start_dir,
                                                   name_filter)
@@ -255,6 +298,7 @@ class SettingsPage(QWidget):
         font_btn = QPushButton("选择字体")
         font_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
+        @Slot()
         def open_dialog():
             ok, font = QFontDialog.getFont(
                 QApplication.font(),  # initial

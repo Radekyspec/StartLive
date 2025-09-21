@@ -8,6 +8,12 @@ class ThreadSafeDict:
         self._dict: dict = {} if value is None else value
         self._lock = QMutex()
 
+    @staticmethod
+    def new(value: dict | None = None) -> "ThreadSafeDict":
+        if value is None:
+            return ThreadSafeDict()
+        return ThreadSafeDict(value.copy())
+
     def __bool__(self) -> bool:
         with QMutexLocker(self._lock):
             return bool(self._dict)

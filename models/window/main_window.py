@@ -399,7 +399,7 @@ class MainWindow(SingleInstanceWindow):
     def _delete_app_settings(self):
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
-        CredentialManagerWorker.app_settings_default()
+        config.app_settings_default()
         self._settings_page.reset_default()
         self.tray_icon.setIcon(QIcon(
             join(self._base_path, "resources",
@@ -486,12 +486,6 @@ class MainWindow(SingleInstanceWindow):
         self._current_cookie_idx = self._cookie_index_len
         CredentialManagerWorker.reset_default()
         self.setup_ui(is_new=True)
-
-    @staticmethod
-    @Slot()
-    def switch_proxy(_id: int):
-        use_proxy = _id == 1
-        config.app_settings["use_proxy"] = use_proxy
 
     @Slot()
     def switch_tray_icon(self, icon_path: str):

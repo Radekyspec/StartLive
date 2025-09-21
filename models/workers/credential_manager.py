@@ -27,25 +27,6 @@ class CredentialManagerWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     @staticmethod
-    def obs_settings_default():
-        config.obs_settings.update({
-            "ip_addr": "localhost",
-            "port": "4455",
-            "password": "",
-            "auto_live": False,
-            "auto_connect": False
-        })
-
-    @staticmethod
-    def app_settings_default():
-        config.app_settings.update({
-            "use_proxy": False,
-            "custom_tray_icon": "",
-            "custom_tray_hint": "",
-            "custom_font": ""
-        })
-
-    @staticmethod
     def get_cookie_indices() -> list[str]:
         if (cookies_index := get_password(KEYRING_SERVICE_NAME,
                                           KEYRING_COOKIES_INDEX)) is not None:
@@ -59,44 +40,10 @@ class CredentialManagerWorker(BaseWorker):
         return []
 
     @staticmethod
-    def _room_info_default():
-        config.room_info.update({
-            "cover_audit_reason": "",
-            "cover_url": "",
-            "cover_status": 0,
-            "cover_data": None,
-            "room_id": "",
-            "title": "",
-            "parent_area": "",
-            "area": "",
-            "announcement": "",
-        })
-
-    @staticmethod
-    def _scan_settings_default():
-        config.scan_status.update({
-            "scanned": False, "qr_key": None, "qr_url": None,
-            "timeout": False, "wait_for_confirm": False,
-            "area_updated": False, "room_updated": False,
-            "const_updated": True, "announce_updated": False
-        })
-
-    @staticmethod
-    def _stream_status_default():
-        config.stream_status.update({
-            "live_status": False,
-            "required_face": False,
-            "identified_face": False,
-            "face_url": None,
-            "stream_addr": None,
-            "stream_key": None
-        })
-
-    @staticmethod
     def reset_default():
-        CredentialManagerWorker._room_info_default()
-        CredentialManagerWorker._scan_settings_default()
-        CredentialManagerWorker._stream_status_default()
+        config.room_info_default()
+        config.scan_settings_default()
+        config.stream_status_default()
 
     @staticmethod
     def add_cookie():
@@ -137,11 +84,11 @@ class CredentialManagerWorker(BaseWorker):
             config.obs_settings.update(loads(saved_settings))
             self.logger.info(f"obs_settings loaded: {saved_settings}")
         else:
-            self.obs_settings_default()
+            config.obs_settings_default()
             self.logger.info(f"obs_default_settings loaded")
         if get_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO) is not None:
             delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
-        self._room_info_default()
+        config.room_info_default()
         self.logger.info(f"room_default_settings loaded")
 
         if self.is_new:
