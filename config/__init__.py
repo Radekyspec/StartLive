@@ -15,11 +15,12 @@ from models.classes import ThreadSafeDict
 dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))
 _APP_CONFIG_INITIALIZATION = {
-    "proxy_mode": "none",
+    "proxy_mode": ProxyMode.NONE,
     "custom_proxy_url": "",
     "custom_tray_icon": "",
     "custom_tray_hint": "",
     "custom_font": "",
+    "prefer_proto": PreferProto.RTMP,
 }
 _OBS_SETTINGS_INITIALIZATION = {
     "ip_addr": "localhost",
@@ -46,7 +47,7 @@ _STREAM_STATUS_INITIALIZATION = {
 _ROOM_INFO_INITIALIZATION = {
     "cover_audit_reason": "",
     "cover_url": "",
-    "cover_status": 0,
+    "cover_status": CoverStatus.AUDIT_IN_PROGRESS,
     "cover_data": None,
     "room_id": "",
     "title": "",
@@ -104,15 +105,15 @@ def create_session() -> Session:
         "https": custom_proxy,
     }
     match app_settings["proxy_mode"]:
-        case "none":
+        case ProxyMode.NONE:
             session.get = partial(session.get, verify=True, timeout=5)
             session.post = partial(session.post, verify=True, timeout=5)
             session.trust_env = False
-        case "system":
+        case ProxyMode.SYSTEM:
             session.get = partial(session.get, verify=False, timeout=5)
             session.post = partial(session.post, verify=False, timeout=5)
             session.trust_env = True
-        case "custom":
+        case ProxyMode.CUSTOM:
             session.get = partial(session.get, verify=False, timeout=5,
                                   proxies=custom_proxy)
             session.post = partial(session.post, verify=False, timeout=5,

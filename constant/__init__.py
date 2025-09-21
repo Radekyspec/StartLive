@@ -1,9 +1,32 @@
+from enum import StrEnum, unique, IntEnum
+
 __all__ = [
     "KEYRING_SERVICE_NAME", "KEYRING_COOKIES", "KEYRING_COOKIES_INDEX",
     "KEYRING_SETTINGS", "KEYRING_ROOM_INFO", "KEYRING_APP_SETTINGS",
     "LOCAL_SERVER_NAME", "LOGGER_NAME", "USERNAME_DISPLAY_TEMPLATE", "VERSION",
-    "DARK_CSS", "LIGHT_CSS"
+    "DARK_CSS", "LIGHT_CSS", "ProxyMode", "PreferProto", "CoverStatus"
 ]
+
+
+@unique
+class ProxyMode(IntEnum):
+    NONE: int = 0
+    SYSTEM: int = 1
+    CUSTOM: int = 2
+
+
+@unique
+class PreferProto(IntEnum):
+    RTMP: int = 0
+    SRT: int = 1
+
+
+@unique
+class CoverStatus(IntEnum):
+    AUDIT_FAILED: int = -1
+    AUDIT_IN_PROGRESS: int = 0
+    AUDIT_PASSED: int = 1
+
 
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"
 KEYRING_COOKIES = "cookies"

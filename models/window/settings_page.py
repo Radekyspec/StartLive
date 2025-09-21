@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 
 import config
+from constant import ProxyMode, PreferProto
 
 
 class SettingsPage(QWidget):
@@ -28,13 +29,12 @@ class SettingsPage(QWidget):
         self.title_font.setPointSize(14)
         self.title_font.setBold(True)
 
-        proxy_mode = config.app_settings.get("proxy_mode", "none")
-        default_index = {"none": 0, "system": 1, "custom": 2}.get(proxy_mode, 0)
-
+        proxy_default_index = config.app_settings.get("proxy_mode",
+                                                      ProxyMode.NONE)
         self.proxy_group = self.add_multi_choice_item(
             "代理设置",
             ["不使用代理", "使用系统代理", "使用自定义代理"],
-            default=default_index
+            default=proxy_default_index
         )
 
         self.proxy_addr_edit, self.proxy_addr_btn = self.add_text_item(
@@ -52,6 +52,15 @@ class SettingsPage(QWidget):
         self.proxy_group.idClicked.connect(self._on_proxy_mode_changed)
 
         self._on_proxy_mode_changed(self.proxy_group.checkedId())
+
+        proto_default_index = config.app_settings.get("prefer_proto",
+                                                      PreferProto.RTMP)
+        self.prefer_proto_group = self.add_multi_choice_item(
+            "推流协议选择",
+            ["优先RTMP", "优先SRT"],
+            default=proto_default_index
+        )
+        self.prefer_proto_group.idClicked.connect(self._on_prefer_proto_changed)
 
         self.tray_icon_edit, self.tray_icon_btn = self.add_file_picker_item(
             "自定义托盘图标", dialog_title="选择托盘图标图片",
@@ -77,17 +86,29 @@ class SettingsPage(QWidget):
         self._parent_window.switch_tray_hint(self.tray_hint_edit.text())
 
     @Slot(int)
+    def _on_prefer_proto_changed(self, _id: int):
+        match _id:
+            case 0:
+                config.app_settings["prefer_proto"] = PreferProto.RTMP
+            case 1:
+                config.app_settings["prefer_proto"] = PreferProto.SRT
+            case _:
+                raise ValueError("Unexpected protocol choice")
+
+    @Slot(int)
     def _on_proxy_mode_changed(self, _id: int):
         is_custom = (_id == 2)
         self.proxy_addr_edit.setEnabled(is_custom)
         self.proxy_addr_btn.setEnabled(is_custom)
         match _id:
             case 0:
-                config.app_settings["proxy_mode"] = "none"
+                config.app_settings["proxy_mode"] = ProxyMode.NONE
             case 1:
-                config.app_settings["proxy_mode"] = "system"
+                config.app_settings["proxy_mode"] = ProxyMode.SYSTEM
             case 2:
-                config.app_settings["proxy_mode"] = "custom"
+                config.app_settings["proxy_mode"] = ProxyMode.CUSTOM
+            case _:
+                raise ValueError("Unexpected proxy mode")
 
     @Slot()
     def _save_custom_proxy(self):

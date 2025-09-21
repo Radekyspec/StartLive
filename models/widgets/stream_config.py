@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
 
 # local package import
 import config
+from constant import CoverStatus
 from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
 from models.states import ObsBtnState, StreamState
@@ -355,13 +356,13 @@ class StreamConfigPanel(QWidget):
         self.connect_btn.setText("连接")
 
     def cover_audit_state(self):
-        if config.room_info["cover_status"] == 1:
+        if config.room_info["cover_status"] == CoverStatus.AUDIT_PASSED:
             self.cover_status.setText("审核通过~")
             self.cover_status.setStyleSheet("color: green")
-        elif config.room_info["cover_status"] == 0:
+        elif config.room_info["cover_status"] == CoverStatus.AUDIT_IN_PROGRESS:
             self.cover_status.setText("审核中...可以先行开播喔~")
             self.cover_status.setStyleSheet("color: orange")
-        elif config.room_info["cover_status"] == -1:
+        elif config.room_info["cover_status"] == CoverStatus.AUDIT_FAILED:
             self.cover_status.setText(
                 f"审核未通过: {config.room_info['cover_audit_reason']}")
             self.cover_status.setStyleSheet("color: red")

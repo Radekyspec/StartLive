@@ -5,6 +5,7 @@ from PySide6.QtCore import Slot
 
 # local package import
 import config
+from constant import CoverStatus
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign, order_payload
@@ -89,7 +90,7 @@ class FetchPreLiveWorker(BaseWorker):
             parent_window.stop_btn.setEnabled(True)
             parent_window.parent_window.tray_stop_live_action.setEnabled(True)
         parent_window.cover_audit_state()
-        if config.room_info["cover_status"] == 0:
+        if config.room_info["cover_status"] == CoverStatus.AUDIT_IN_PROGRESS:
             # add updating logic
             cover_state_updater = CoverStateUpdateWorker()
             parent_window.parent_window.add_thread(
