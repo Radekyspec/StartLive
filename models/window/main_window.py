@@ -501,7 +501,7 @@ class MainWindow(SingleInstanceWindow):
         CredentialManagerWorker.reset_default()
         self.setup_ui(is_new=True)
 
-    @Slot()
+    @Slot(str)
     def switch_tray_icon(self, icon_path: str):
         config.app_settings["custom_tray_icon"] = icon_path
         self.tray_icon.setIcon(QIcon(icon_path))
@@ -526,7 +526,7 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("Starting login flow.")
         config.scan_status["timeout"] = False
         if retry and self.login_worker is not None:
-            self.status_label.clicked.disconnect(self._fetch_qr)
+            self.status_label.clicked.disconnect(self._refresh_qr)
             self.login_worker.stop()
             # Reset status
             config.scan_status.update({
@@ -544,6 +544,10 @@ class MainWindow(SingleInstanceWindow):
         self.status_label.setText("等待扫码中...")
         self.status_label.setStyleSheet("color: blue; font-size: 16pt;")
         # Timer checks the login state and updates UI
+
+    @Slot()
+    def _refresh_qr(self):
+        self._fetch_qr(True)
 
     def add_thread(self, worker: BaseWorker | LongLiveWorker, *,
                    on_finished: Callable | None = None,
@@ -650,7 +654,7 @@ class MainWindow(SingleInstanceWindow):
     def _qr_expired(self):
         self.status_label.setText("二维码已失效，点击这里刷新")
         self.status_label.setStyleSheet("color: red; font-size: 16pt;")
-        self.status_label.clicked.connect(lambda: self._fetch_qr(True))
+        self.status_label.clicked.connect(self._refresh_qr)
 
     @Slot()
     def _qr_not_confirmed(self):
