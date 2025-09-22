@@ -547,6 +547,7 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot()
     def _refresh_qr(self):
+        self.update_qr_image("")
         self._fetch_qr(True)
 
     def add_thread(self, worker: BaseWorker | LongLiveWorker, *,
@@ -606,6 +607,9 @@ class MainWindow(SingleInstanceWindow):
         return QPixmap.fromImage(ImageQt.ImageQt(cls.generate_qr_code(data)))
 
     def update_qr_image(self, qr_url: str):
+        if not qr_url:
+            self.qr_label.clear()
+            return
         self.qr_label.setPixmap(self._qpixmap_from_str(qr_url))  # Show in UI
 
     def _after_login_success(self):
