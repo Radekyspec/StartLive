@@ -1,4 +1,4 @@
-from enum import StrEnum, unique, IntEnum
+from enum import unique, IntEnum
 
 __all__ = [
     "KEYRING_SERVICE_NAME", "KEYRING_COOKIES", "KEYRING_COOKIES_INDEX",
