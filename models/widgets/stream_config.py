@@ -273,7 +273,7 @@ class StreamConfigPanel(QWidget):
                                             area=area_code)
         self.parent_window.add_thread(
             start_live_worker,
-            on_finished=start_live_worker.on_finished,
+            on_finished=partial(start_live_worker.on_finished, self),
             on_exception=partial(start_live_worker.on_exception, self),
         )
 

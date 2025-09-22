@@ -57,7 +57,8 @@ class SettingsPage(QWidget):
                                                       PreferProto.RTMP)
         self.prefer_proto_group = self.add_multi_choice_item(
             "推流协议选择",
-            ["优先RTMP", "优先SRT"],
+            ["优先RTMP", "优先SRT，无SRT流时回退至RTMP",
+             "优先SRT，无SRT时停止直播"],
             default=proto_default_index
         )
         self.prefer_proto_group.idClicked.connect(self._on_prefer_proto_changed)
@@ -91,7 +92,10 @@ class SettingsPage(QWidget):
             case 0:
                 config.app_settings["prefer_proto"] = PreferProto.RTMP
             case 1:
-                config.app_settings["prefer_proto"] = PreferProto.SRT
+                config.app_settings[
+                    "prefer_proto"] = PreferProto.SRT_FALLBACK_RTMP
+            case 2:
+                config.app_settings["prefer_proto"] = PreferProto.SRT_ONLY
             case _:
                 raise ValueError("Unexpected protocol choice")
 

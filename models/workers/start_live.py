@@ -2,10 +2,12 @@ from warnings import warn
 
 # package import
 from PySide6.QtCore import Slot, QMutex, QWaitCondition, QMutexLocker
+from PySide6.QtWidgets import QMessageBox
 
 # local package import
 import config
 import constant
+from constant import PreferProto
 from exceptions import StartLiveError
 from models.log import get_logger
 from models.states import StreamState
@@ -21,13 +23,14 @@ class StartLiveWorker(BaseWorker):
         self.area = area
         self._mutex = mutex
         self._cond = cond
+        self._live_result = 0
 
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
-        result = self.start_live(self._session, self.area)
-        match result:
-            case 0:
+        self._live_result = self.start_live(self._session, self.area)
+        match self._live_result:
+            case 0 | 1:
                 with QMutexLocker(self._mutex):
                     while config.obs_connecting:
                         self._cond.wait(self._mutex)
@@ -71,11 +74,18 @@ class StartLiveWorker(BaseWorker):
         response = response.json()
         match response["code"]:
             case 0:
-                config.stream_status.update({
-                    "stream_addr": response["data"]["rtmp"]["addr"],
-                    "stream_key": response["data"]["rtmp"]["code"]
-                })
-                return 0
+                result = cls.parse_live_addr(response)
+                match result:
+                    case 0:
+                        return 0
+                    case 1:
+                        logger.warning(
+                            "startLive Response no srt fallback to RTMP")
+                        return 1
+                    case -1:
+                        logger.warning(
+                            "startLive Response no srt")
+                        return -1
             case 60024:
                 logger.warning(f"startLive Response face auth: {response}")
                 config.stream_status.update({
@@ -86,6 +96,46 @@ class StartLiveWorker(BaseWorker):
             case _:
                 logger.error(f"startLive Response error: {response}")
                 raise StartLiveError(response["message"])
+
+    @staticmethod
+    def parse_live_addr(response):
+        prefer_proto = config.app_settings.get("prefer_proto",
+                                               PreferProto.RTMP)
+        srt_protos = [d for d in response["data"]["protocols"]
+                      if
+                      isinstance(d.get("protocol", ""), str) and "srt" in d.get(
+                          "protocol", "").casefold()]
+        match prefer_proto:
+            case PreferProto.RTMP:
+                config.stream_status.update({
+                    "stream_addr": response["data"]["rtmp"]["addr"],
+                    "stream_key": response["data"]["rtmp"]["code"]
+                })
+                return 0
+            case PreferProto.SRT_FALLBACK_RTMP:
+                if srt_protos:
+                    config.stream_status.update({
+                        "stream_addr": srt_protos[0]["addr"],
+                        "stream_key": srt_protos[0]["code"]
+                    })
+                    return 0
+                else:
+                    config.stream_status.update({
+                        "stream_addr": response["data"]["rtmp"]["addr"],
+                        "stream_key": response["data"]["rtmp"]["code"]
+                    })
+                    return 1
+            case PreferProto.SRT_ONLY:
+                if srt_protos:
+                    config.stream_status.update({
+                        "stream_addr": srt_protos[0]["addr"],
+                        "stream_key": srt_protos[0]["code"]
+                    })
+                    return 0
+                else:
+                    return -1
+            case _:
+                raise ValueError(f"Invalid prefer_proto: {prefer_proto}")
 
     def fetch_upstream(self):
         warn("fetch_upstream is deprecated", DeprecationWarning)
@@ -116,5 +166,13 @@ class StartLiveWorker(BaseWorker):
         parent_window.save_area_btn.setEnabled(True)
 
     @Slot()
-    def on_finished(self):
+    def on_finished(self, parent_window: "StreamConfigPanel" = None):
         self._session.close()
+        match self._live_result:
+            case 1:
+                QMessageBox.warning(parent_window, "无可用SRT流",
+                                    "没有检测到可用的SRT服务器，已切换到RTMP协议")
+            case -1:
+                QMessageBox.warning(parent_window, "无可用SRT流",
+                                    "没有检测到可用的SRT服务器，已停止直播")
+                parent_window.stop_btn.click()

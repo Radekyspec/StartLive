@@ -18,7 +18,8 @@ class ProxyMode(IntEnum):
 @unique
 class PreferProto(IntEnum):
     RTMP: int = 0
-    SRT: int = 1
+    SRT_FALLBACK_RTMP: int = 1
+    SRT_ONLY: int = 2
 
 
 @unique
