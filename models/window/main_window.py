@@ -517,7 +517,7 @@ class MainWindow(SingleInstanceWindow):
             self._post_scan_setup()
         else:
             # Needs update credential
-            if config.scan_status["expired"]:
+            if config.scan_status["expired"] or config.scan_status["is_new"]:
                 self._fetch_qr()
                 return
             self.login_label.setText("登录时发生错误！请重试...")

@@ -161,6 +161,8 @@ class CredentialManagerWorker(BaseWorker):
                 fetch_usernames,
                 on_finished=fetch_usernames.on_finished,
             )
+        else:
+            config.app_settings["is_new"] = True
         panel = parent_window.panel
         panel.host_input.setText(
             config.obs_settings.get("ip_addr", "localhost"))
