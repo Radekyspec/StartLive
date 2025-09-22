@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 
 import config
 from constant import ProxyMode, PreferProto
+from models.classes import FocusPlaceholderLineEdit
 
 
 class SettingsPage(QWidget):
@@ -39,14 +40,14 @@ class SettingsPage(QWidget):
 
         self.proxy_addr_edit, self.proxy_addr_btn = self.add_text_item(
             "自定义代理服务器地址（URL）",
+            "保存并应用",
             placeholder=config.app_settings.get("custom_proxy_url",
-                                                "http://127.0.0.1:7890")
+                                                "socks5://127.0.0.1:7898")
         )
         self.proxy_addr_edit.setToolTip(
             "代理协议支持 http://，https://，socks5://，socks5h://")
         self.proxy_addr_edit.setText(
             config.app_settings.get("custom_proxy_url", ""))
-        self.proxy_addr_btn.setText("保存并应用")
         self.proxy_addr_btn.clicked.connect(self._save_custom_proxy)
 
         self.proxy_group.idClicked.connect(self._on_proxy_mode_changed)
@@ -74,6 +75,7 @@ class SettingsPage(QWidget):
         custom_tray_hint = config.app_settings["custom_tray_hint"]
         self.tray_hint_edit, self.tray_hint_btn = self.add_text_item(
             "自定义托盘图标提示",
+            "保存更改",
             "你所热爱的 就是你的生活" if custom_tray_hint == "" else custom_tray_hint)
         self.tray_hint_btn.clicked.connect(self._switch_tray_hint)
 
@@ -135,18 +137,21 @@ class SettingsPage(QWidget):
         self.main_vbox.addWidget(frame)
         return frame
 
-    def add_text_item(self, label: str, placeholder: str = "") -> tuple[
-        QLineEdit, QPushButton]:
+    def add_text_item(self, label: str, btn_label: str,
+                      placeholder: str = "") -> tuple[
+        FocusPlaceholderLineEdit, QPushButton]:
         """
         Adds a text item to the user interface consisting of a label and an editable text field.
         The label displays the given text, and the text field optionally contains placeholder text.
 
         :param label: The text to display as the label. This identifies the purpose of the text field.
         :type label: str
+        :param btn_label: The text to display on the save button.
+        :type btn_label: str
         :param placeholder: Optional placeholder text shown in the text field when it is empty.
         :type placeholder: str
         :return: The editable text field (QLineEdit) added to the interface.
-        :rtype: QLineEdit, QPushButton
+        :rtype: FocusPlaceholderLineEdit, QPushButton
         """
         frame = QFrame()
         v = QVBoxLayout(frame)
@@ -161,11 +166,17 @@ class SettingsPage(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
 
-        text_edit = QLineEdit()
-        text_edit.setPlaceholderText(placeholder)
+        text_edit = FocusPlaceholderLineEdit()
+        text_edit.update_placeholder(placeholder)
 
-        save_btn = QPushButton("保存更改")
+        save_btn = QPushButton(btn_label)
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        @Slot()
+        def _update_placeholder():
+            text_edit.update_placeholder(text_edit.text())
+
+        save_btn.clicked.connect(_update_placeholder)
 
         row.addWidget(text_edit, 1)
         row.addWidget(save_btn, 0)
@@ -346,6 +357,15 @@ class SettingsPage(QWidget):
         return font_edit, font_btn
 
     def reset_default(self):
-        self.proxy_group.button(0).setChecked(True)
-        self.tray_icon_edit.setText("")
-        self.tray_hint_edit.setText("你所热爱的 就是你的生活")
+        pm = config.app_settings["proxy_mode"]
+        self._on_proxy_mode_changed(pm)
+        self.proxy_group.button(pm).setChecked(
+            True)
+        self.tray_icon_edit.setText(config.app_settings["custom_tray_icon"])
+        self.tray_hint_edit.setText(config.app_settings["custom_tray_hint"])
+        self.tray_hint_edit.update_placeholder("你所热爱的 就是你的生活")
+        self.proxy_addr_edit.setText(config.app_settings["custom_proxy_url"])
+        self.proxy_addr_edit.update_placeholder("socks5://127.0.0.1:7898")
+        self.prefer_proto_group.button(
+            config.app_settings["prefer_proto"]).setChecked(True)
+
