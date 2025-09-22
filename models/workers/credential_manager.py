@@ -153,7 +153,6 @@ class CredentialManagerWorker(BaseWorker):
     @Slot()
     def on_finished(self, parent_window: "MainWindow", state: LoginState):
         FetchLoginWorker.post_login(parent_window, state)
-        state.credentialLoaded.emit()
         if not self.is_new:
             fetch_usernames = FetchUsernamesWorker(
                 config.cookie_indices[self.cookie_index])
@@ -162,7 +161,8 @@ class CredentialManagerWorker(BaseWorker):
                 on_finished=fetch_usernames.on_finished,
             )
         else:
-            config.app_settings["is_new"] = True
+            config.scan_status["is_new"] = True
+        state.credentialLoaded.emit()
         panel = parent_window.panel
         panel.host_input.setText(
             config.obs_settings.get("ip_addr", "localhost"))

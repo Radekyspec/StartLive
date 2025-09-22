@@ -515,11 +515,10 @@ class MainWindow(SingleInstanceWindow):
         config.scan_status["cred_loaded"] = True
         if config.scan_status["scanned"]:
             self._post_scan_setup()
-        else:
+        elif config.scan_status["expired"] or config.scan_status["is_new"]:
             # Needs update credential
-            if config.scan_status["expired"] or config.scan_status["is_new"]:
-                self._fetch_qr()
-                return
+            self._fetch_qr()
+        else:
             self.login_label.setText("登录时发生错误！请重试...")
 
     def _fetch_qr(self, retry: bool = False):
