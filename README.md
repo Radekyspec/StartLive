@@ -45,7 +45,7 @@ winget install Radekyspec.StartLive
 
 ### Prerequisites
 
-- `3.10 <= Python <= 3.13`
+- `3.11 <= Python <= 3.13`
 - Tested on **Python 3.13.7**; **Python 3.12.10** recommended
 - Desktop environment
 - `PySide6 (Qt for Python)` [supported platforms/architectures](https://wiki.qt.io/Qt_for_Python)

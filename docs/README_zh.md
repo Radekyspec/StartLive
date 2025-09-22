@@ -42,7 +42,7 @@ winget install Radekyspec.StartLive
 
 ### 前置要求
 
-* `3.10 <= Python <= 3.13`
+* `3.11 <= Python <= 3.13`
 * `Python 3.13.7` 经测试可用, 推荐使用`3.12.10`
 * 桌面端环境
 * `PySide6 (Qt for Python)` [支持的架构](https://wiki.qt.io/Qt_for_Python)
