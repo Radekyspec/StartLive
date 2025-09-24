@@ -10,7 +10,7 @@ from .formatter import ThreadClassFormatter
 from .handler import QSignalLogHandler
 
 
-def get_log_path(*, is_makedir: bool = True) -> (str, str):
+def get_log_path(*, is_makedir: bool = True) -> tuple[str, str]:
     if system() == "Windows":
         try:
             base_dir = os.path.abspath(__compiled__.containing_dir)
@@ -42,11 +42,11 @@ def init_logger(name: str = LOGGER_NAME) -> tuple[Logger, QSignalLogHandler]:
     gui_handler = QSignalLogHandler()
     fh.suffix = "%Y-%m-%d.log"
     fh.namer = lambda _name: _name.replace(".log.", ".")
-    formatter = ThreadClassFormatter(
+    tc_formatter = ThreadClassFormatter(
         "%(asctime)s.%(msecs)03d [%(threadClassName)s] - %(message)s",
         "%Y-%m-%d %H:%M:%S")
-    fh.setFormatter(formatter)
-    gui_handler.setFormatter(formatter)
+    fh.setFormatter(tc_formatter)
+    gui_handler.setFormatter(tc_formatter)
     logger.addHandler(fh)
     logger.addHandler(gui_handler)
 
