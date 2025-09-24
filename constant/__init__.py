@@ -10,23 +10,23 @@ __all__ = [
 
 @unique
 class ProxyMode(IntEnum):
-    NONE: int = 0
-    SYSTEM: int = 1
-    CUSTOM: int = 2
+    NONE = 0
+    SYSTEM = 1
+    CUSTOM = 2
 
 
 @unique
 class PreferProto(IntEnum):
-    RTMP: int = 0
-    SRT_FALLBACK_RTMP: int = 1
-    SRT_ONLY: int = 2
+    RTMP = 0
+    SRT_FALLBACK_RTMP = 1
+    SRT_ONLY = 2
 
 
 @unique
 class CoverStatus(IntEnum):
-    AUDIT_FAILED: int = -1
-    AUDIT_IN_PROGRESS: int = 0
-    AUDIT_PASSED: int = 1
+    AUDIT_FAILED = -1
+    AUDIT_IN_PROGRESS = 0
+    AUDIT_PASSED = 1
 
 
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"
@@ -38,7 +38,7 @@ KEYRING_ROOM_INFO = "roomInfo"
 LOCAL_SERVER_NAME = "StartLive|singleInstanceServer"
 LOGGER_NAME = "StartLiveLogger"
 USERNAME_DISPLAY_TEMPLATE = "{}（{}）"
-VERSION = "0.6.3"
+VERSION = "0.6.4"
 
 APP_KEY = "aae92bc66f3edfab"
 APP_SECRET = "af125a0d5279fd576c1b4418a3e8276d"

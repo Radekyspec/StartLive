@@ -56,7 +56,7 @@ jobs:
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
-          file-version: "0.6.3.0"
+          file-version: "0.6.4.0"
           windows-icon-from-ico: "resources/icon_left.ico"
           windows-console-mode: "disable"
           noinclude-setuptools-mode: "nofollow"
