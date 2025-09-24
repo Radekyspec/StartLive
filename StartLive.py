@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 # module import
 import sys
 from argparse import ArgumentParser
@@ -23,6 +22,7 @@ if __name__ == '__main__':
     if MainWindow.is_another_instance_running():
         sys.exit(0)
     if system() == "Windows":
+        font_size = 9
         try:
             install_path = abspath(__compiled__.containing_dir)
             updater_path = join(install_path, "Update.exe")
@@ -31,6 +31,8 @@ if __name__ == '__main__':
                 Popen([updater_path, "--update=https://startlive.vtbs.ai/"])
         except NameError:
             pass
+    else:
+        font_size = 12
     parser = ArgumentParser()
 
     parser.add_argument("--web.host", dest="web_host", default=None,
@@ -54,7 +56,7 @@ if __name__ == '__main__':
     else:
         app.setFont(QFont(
             "Open Sans,.AppleSystemUIFont,Helvetica,Arial,MS Shell Dlg,sans-serif",
-            9))
+            font_size))
     window = MainWindow(args.web_host, args.web_port, args.first_run,
                         args.no_update, base_path=base_path)
     window.apply_color_scheme(app.styleHints().colorScheme())
