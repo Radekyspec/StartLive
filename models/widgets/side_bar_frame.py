@@ -18,21 +18,22 @@ class SideBar(QFrame):
         self._expanded = False
         self.setObjectName("SideBar")
         self.setFixedWidth(self._collapsed_width)
-        self._light_icons = [QIcon(join(icon_path, "light-theme.svg")),
-                             QIcon(join(icon_path, "light-home.svg")),
-                             QIcon(join(icon_path, "light-log.svg")),
-                             QIcon(join(icon_path, "light-settings.svg")), ]
-        self._dark_icons = [QIcon(join(icon_path, "dark-theme.svg")),
-                            QIcon(join(icon_path, "dark-home.svg")),
-                            QIcon(join(icon_path, "dark-log.svg")),
-                            QIcon(join(icon_path, "dark-settings.svg")), ]
+        self._light_icons = [
+            QIcon(join(icon_path, "light-menu.svg")),
+            QIcon(join(icon_path, "light-theme.svg")),
+            QIcon(join(icon_path, "light-home.svg")),
+            QIcon(join(icon_path, "light-log.svg")),
+            QIcon(join(icon_path, "light-settings.svg")),
+        ]
+        self._dark_icons = [
+            QIcon(join(icon_path, "dark-menu.svg")),
+            QIcon(join(icon_path, "dark-theme.svg")),
+            QIcon(join(icon_path, "dark-home.svg")),
+            QIcon(join(icon_path, "dark-log.svg")),
+            QIcon(join(icon_path, "dark-settings.svg")),
+        ]
 
-        self.toggle_btn = QToolButton()
-        self.toggle_btn.setText("☰")
-        self.toggle_btn.clicked.connect(self._toggle)
-        self.toggle_btn.setFixedSize(40, 40)
-
-        def mk_btn(text: str, icon_index, checkable: bool = True):
+        def mk_btn(text: str, icon_index, *, checkable: bool = True):
             b = QToolButton()
             b.setProperty("_fulltext", text)
             b.setText("" if not self._expanded else text)
@@ -51,10 +52,13 @@ class SideBar(QFrame):
                             QSizePolicy.Policy.Preferred)
             return b
 
-        self.btn_theme = mk_btn("", 0, False)
-        self.btn_home = mk_btn(" 主界面", 1)
-        self.btn_log = mk_btn(" 日志", 2)
-        self.btn_settings = mk_btn(" 设置", 3)
+        self.toggle_btn = mk_btn(" 菜单", 0, checkable=False)
+        self.toggle_btn.clicked.connect(self._toggle)
+
+        self.btn_theme = mk_btn("", 1, checkable=False)
+        self.btn_home = mk_btn(" 主界面", 2)
+        self.btn_log = mk_btn(" 日志", 3)
+        self.btn_settings = mk_btn(" 设置", 4)
 
         v = QVBoxLayout(self)
         v.setContentsMargins(6, 6, 6, 6)
@@ -69,8 +73,10 @@ class SideBar(QFrame):
         self._anim = QVariantAnimation(self, duration=200)
         self._anim.valueChanged.connect(self._on_anim_value)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._menu_buttons = [self.btn_theme, self.btn_home, self.btn_log,
-                              self.btn_settings]
+        self._menu_buttons = [
+            self.toggle_btn, self.btn_theme, self.btn_home, self.btn_log,
+            self.btn_settings
+        ]
 
     def _on_anim_value(self, val):
         self.setFixedWidth(int(val))
@@ -79,7 +85,7 @@ class SideBar(QFrame):
 
     def _apply_collapsed_ui(self, collapsed: bool):
         for b in self._menu_buttons:
-            full = b.property("_fulltext") or ""
+            full = b.property("_fulltext")
             b.setText("" if collapsed else full)
             b.setToolButtonStyle(
                 Qt.ToolButtonStyle.ToolButtonIconOnly if collapsed else Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
