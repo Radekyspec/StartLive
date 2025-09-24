@@ -245,7 +245,7 @@ class MainWindow(SingleInstanceWindow):
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Layout
-        layout = QVBoxLayout(self)
+        layout = QVBoxLayout()
         layout.addWidget(self.login_label)
         layout.addWidget(self.qr_label)
         layout.addWidget(self.status_label)
@@ -267,7 +267,7 @@ class MainWindow(SingleInstanceWindow):
         self._side_bar.btn_home.setChecked(True)
 
         central = QWidget(self)
-        root = QHBoxLayout(self)
+        root = QHBoxLayout()
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         root.addWidget(self._side_bar)
