@@ -23,6 +23,7 @@ if __name__ == '__main__':
         sys.exit(0)
     if system() == "Windows":
         font_size = 9
+        icon_file = "icon_left.ico"
         try:
             install_path = abspath(__compiled__.containing_dir)
             updater_path = join(install_path, "Update.exe")
@@ -33,6 +34,7 @@ if __name__ == '__main__':
             pass
     else:
         font_size = 12
+        icon_file = "icon_left_macOS.ico"
     parser = ArgumentParser()
 
     parser.add_argument("--web.host", dest="web_host", default=None,
@@ -49,7 +51,7 @@ if __name__ == '__main__':
     app = QApplication(qt_args)
     base_path = abspath(dirname(__file__))
     app.setWindowIcon(
-        QIcon(join(base_path, "resources", "icon_left.ico")))
+        QIcon(join(base_path, "resources", icon_file)))
     if (font := config.app_settings["custom_font"]) and (
             f := QFont()).fromString(font):
         app.setFont(f)

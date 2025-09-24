@@ -91,7 +91,9 @@ jobs:
           noinclude-pytest-mode: "nofollow"
           noinclude-unittest-mode: "nofollow"
           include-data-dir: "resources=resources"
-          noinclude-data-files: "resources/version.json"
+          noinclude-data-files: |
+            "resources/version.json"
+            "resources/icon_left_macOS.ico"
           deployment: true
 
       - name: Build Executable for Mac
@@ -106,7 +108,7 @@ jobs:
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
           file-version: "0.6.4.0"
-          macos-app-icon: "resources/icon_left.ico"
+          macos-app-icon: "resources/icon_left_macOS.ico"
           noinclude-setuptools-mode: "nofollow"
           noinclude-pytest-mode: "nofollow"
           noinclude-unittest-mode: "nofollow"
