@@ -1,6 +1,6 @@
 from os.path import join
 
-from PySide6.QtCore import Qt, QEasingCurve, QVariantAnimation, QSize
+from PySide6.QtCore import Qt, QEasingCurve, QVariantAnimation, QSize, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QVBoxLayout, QFrame, QToolButton,
@@ -16,6 +16,7 @@ class SideBar(QFrame):
         self._collapsed_width = collapsed_width
         self._icon_path = icon_path
         self._expanded = False
+        self._anim_changing = False
         self.setObjectName("SideBar")
         self.setFixedWidth(self._collapsed_width)
         self._light_icons = [
@@ -72,16 +73,23 @@ class SideBar(QFrame):
 
         self._anim = QVariantAnimation(self, duration=200)
         self._anim.valueChanged.connect(self._on_anim_value)
+        self._anim.finished.connect(self._on_anim_finished)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._menu_buttons = [
             self.toggle_btn, self.btn_theme, self.btn_home, self.btn_log,
             self.btn_settings
         ]
 
+    @Slot()
+    def _on_anim_finished(self):
+        self._anim_changing = False
+
+    @Slot()
     def _on_anim_value(self, val):
         self.setFixedWidth(int(val))
         self.updateGeometry()
-        if self.parentWidget(): self.parentWidget().updateGeometry()
+        if self.parentWidget():
+            self.parentWidget().updateGeometry()
 
     def _apply_collapsed_ui(self, collapsed: bool):
         for b in self._menu_buttons:
@@ -90,7 +98,11 @@ class SideBar(QFrame):
             b.setToolButtonStyle(
                 Qt.ToolButtonStyle.ToolButtonIconOnly if collapsed else Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
 
+    @Slot()
     def _toggle(self):
+        if self._anim_changing:
+            return
+        self._anim_changing = True
         self._expanded = not self._expanded
         start = self.width()
         end = self._expanded_width if self._expanded else self._collapsed_width
