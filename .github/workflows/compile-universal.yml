@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ windows-latest, macos-13, macos-latest ]
+        os: [ windows-latest, macos-15-intel, macos-latest ]
 
     runs-on: ${{ matrix.os }}
 
@@ -57,7 +57,7 @@ jobs:
         run: |
           brew remove --force --ignore-dependencies openssl@3
           brew cleanup openssl@3
-        if: matrix.os == 'macos-13'
+        if: matrix.os == 'macos-15-intel'
 
       - name: Download UPX (Windows)
         if: matrix.os == 'windows-latest'
