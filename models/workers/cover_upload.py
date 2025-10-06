@@ -75,7 +75,6 @@ class CoverUploadWorker(BaseWorker):
     @Slot()
     def on_finished(self, parent_window: "StreamConfigPanel"):
         parent_window.cover_audit_state()
-        parent_window.cover_crop_widget.close()
         cover_state_updater = CoverStateUpdateWorker()
         parent_window.parent_window.add_thread(
             cover_state_updater,
@@ -83,6 +82,8 @@ class CoverUploadWorker(BaseWorker):
                 cover_state_updater.on_finished, parent_window),
         )
         self._session.close()
+        if parent_window.cover_crop_widget is not None:
+            parent_window.cover_crop_widget.close()
 
     @staticmethod
     @Slot()
