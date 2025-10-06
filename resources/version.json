@@ -1,8 +1,8 @@
 {
   "ak": "aae92bc66f3edfab",
   "as": "af125a0d5279fd576c1b4418a3e8276d",
-  "b": "9658",
-  "v": "7.25.0.9658",
+  "b": "9775",
+  "v": "7.28.0.9775",
   "hw": {
     "Accept": "*/*",
     "Accept-Encoding": "gzip, deflate",
@@ -16,12 +16,12 @@
     "Sec-Fetch-Site": "same-site",
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Dest": "empty",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/9658"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/9775"
   },
   "ha": {
     "Accept-Encoding": "gzip,deflate",
     "Connection": "keep-alive",
-    "User-Agent": "LiveHime/7.25.0.9658 os/Windows pc_app/livehime build/9658 osVer/10.0_x86_64"
+    "User-Agent": "LiveHime/7.28.0.9775 os/Windows pc_app/livehime build/9775 osVer/10.0_x86_64"
   },
   "start_ac": true,
   "stop_ac": false
