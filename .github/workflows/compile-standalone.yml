@@ -65,6 +65,7 @@ jobs:
           noinclude-unittest-mode: "nofollow"
           include-data-dir: "resources=resources"
           noinclude-data-files: "resources/version.json"
+          onefile-no-compression: true
           deployment: true
 
       - name: Flatten output
