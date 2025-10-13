@@ -96,6 +96,7 @@ jobs:
             "resources/version.json"
             "resources/icon_left_macOS.ico"
           onefile-no-compression: true
+          upx-disable-cache: true
           deployment: true
 
       - name: Build Executable for Mac
