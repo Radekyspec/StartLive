@@ -64,7 +64,9 @@ jobs:
           noinclude-pytest-mode: "nofollow"
           noinclude-unittest-mode: "nofollow"
           include-data-dir: "resources=resources"
-          noinclude-data-files: "resources/version.json"
+          noinclude-data-files: |
+            "resources/version.json"
+            "resources/icon_left_macOS.ico"
           onefile-no-compression: true
           deployment: true
 
