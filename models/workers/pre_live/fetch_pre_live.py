@@ -28,7 +28,6 @@ class FetchPreLiveWorker(BaseWorker):
         response.encoding = "utf-8"
         self.logger.info("live_info Response")
         response = response.json()
-        self.logger.info(f"live_info Result: {response}")
         config.room_info.update(
             {
                 "room_id": response["data"]["room_id"],

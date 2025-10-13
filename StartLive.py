@@ -8,8 +8,7 @@ from subprocess import Popen
 
 # package import
 from PySide6.QtGui import QFont, QIcon
-from PySide6.QtWidgets import (QApplication
-                               )
+from PySide6.QtWidgets import QApplication
 from qdarktheme import enable_hi_dpi
 
 # local package import
