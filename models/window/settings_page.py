@@ -1,4 +1,7 @@
+from functools import partial
+
 from PySide6.QtCore import Qt, QSize, Slot
+from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QRadioButton, QButtonGroup, QCheckBox,
@@ -8,6 +11,7 @@ from PySide6.QtWidgets import (
 import config
 from constant import ProxyMode, PreferProto
 from models.classes import FocusPlaceholderLineEdit
+from models.workers.live_delay import StreamTimeShiftUpdateWorker
 
 
 class SettingsPage(QWidget):
@@ -54,6 +58,20 @@ class SettingsPage(QWidget):
 
         self._on_proxy_mode_changed(self.proxy_group.checkedId())
 
+        self.delay_edit, self.delay_save_btn = self.add_text_item(
+            "推流延迟",
+            "保存并应用",
+            placeholder="请输入10 - 300之间的整数"
+        )
+        self.delay_edit.setValidator(QIntValidator(10, 300, self.delay_edit))
+        self.delay_edit.setToolTip(
+            "此设置项为B站在标准推流基础上添加的延迟\n\n"
+            "推流协议本身自带一些不可避免的短暂的延迟，设置成0不能实现无延迟直播\n\n"
+            "设置后，仅在PC开播生效，直播画面和音频将同步延迟；连麦、连线、PK等正常功能可能受到影响")
+        self.delay_edit.textChanged.connect(
+            lambda: self.delay_save_btn.setEnabled(True))
+        self.delay_save_btn.clicked.connect(self._on_delay_save)
+
         proto_default_index = config.app_settings.get("prefer_proto",
                                                       PreferProto.RTMP)
         self.prefer_proto_group = self.add_multi_choice_item(
@@ -83,6 +101,19 @@ class SettingsPage(QWidget):
             "自定义显示字体（重启生效）", options=(
                     QFontDialog.FontDialogOption.DontUseNativeDialog | QFontDialog.FontDialogOption.ScalableFonts))
         self.main_vbox.addStretch(1)
+
+    @Slot()
+    def _on_delay_save(self):
+        self.delay_save_btn.setEnabled(False)
+        delay_value = self.delay_edit.text()
+        if not delay_value:
+            delay_value = 0
+        update_delay = StreamTimeShiftUpdateWorker(delay_value)
+        self._parent_window.add_thread(
+            update_delay,
+            on_finished=update_delay.on_finished,
+            on_exception=partial(update_delay.on_exception, self.delay_save_btn)
+        )
 
     @Slot()
     def _switch_tray_hint(self):
@@ -368,4 +399,3 @@ class SettingsPage(QWidget):
         self.proxy_addr_edit.update_placeholder("socks5://127.0.0.1:7898")
         self.prefer_proto_group.button(
             config.app_settings["prefer_proto"]).setChecked(True)
-

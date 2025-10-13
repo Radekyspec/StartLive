@@ -253,17 +253,20 @@ class MainWindow(SingleInstanceWindow):
         login_widget = QWidget(self)
         login_widget.setLayout(layout)
         # self.setCentralWidget(central)
-        if (w := self._stack.widget(0)) is not None:
+        if (w := self._stack.widget(WidgetIndex.WIDGET_LOGIN)) is not None:
             self._stack.removeWidget(w)
-        self._stack.insertWidget(0, login_widget)
-        if (w := self._stack.widget(1)) is not None:
+        self._stack.insertWidget(WidgetIndex.WIDGET_LOGIN, login_widget)
+        if (w := self._stack.widget(WidgetIndex.WIDGET_PANEL)) is not None:
             self._stack.removeWidget(w)
-        self._stack.insertWidget(1, self.panel)
+        self._stack.insertWidget(WidgetIndex.WIDGET_PANEL, self.panel)
         if self._stack.indexOf(self._log_viewer) == -1:
-            self._stack.insertWidget(2, self._log_viewer)
+            self._stack.insertWidget(WidgetIndex.WIDGET_LOGGING,
+                                     self._log_viewer)
         if self._stack.indexOf(self._settings_page) == -1:
-            self._stack.insertWidget(3, self._settings_page)
-        self._stack.setCurrentIndex(0)
+            self._stack.insertWidget(WidgetIndex.WIDGET_SETTINGS,
+                                     self._settings_page)
+        self._stack.setCurrentIndex(WidgetIndex.WIDGET_LOGIN)
+        self._stack.currentChanged.connect(self._on_settings_loaded)
         self._side_bar.btn_home.setChecked(True)
 
         central = QWidget(self)
@@ -364,6 +367,18 @@ class MainWindow(SingleInstanceWindow):
     def _on_tray_icon_activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._show_normal()
+
+    @Slot(int)
+    def _on_settings_loaded(self, index: int):
+        if index != WidgetIndex.WIDGET_SETTINGS:
+            return
+        if not self._ready_switch_account():
+            return
+        self._settings_page.delay_edit.setText("")
+        fetch_delay = FetchStreamTimeShiftWorker()
+        self.add_thread(fetch_delay,
+                        on_finished=partial(fetch_delay.on_finished,
+                                            self._settings_page.delay_edit))
 
     @staticmethod
     @Slot()

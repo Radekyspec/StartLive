@@ -21,7 +21,7 @@ from models.classes import FocusAwareLineEdit, \
 from models.states import ObsBtnState, StreamState
 from models.window.cover_crop import CoverCropWidget
 from models.workers import *
-from models.workers.announce_update import AnnounceUpdateWorker
+from models.workers.announce.announce_update import AnnounceUpdateWorker
 
 
 class StreamConfigPanel(QWidget):
@@ -74,7 +74,7 @@ class StreamConfigPanel(QWidget):
 
         obs_layout.addWidget(QLabel("端口:"), 1, 2)
         self.port_input = QLineEdit("4455")
-        self.port_input.setValidator(QIntValidator(1, 65535))
+        self.port_input.setValidator(QIntValidator(1, 65535, self.port_input))
         self.port_input.editingFinished.connect(_port_save)
         obs_layout.addWidget(self.port_input, 1, 3)
 
