@@ -4,7 +4,8 @@ __all__ = [
     "KEYRING_SERVICE_NAME", "KEYRING_COOKIES", "KEYRING_COOKIES_INDEX",
     "KEYRING_SETTINGS", "KEYRING_ROOM_INFO", "KEYRING_APP_SETTINGS",
     "LOCAL_SERVER_NAME", "LOGGER_NAME", "USERNAME_DISPLAY_TEMPLATE", "VERSION",
-    "DARK_CSS", "LIGHT_CSS", "ProxyMode", "PreferProto", "CoverStatus"
+    "DARK_CSS", "LIGHT_CSS", "ProxyMode", "PreferProto", "CoverStatus",
+    "WidgetIndex"
 ]
 
 
@@ -27,6 +28,13 @@ class CoverStatus(IntEnum):
     AUDIT_FAILED = -1
     AUDIT_IN_PROGRESS = 0
     AUDIT_PASSED = 1
+
+
+class WidgetIndex(IntEnum):
+    WIDGET_LOGIN = 0
+    WIDGET_PANEL = 1
+    WIDGET_LOGGING = 2
+    WIDGET_SETTINGS = 3
 
 
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"
