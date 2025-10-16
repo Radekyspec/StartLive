@@ -9,6 +9,12 @@ import config
 
 
 class AreaPickerPanel(QDialog):
+    CHILD_COLS = 4  # 每行 4 个
+    CHILD_BTN_W = 130
+    CHILD_BTN_H = 36
+    CHILD_H_GAP = 15
+    CHILD_V_GAP = 20
+    FOOTER_BTN_H = 30
     selectionConfirmed = Signal(str, str)  # parent, child
 
     def __init__(self, parent: QWidget | None = None,
@@ -16,7 +22,7 @@ class AreaPickerPanel(QDialog):
         super().__init__(parent)
         self.setWindowTitle("直播分区")
         self.setModal(True)
-        self.setGeometry(300, 200, 610, 470)
+        self.setFixedSize(610, 520)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
         # 状态
@@ -78,9 +84,8 @@ class AreaPickerPanel(QDialog):
         parent_inner = QWidget()
         self.parent_layout = QGridLayout(parent_inner)
         self.parent_layout.setContentsMargins(0, 0, 0, 0)
-        self.parent_layout.setHorizontalSpacing(6)
-        self.parent_layout.setVerticalSpacing(6)
         parent_bar.setWidget(parent_inner)
+        parent_bar.setFixedHeight(int(self.CHILD_BTN_H + self.CHILD_H_GAP * 1.5))
         root.addWidget(parent_bar)
 
         self.parent_group = QButtonGroup(self)
@@ -92,9 +97,11 @@ class AreaPickerPanel(QDialog):
         child_area.setFrameShape(QFrame.Shape.NoFrame)
         self.child_inner = QWidget()
         self.child_layout = QGridLayout(self.child_inner)
+        self.child_layout.setHorizontalSpacing(self.CHILD_H_GAP)
+        self.child_layout.setVerticalSpacing(self.CHILD_V_GAP)
         self.child_layout.setContentsMargins(0, 0, 0, 0)
-        self.child_layout.setHorizontalSpacing(6)
-        self.child_layout.setVerticalSpacing(6)
+        self.child_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+
         child_area.setWidget(self.child_inner)
         root.addWidget(child_area, 1)
 
@@ -103,10 +110,14 @@ class AreaPickerPanel(QDialog):
 
         # 底部按钮
         bottom = QHBoxLayout()
-        bottom.addStretch(1)
+        # bottom.addStretch(1)
         self.ok_btn = QPushButton("确认")
         self.ok_btn.setEnabled(False)
+        self.ok_btn.setMinimumHeight(self.FOOTER_BTN_H)
+        self.ok_btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.cancel_btn = QPushButton("取消")
+        self.cancel_btn.setMinimumHeight(self.FOOTER_BTN_H)
+        self.cancel_btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         bottom.addWidget(self.ok_btn)
         bottom.addWidget(self.cancel_btn)
         root.addLayout(bottom)
@@ -118,16 +129,13 @@ class AreaPickerPanel(QDialog):
 
     def set_initial_selection(self, parent_text: str | None,
                               child_text: str | None):
-        """可选：设置默认选中的父/子分区（若存在则选中并同步 UI）"""
         if parent_text and parent_text in config.parent_area:
             self._select_parent(parent_text)
             if child_text and parent_text in config.area_options and child_text in \
                     config.area_options[parent_text]:
                 self._select_child(child_text)
 
-    # ---------- 内部构建 ----------
     def _build_parent_buttons(self, parents: list[str]):
-        """构建父分区按钮条：网格布局以形成“标签条”的视觉节奏。"""
         # 先清空
         while self.parent_layout.count():
             item = self.parent_layout.takeAt(0)
@@ -137,24 +145,30 @@ class AreaPickerPanel(QDialog):
                 w.deleteLater()
 
         # 生成
-        cols = 6  # 每行显示的父分区按钮数，可按需要调整
+        cols = len(parents)
         for i, name in enumerate(parents):
             btn = QPushButton(name)
             btn.setCheckable(True)
-            btn.setSizePolicy(QSizePolicy.Policy.Preferred,
-                              QSizePolicy.Policy.Fixed)
+
+            # 固定大小，避免随文本伸缩
+            btn.setFixedSize(self.CHILD_BTN_W, self.CHILD_BTN_H)
+            btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+            fm = btn.fontMetrics()
+            elided = fm.elidedText(name, Qt.TextElideMode.ElideRight, self.CHILD_BTN_W - 16)  # 预留一点左右 padding
+            btn.setText(elided)
+            btn.setToolTip(name)
+
             self.parent_group.addButton(btn)
             r, c = divmod(i, cols)
             self.parent_layout.addWidget(btn, r, c)
             btn.clicked.connect(
                 lambda checked, t=name: self._on_parent_clicked(t))
 
-        # 默认选中第一个（若存在）
         if parents:
             self._select_parent(parents[0])
 
     def _populate_children(self, parent_text: str):
-        """根据父分区填充子分区网格。逻辑参考原先的 update_child_combo。"""
         # 清空旧子分区
         self._all_child_buttons.clear()
         while self.child_layout.count():
@@ -165,12 +179,20 @@ class AreaPickerPanel(QDialog):
                 w.deleteLater()
 
         children = config.area_options.get(parent_text, [])
-        cols = 4  # 每行显示的子分区按钮数
         for i, name in enumerate(children):
             btn = QPushButton(name)
             btn.setCheckable(True)
+
+            btn.setFixedSize(self.CHILD_BTN_W, self.CHILD_BTN_H)
+            btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+            fm = btn.fontMetrics()
+            elided = fm.elidedText(name, Qt.TextElideMode.ElideRight, self.CHILD_BTN_W - 16)
+            btn.setText(elided)
+            btn.setToolTip(name)
+
             self.child_group.addButton(btn)
-            r, c = divmod(i, cols)
+            r, c = divmod(i, self.CHILD_COLS)
             self.child_layout.addWidget(btn, r, c)
             btn.clicked.connect(
                 lambda checked, t=name: self._on_child_clicked(t))
@@ -184,11 +206,9 @@ class AreaPickerPanel(QDialog):
         self._sync_current_label()
         self._update_ok_enabled()
 
-    # ---------- 事件与交互 ----------
     def _on_parent_clicked(self, parent_text: str):
         self._selected_parent = parent_text
         self._populate_children(parent_text)
-        # 与原逻辑一致：切换父分区即刷新子分区列表
         self._sync_current_label()
 
     def _on_child_clicked(self, child_text: str):
@@ -197,11 +217,9 @@ class AreaPickerPanel(QDialog):
         self._update_ok_enabled()
 
     def _apply_child_filter(self, keyword: str):
-        """包含式过滤 + 重排，不依赖 isVisible()"""
         kw = (keyword or "").strip()
 
         def _match(btn):
-            # 关键：用文本匹配决定“逻辑可见性”
             return True if not kw else (kw in btn.text())
 
         matched = []
@@ -224,10 +242,8 @@ class AreaPickerPanel(QDialog):
         self._update_ok_enabled()
 
     def _reflow_children(self, buttons: list[QPushButton], kw: str):
-        """把待显示的按钮按新顺序紧凑铺回网格"""
-        self._clear_layout_keep_widgets(self.child_layout)
+        self._clear_layout_keep_widgets()
 
-        # 排序策略：前缀匹配优先（kw 开头）→ 普通包含 → 文本字典序
         def _key(b):
             t = b.text()
             if kw:
@@ -238,7 +254,7 @@ class AreaPickerPanel(QDialog):
 
         buttons.sort(key=_key)
 
-        cols = 4
+        cols = self.CHILD_COLS
         for i, btn in enumerate(buttons):
             r, c = divmod(i, cols)
             self.child_layout.addWidget(btn, r, c)
@@ -247,22 +263,19 @@ class AreaPickerPanel(QDialog):
         self.child_inner.adjustSize()
         self.child_inner.updateGeometry()
 
-    def _clear_layout_keep_widgets(self, layout):
-        """取出布局项但不销毁 widget，本质是‘清格子不清按钮’"""
-        while layout.count():
-            item = layout.takeAt(0)
+    def _clear_layout_keep_widgets(self):
+        while self.child_layout.count():
+            item = self.child_layout.takeAt(0)
             w = item.widget()
             if w is not None:
-                layout.removeWidget(w)
+                self.child_layout.removeWidget(w)
 
     def _quick_pick(self, parent_text: str, child_text: str):
         """从‘最近开播’快速选中一组。"""
         self._select_parent(parent_text)
         self._select_child(child_text)
 
-    # ---------- 选择/UI 同步 ----------
     def _select_parent(self, parent_text: str):
-        # 触发父分区按钮的选中
         for btn in self.parent_group.buttons():
             if btn.text() == parent_text:
                 btn.setChecked(True)
@@ -291,19 +304,3 @@ class AreaPickerPanel(QDialog):
         self.selectionConfirmed.emit(self._selected_parent,
                                      self._selected_child)
         self.accept()
-
-# ============ 用法示例 ============
-# 将该对话框与原 StreamConfigPanel 对接的典型方式（示意）：
-#
-# def open_area_picker(self):
-#     dlg = AreaPickerPanel(self, recent_pairs=[("网游", "命运方舟"), ("手游", "明日方舟")])
-#     # 可选：设置默认选中
-#     # dlg.set_initial_selection(config.room_info.get("parent_area"), config.room_info.get("area"))
-#     def _apply(parent_text, child_text):
-#         # 将选择结果写回你原先的控件/状态，然后沿用现有保存逻辑
-#         self.parent_combo.setEditText(parent_text)
-#         self.update_child_combo(parent_text)  # 维持与旧逻辑一致
-#         self.child_combo.setEditText(child_text)
-#         self._activate_area_save()
-#     dlg.selectionConfirmed.connect(_apply)
-#     dlg.exec()
