@@ -19,6 +19,7 @@ from constant import CoverStatus
 from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
 from models.states import ObsBtnState, StreamState
+from models.window.area_picker import AreaPickerPanel
 from models.window.cover_crop import CoverCropWidget
 from models.workers import *
 from models.workers.announce.announce_update import AnnounceUpdateWorker
@@ -173,16 +174,18 @@ class StreamConfigPanel(QWidget):
         self.parent_combo = CompletionComboBox(config.parent_area)
         # self.parent_combo.addItems(config.parent_area)
         area_group_layout.addWidget(self.parent_combo, 2, 1, 1, 3)
+        self._child_combo_autosave = False
         self.child_combo = CompletionComboBox([])
         self.child_combo.setEnabled(False)
         area_group_layout.addWidget(self.child_combo, 2, 4, 1, 3)
-        self.save_area_btn = QPushButton("保存")
-        self.save_area_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.save_area_btn.setEnabled(False)
-        self.save_area_btn.clicked.connect(self._save_area)
-        self.parent_combo.editTextChanged.connect(self._activate_area_save)
-        self.child_combo.editTextChanged.connect(self._activate_area_save)
-        area_group_layout.addWidget(self.save_area_btn, 2, 8)
+        self.modify_area_btn = QPushButton("修改")
+        self.modify_area_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        # self.save_area_btn.clicked.connect(self._save_area)
+        self.modify_area_btn.clicked.connect(self._open_area_dialog)
+        # self.parent_combo.editTextChanged.connect(self._activate_area_save)
+        # self.child_combo.editTextChanged.connect(self._activate_area_save)
+        self.child_combo.editTextChanged.connect(self._save_area)
+        area_group_layout.addWidget(self.modify_area_btn, 2, 8)
 
         area_group_layout.addWidget(QLabel("直播封面:"), 3, 0, 1, 1)
         self.cover_status = QLabel()
@@ -226,7 +229,12 @@ class StreamConfigPanel(QWidget):
         self.obs_auto_connect_checkbox.setChecked(False)
         self.obs_auto_live_checkbox.setChecked(False)
 
+    def enable_child_combo_autosave(self):
+        self._child_combo_autosave = True
+
     def update_child_combo(self, text):
+        if not self._child_combo_autosave:
+            self.child_combo.editTextChanged.disconnect(self._save_area)
         if text in config.area_options:
             self.child_combo.clear()
             self.child_combo.addItems(config.area_options[text])
@@ -234,9 +242,31 @@ class StreamConfigPanel(QWidget):
         else:
             self.child_combo.clear()
             self.child_combo.setEnabled(False)
+        if not self._child_combo_autosave:
+            self.child_combo.editTextChanged.connect(self._save_area)
 
+    @Slot()
+    def _open_area_dialog(self):
+
+        dlg = AreaPickerPanel(self, recent_pairs=[("网游", "命运方舟"),
+                                                  ("手游", "明日方舟")])
+        # 可选：设置默认选中
+        if self._valid_area():
+            dlg.set_initial_selection(self.parent_combo.currentText(),
+                                      self.child_combo.currentText())
+
+        def _apply(parent_text, child_text):
+            # 将选择结果写回你原先的控件/状态，然后沿用现有保存逻辑
+            self.parent_combo.setEditText(parent_text)
+            self.child_combo.setEditText(child_text)
+            self._activate_area_save()
+
+        dlg.selectionConfirmed.connect(_apply)
+        dlg.exec()
+
+    @Slot()
     def _activate_area_save(self):
-        self.save_area_btn.setEnabled(True)
+        self.modify_area_btn.setEnabled(True)
 
     def copy_address(self):
         QApplication.clipboard().setText(self.addr_input.text())
@@ -261,7 +291,7 @@ class StreamConfigPanel(QWidget):
         self.parent_window.tray_stop_live_action.setEnabled(True)
         # self.parent_combo.setEnabled(False)
         # self.child_combo.setEnabled(False)
-        self.save_area_btn.setEnabled(False)
+        # self.save_area_btn.setEnabled(False)
         if config.obs_settings.get("auto_connect",
                                    False) and config.obs_client is None:
             self.connect_btn.click()
@@ -321,6 +351,7 @@ class StreamConfigPanel(QWidget):
             if self.obs_auto_live_checkbox.isChecked():
                 config.obs_req_queue.put(("StartStream", {}))
 
+    @Slot()
     def _connect_obs(self):
         if config.obs_client is None and not config.obs_op:
             obs_host = self.host_input.text()
@@ -346,12 +377,15 @@ class StreamConfigPanel(QWidget):
             ObsDaemonWorker.disconnect_obs(self.obs_btn_state)
             self.obs_auto_live_checkbox.setEnabled(False)
 
+    @Slot()
     def _obs_btn_connecting(self):
         self.connect_btn.setText("连接中")
 
+    @Slot()
     def _obs_btn_connected(self):
         self.connect_btn.setText("断开")
 
+    @Slot()
     def _obs_btn_disconnected(self):
         self.connect_btn.setText("连接")
 
@@ -367,6 +401,7 @@ class StreamConfigPanel(QWidget):
                 f"审核未通过: {config.room_info['cover_audit_reason']}")
             self.cover_status.setStyleSheet("color: red")
 
+    @Slot()
     def _save_title(self):
         self.save_title_btn.setEnabled(False)
         title_updater = TitleUpdateWorker(self.title_input.text())
@@ -376,6 +411,7 @@ class StreamConfigPanel(QWidget):
             on_exception=partial(title_updater.on_exception, self)
         )
 
+    @Slot()
     def _edit_cover(self):
         if config.room_info["cover_status"] == 0:
             return
@@ -390,6 +426,7 @@ class StreamConfigPanel(QWidget):
         )
         self.cover_crop_widget.show()
 
+    @Slot()
     def _on_cover_exit(self):
         self.cover_edit_btn.setEnabled(True)
         with suppress(RuntimeError):
@@ -398,6 +435,7 @@ class StreamConfigPanel(QWidget):
             self.cover_crop_widget.deleteLater()
         self.cover_crop_widget = None
 
+    @Slot()
     def _save_announce(self):
         self.save_announce_btn.setEnabled(False)
         announce_updater = AnnounceUpdateWorker(self.announce_input.text())
@@ -414,9 +452,10 @@ class StreamConfigPanel(QWidget):
         return parent_choose in config.parent_area and self.child_combo.currentText() in \
             config.area_options[self.parent_combo.currentText()]
 
+    @Slot()
     def _save_area(self):
         if self._valid_area():
-            self.save_area_btn.setEnabled(False)
+            # self.save_area_btn.setEnabled(False)
             area_updater = AreaUpdateWorker(self.child_combo.currentText())
             self.parent_window.add_thread(
                 area_updater,

@@ -638,6 +638,7 @@ class MainWindow(SingleInstanceWindow):
             config.room_info.get("parent_area", "请选择"))
         self.panel.child_combo.setCurrentText(
             config.room_info.get("area", ""))
+        self.panel.enable_child_combo_autosave()
         self._start_http_server()
 
     @Slot()

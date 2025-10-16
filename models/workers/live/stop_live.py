@@ -57,7 +57,7 @@ class StopLiveWorker(BaseWorker):
         parent_window.parent_window.tray_stop_live_action.setEnabled(True)
         # parent_window.parent_combo.setEnabled(False)
         # parent_window.child_combo.setEnabled(False)
-        parent_window.save_area_btn.setEnabled(True)
+        parent_window.modify_area_btn.setEnabled(True)
 
     def on_finished(self):
         self._session.close()

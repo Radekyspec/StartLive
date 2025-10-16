@@ -53,4 +53,4 @@ class AreaUpdateWorker(BaseWorker):
     @staticmethod
     @Slot()
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
-        parent_window.save_area_btn.setEnabled(True)
+        parent_window.modify_area_btn.setEnabled(True)

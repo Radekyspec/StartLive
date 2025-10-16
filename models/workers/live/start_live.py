@@ -163,7 +163,7 @@ class StartLiveWorker(BaseWorker):
         parent_window.parent_window.tray_stop_live_action.setEnabled(False)
         # parent_window.parent_combo.setEnabled(True)
         # parent_window.child_combo.setEnabled(True)
-        parent_window.save_area_btn.setEnabled(True)
+        parent_window.modify_area_btn.setEnabled(True)
 
     @Slot()
     def on_finished(self, parent_window: "StreamConfigPanel" = None):
