@@ -229,8 +229,10 @@ class StreamConfigPanel(QWidget):
         self.obs_auto_connect_checkbox.setChecked(False)
         self.obs_auto_live_checkbox.setChecked(False)
 
-    def enable_child_combo_autosave(self):
-        self._child_combo_autosave = True
+    def enable_child_combo_autosave(self, enabled: bool) -> bool:
+        old = self._child_combo_autosave
+        self._child_combo_autosave = enabled
+        return old
 
     def update_child_combo(self, text):
         if not self._child_combo_autosave:
@@ -247,7 +249,7 @@ class StreamConfigPanel(QWidget):
 
     @Slot()
     def _open_area_dialog(self):
-
+        self.modify_area_btn.setEnabled(False)
         dlg = AreaPickerPanel(self, recent_pairs=[("网游", "命运方舟"),
                                                   ("手游", "明日方舟")])
         # 可选：设置默认选中
@@ -255,13 +257,16 @@ class StreamConfigPanel(QWidget):
             dlg.set_initial_selection(self.parent_combo.currentText(),
                                       self.child_combo.currentText())
 
+        @Slot()
         def _apply(parent_text, child_text):
             # 将选择结果写回你原先的控件/状态，然后沿用现有保存逻辑
+            enabled = self.enable_child_combo_autosave(False)
             self.parent_combo.setEditText(parent_text)
             self.child_combo.setEditText(child_text)
-            self._activate_area_save()
+            self.enable_child_combo_autosave(enabled)
 
         dlg.selectionConfirmed.connect(_apply)
+        dlg.finished.connect(self._activate_area_save)
         dlg.exec()
 
     @Slot()
