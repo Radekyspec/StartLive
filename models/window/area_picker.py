@@ -55,6 +55,7 @@ class AreaPickerPanel(QDialog):
         if recent_pairs:
             for p, c in recent_pairs:
                 btn = QPushButton(f"{p} - {c}")
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn.setCheckable(False)
                 btn.clicked.connect(
                     lambda _, pp=p, cc=c: self._quick_pick(pp, cc))
@@ -148,6 +149,7 @@ class AreaPickerPanel(QDialog):
         cols = len(parents)
         for i, name in enumerate(parents):
             btn = QPushButton(name)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setCheckable(True)
 
             # 固定大小，避免随文本伸缩
@@ -181,6 +183,7 @@ class AreaPickerPanel(QDialog):
         children = config.area_options.get(parent_text, [])
         for i, name in enumerate(children):
             btn = QPushButton(name)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setCheckable(True)
 
             btn.setFixedSize(self.CHILD_BTN_W, self.CHILD_BTN_H)
@@ -271,7 +274,6 @@ class AreaPickerPanel(QDialog):
                 self.child_layout.removeWidget(w)
 
     def _quick_pick(self, parent_text: str, child_text: str):
-        """从‘最近开播’快速选中一组。"""
         self._select_parent(parent_text)
         self._select_child(child_text)
 
