@@ -1,5 +1,5 @@
 from PySide6.QtCore import (
-    Qt, QRect, QPoint, QSize, QVariantAnimation, QEasingCurve, QTimer
+    Qt, QRect, QPoint, QSize, QVariantAnimation, QEasingCurve, QTimer, Signal, Slot
 )
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QGuiApplication
 from PySide6.QtWidgets import (
@@ -11,6 +11,7 @@ class CropLabel(QLabel):
     HANDLE_LENGTH = 20
     HANDLE_WIDTH = 8
     SNAP_MARGIN = 10
+    coverUpdated = Signal(QPixmap)
 
     def __init__(self, ratio: tuple[int, int], /, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -47,6 +48,7 @@ class CropLabel(QLabel):
         self._pending_dirty: QRect | None = None
 
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.coverUpdated.connect(self.setPixmap)
 
     def _current_screen(self):
         # 优先用窗口句柄的屏幕；退化到主屏
@@ -104,6 +106,7 @@ class CropLabel(QLabel):
         self._scaled_pixmap.setDevicePixelRatio(dpr)
         self._scaled_key = key
 
+    @Slot(QPixmap)
     def setPixmap(self, pixmap: QPixmap):
         pixmap.setDevicePixelRatio(self.devicePixelRatioF())
         self._orig_pixmap = pixmap

@@ -6,7 +6,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtWidgets import (
     QWidget, QPushButton, QFileDialog,
-    QGridLayout, QLabel,
+    QGridLayout, QLabel, QSizePolicy,
 )
 
 from models.widgets import CropLabel
@@ -14,6 +14,8 @@ from models.workers import CoverUploadWorker
 
 
 class CoverCropWidget(QWidget):
+    FOOTER_BTN_H = 30
+
     def __init__(self, parent_window: "StreamConfigPanel", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.parent_window = parent_window
@@ -24,6 +26,8 @@ class CoverCropWidget(QWidget):
         self.label = CropLabel((16, 9), self)
 
         btn_load = QPushButton("更换封面")
+        btn_load.setMinimumHeight(self.FOOTER_BTN_H)
+        btn_load.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         btn_load.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_load.clicked.connect(self.load_image)
 
@@ -37,7 +41,9 @@ class CoverCropWidget(QWidget):
         text_hint.setStyleSheet("font-size: 12pt")
 
         self.btn_upload = QPushButton("保存封面")
+        self.btn_upload.setMinimumHeight(self.FOOTER_BTN_H)
         self.btn_upload.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_upload.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.btn_upload.clicked.connect(self.save_crop)
 
         layout = QGridLayout(self)

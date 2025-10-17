@@ -27,5 +27,5 @@ class FetchCoverWorker(BaseWorker):
         pix = QPixmap()
         pix.loadFromData(config.room_info["cover_data"])
         config.room_info["cover_data"] = None
-        parent.label.setPixmap(pix)
+        parent.label.coverUpdated.emit(pix)
         self._session.close()
