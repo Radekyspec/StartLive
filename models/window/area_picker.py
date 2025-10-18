@@ -26,7 +26,6 @@ class AreaPickerPanel(QDialog):
     def __init__(self, /, parent: QWidget | None = None, *,
                  recent_pairs: list[tuple[str, str]] | None = None):
         super().__init__(parent)
-        print(recent_pairs)
         self.setWindowTitle("直播分区")
         self.setModal(True)
         self.setFixedSize(610, 520)
