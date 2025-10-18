@@ -233,17 +233,16 @@ class StreamConfigPanel(QWidget):
         return old
 
     def update_child_combo(self, text):
-        if not self._child_combo_autosave:
-            self.child_combo.editTextChanged.disconnect(self._save_area)
         if text in config.area_options:
+            _enabled = self.enable_child_combo_autosave(False)
             self.child_combo.clear()
             self.child_combo.addItems(config.area_options[text])
             self.child_combo.setEnabled(True)
+            self.enable_child_combo_autosave(_enabled)
+            self._save_area()
         else:
             self.child_combo.clear()
             self.child_combo.setEnabled(False)
-        if not self._child_combo_autosave:
-            self.child_combo.editTextChanged.connect(self._save_area)
 
     @Slot()
     def _open_area_dialog(self):
@@ -264,10 +263,10 @@ class StreamConfigPanel(QWidget):
         @Slot()
         def _apply(parent_text, child_text):
             # 将选择结果写回你原先的控件/状态，然后沿用现有保存逻辑
-            enabled = self.enable_child_combo_autosave(False)
-            self.parent_combo.setEditText(parent_text)
-            self.child_combo.setEditText(child_text)
-            self.enable_child_combo_autosave(enabled)
+            _enabled = self.enable_child_combo_autosave(False)
+            self.parent_combo.setCurrentText(parent_text)
+            self.enable_child_combo_autosave(_enabled)
+            self.child_combo.setCurrentText(child_text)
 
         dlg.selectionConfirmed.connect(_apply)
         dlg.finished.connect(self._activate_area_save)
@@ -464,7 +463,7 @@ class StreamConfigPanel(QWidget):
 
     @Slot()
     def _save_area(self):
-        if self._valid_area():
+        if self._valid_area() and self._child_combo_autosave:
             # self.save_area_btn.setEnabled(False)
             area_updater = AreaUpdateWorker(self.child_combo.currentText())
             self.parent_window.add_thread(
