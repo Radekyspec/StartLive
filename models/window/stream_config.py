@@ -19,10 +19,8 @@ from constant import CoverStatus
 from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
 from models.states import ObsBtnState, StreamState
-from models.window.area_picker import AreaPickerPanel
-from models.window.cover_crop import CoverCropWidget
+from models.window import AreaPickerPanel, CoverCropWidget
 from models.workers import *
-from models.workers.announce.announce_update import AnnounceUpdateWorker
 
 
 class StreamConfigPanel(QWidget):
@@ -250,8 +248,14 @@ class StreamConfigPanel(QWidget):
     @Slot()
     def _open_area_dialog(self):
         self.modify_area_btn.setEnabled(False)
-        dlg = AreaPickerPanel(self, recent_pairs=[("网游", "命运方舟"),
-                                                  ("手游", "明日方舟")])
+        dlg = AreaPickerPanel(self,
+                              recent_pairs=config.room_info["recent_areas"])
+        if not config.room_info["recent_areas"]:
+            update_recent = FetchRecentAreaWorker()
+            self.parent_window.add_thread(
+                update_recent,
+                on_finished=partial(update_recent.on_finished, dlg),
+            )
         # 可选：设置默认选中
         if self._valid_area():
             dlg.set_initial_selection(self.parent_combo.currentText(),
@@ -281,6 +285,7 @@ class StreamConfigPanel(QWidget):
 
     @Slot()
     def start_live(self):
+        config.room_info["recent_areas"].clear()
         self._start_live()
 
     @Slot()

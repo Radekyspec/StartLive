@@ -1,23 +1,29 @@
 # -*- coding: utf-8 -*-
-from PySide6.QtCore import Qt, Signal
+from functools import partial
+
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QGridLayout, QScrollArea, QFrame, QButtonGroup, QSizePolicy
 )
 
 import config
+from models.widgets import RecentAreaBar
 
 
 class AreaPickerPanel(QDialog):
     CHILD_COLS = 4  # 每行 4 个
     CHILD_BTN_W = 130
+    PARENT_BTN_W = 90
     CHILD_BTN_H = 36
     CHILD_H_GAP = 15
     CHILD_V_GAP = 20
+    PARENT_H_GAP = 62
     FOOTER_BTN_H = 30
     selectionConfirmed = Signal(str, str)  # parent, child
+    historyUpdated = Signal(object)
 
-    def __init__(self, parent: QWidget | None = None,
+    def __init__(self, /, parent: QWidget | None = None, *,
                  recent_pairs: list[tuple[str, str]] | None = None):
         super().__init__(parent)
         self.setWindowTitle("直播分区")
@@ -34,7 +40,7 @@ class AreaPickerPanel(QDialog):
         root = QVBoxLayout(self)
         root.setAlignment(Qt.AlignmentFlag.AlignTop)
         root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(10)
+        root.setSpacing(12)
 
         # 顶部：当前分区
         top_line = QHBoxLayout()
@@ -46,25 +52,15 @@ class AreaPickerPanel(QDialog):
         recent_wrap = QVBoxLayout()
         recent_row = QHBoxLayout()
         recent_row.addWidget(QLabel("最近开播："))
-        self.recent_container = QHBoxLayout()
-        self.recent_container.setSpacing(6)
-        recent_row.addLayout(self.recent_container, 1)
+
+        self.recent_bar = RecentAreaBar(self)
+        recent_row.addWidget(self.recent_bar, 1)
         recent_wrap.addLayout(recent_row)
         root.addLayout(recent_wrap)
-
-        if recent_pairs:
-            for p, c in recent_pairs:
-                btn = QPushButton(f"{p} - {c}")
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setCheckable(False)
-                btn.clicked.connect(
-                    lambda _, pp=p, cc=c: self._quick_pick(pp, cc))
-                self.recent_container.addWidget(btn)
-        else:
-            # 没有最近记录也保留结构
-            hint = QLabel("（无记录）")
-            hint.setEnabled(False)
-            self.recent_container.addWidget(hint)
+        self.recent_bar.pairSelected.connect(self._quick_pick)
+        if recent_pairs is not None:
+            self.recent_bar.set_recent_pairs(recent_pairs)
+        self.historyUpdated.connect(self.recent_bar.set_recent_pairs)
 
         # 搜索框
         search_row = QHBoxLayout()
@@ -85,8 +81,9 @@ class AreaPickerPanel(QDialog):
         parent_inner = QWidget()
         self.parent_layout = QGridLayout(parent_inner)
         self.parent_layout.setContentsMargins(0, 0, 0, 0)
+        self.parent_layout.setHorizontalSpacing(self.CHILD_H_GAP)
         parent_bar.setWidget(parent_inner)
-        parent_bar.setFixedHeight(int(self.CHILD_BTN_H + self.CHILD_H_GAP * 1.5))
+        parent_bar.setFixedHeight(self.PARENT_H_GAP)
         root.addWidget(parent_bar)
 
         self.parent_group = QButtonGroup(self)
@@ -96,12 +93,17 @@ class AreaPickerPanel(QDialog):
         child_area = QScrollArea()
         child_area.setWidgetResizable(True)
         child_area.setFrameShape(QFrame.Shape.NoFrame)
+        child_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        child_area.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.child_inner = QWidget()
         self.child_layout = QGridLayout(self.child_inner)
         self.child_layout.setHorizontalSpacing(self.CHILD_H_GAP)
         self.child_layout.setVerticalSpacing(self.CHILD_V_GAP)
         self.child_layout.setContentsMargins(0, 0, 0, 0)
-        self.child_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.child_layout.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
         child_area.setWidget(self.child_inner)
         root.addWidget(child_area, 1)
@@ -114,11 +116,15 @@ class AreaPickerPanel(QDialog):
         # bottom.addStretch(1)
         self.ok_btn = QPushButton("确认")
         self.ok_btn.setEnabled(False)
+        self.ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.ok_btn.setMinimumHeight(self.FOOTER_BTN_H)
-        self.ok_btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.ok_btn.setSizePolicy(QSizePolicy.Policy.Preferred,
+                                  QSizePolicy.Policy.Fixed)
         self.cancel_btn = QPushButton("取消")
         self.cancel_btn.setMinimumHeight(self.FOOTER_BTN_H)
-        self.cancel_btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cancel_btn.setSizePolicy(QSizePolicy.Policy.Preferred,
+                                      QSizePolicy.Policy.Fixed)
         bottom.addWidget(self.ok_btn)
         bottom.addWidget(self.cancel_btn)
         root.addLayout(bottom)
@@ -153,19 +159,20 @@ class AreaPickerPanel(QDialog):
             btn.setCheckable(True)
 
             # 固定大小，避免随文本伸缩
-            btn.setFixedSize(self.CHILD_BTN_W, self.CHILD_BTN_H)
-            btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            btn.setFixedSize(self.PARENT_BTN_W, self.CHILD_BTN_H)
+            btn.setSizePolicy(QSizePolicy.Policy.Fixed,
+                              QSizePolicy.Policy.Fixed)
 
             fm = btn.fontMetrics()
-            elided = fm.elidedText(name, Qt.TextElideMode.ElideRight, self.CHILD_BTN_W - 16)  # 预留一点左右 padding
+            elided = fm.elidedText(name, Qt.TextElideMode.ElideRight,
+                                   self.PARENT_BTN_W - 16)  # 预留一点左右 padding
             btn.setText(elided)
             btn.setToolTip(name)
 
             self.parent_group.addButton(btn)
             r, c = divmod(i, cols)
             self.parent_layout.addWidget(btn, r, c)
-            btn.clicked.connect(
-                lambda checked, t=name: self._on_parent_clicked(t))
+            btn.clicked.connect(partial(self._on_parent_clicked, name))
 
         if parents:
             self._select_parent(parents[0])
@@ -187,18 +194,19 @@ class AreaPickerPanel(QDialog):
             btn.setCheckable(True)
 
             btn.setFixedSize(self.CHILD_BTN_W, self.CHILD_BTN_H)
-            btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            btn.setSizePolicy(QSizePolicy.Policy.Fixed,
+                              QSizePolicy.Policy.Fixed)
 
             fm = btn.fontMetrics()
-            elided = fm.elidedText(name, Qt.TextElideMode.ElideRight, self.CHILD_BTN_W - 16)
+            elided = fm.elidedText(name, Qt.TextElideMode.ElideRight,
+                                   self.CHILD_BTN_W - 16)
             btn.setText(elided)
             btn.setToolTip(name)
 
             self.child_group.addButton(btn)
             r, c = divmod(i, self.CHILD_COLS)
             self.child_layout.addWidget(btn, r, c)
-            btn.clicked.connect(
-                lambda checked, t=name: self._on_child_clicked(t))
+            btn.clicked.connect(partial(self._on_child_clicked, name))
             self._all_child_buttons.append(btn)
 
         # 应用一次过滤（若搜索框里已有文字）
@@ -209,21 +217,24 @@ class AreaPickerPanel(QDialog):
         self._sync_current_label()
         self._update_ok_enabled()
 
+    @Slot(str)
     def _on_parent_clicked(self, parent_text: str):
         self._selected_parent = parent_text
         self._populate_children(parent_text)
         self._sync_current_label()
 
+    @Slot(str)
     def _on_child_clicked(self, child_text: str):
         self._selected_child = child_text
         self._sync_current_label()
         self._update_ok_enabled()
 
+    @Slot(str)
     def _apply_child_filter(self, keyword: str):
         kw = (keyword or "").strip()
 
-        def _match(btn):
-            return True if not kw else (kw in btn.text())
+        def _match(_btn):
+            return True if not kw else (kw in _btn.text())
 
         matched = []
         for btn in self._all_child_buttons:
@@ -238,7 +249,6 @@ class AreaPickerPanel(QDialog):
                     if self._selected_child == btn.text():
                         self._selected_child = None
 
-        # 按“匹配度 + 字典序”重排，初次进入 kw=='' 时会显示全部
         self._reflow_children(matched, kw)
 
         self._sync_current_label()
@@ -292,8 +302,8 @@ class AreaPickerPanel(QDialog):
                 break
 
     def _sync_current_label(self):
-        p = self._selected_parent or "-"
-        c = self._selected_child or "-"
+        p = self._selected_parent or ""
+        c = self._selected_child or ""
         self.current_label.setText(f"当前分区：{p} - {c}")
 
     def _update_ok_enabled(self):

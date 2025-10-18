@@ -28,9 +28,9 @@ from models.classes import ClickableLabel, SingleInstanceWindow
 from models.log import init_logger, get_logger, get_log_path
 from models.states import LoginState
 from models.widgets import *
-from models.window.face_qr import FaceQRWidget
-from models.window.log_viewer import LogViewer
+from models.window import *
 from models.window.settings_page import SettingsPage
+from models.window.stream_config import StreamConfigPanel
 from models.workers import *
 from models.workers.base import *
 from web_server import HttpServerWorker

@@ -55,6 +55,7 @@ _ROOM_INFO_INITIALIZATION = {
     "parent_area": "",
     "area": "",
     "announcement": "",
+    "recent_areas": []
 }
 
 # Queue to communicate with OBS in a separate thread
@@ -132,6 +133,7 @@ def scan_settings_default():
 
 
 def room_info_default():
+    _ROOM_INFO_INITIALIZATION["recent_areas"].clear()
     room_info.update(_ROOM_INFO_INITIALIZATION)
 
 

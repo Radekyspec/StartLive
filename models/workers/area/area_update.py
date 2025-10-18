@@ -53,4 +53,9 @@ class AreaUpdateWorker(BaseWorker):
     @staticmethod
     @Slot()
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
+        enabled = parent_window.enable_child_combo_autosave(False)
+        parent_window.parent_combo.setCurrentText(
+            config.room_info["parent_area"])
+        parent_window.child_combo.setCurrentText(config.room_info["area"])
+        parent_window.enable_child_combo_autosave(enabled)
         parent_window.modify_area_btn.setEnabled(True)
