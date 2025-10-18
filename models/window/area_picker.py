@@ -58,9 +58,10 @@ class AreaPickerPanel(QDialog):
         recent_wrap.addLayout(recent_row)
         root.addLayout(recent_wrap)
         self.recent_bar.pairSelected.connect(self._quick_pick)
+        self.recent_pairs = recent_pairs
         if recent_pairs is not None:
             self.recent_bar.set_recent_pairs(recent_pairs)
-        self.historyUpdated.connect(self.recent_bar.set_recent_pairs)
+        self.historyUpdated.connect(self.set_recent_pairs)
 
         # 搜索框
         search_row = QHBoxLayout()
@@ -72,6 +73,7 @@ class AreaPickerPanel(QDialog):
 
         # 父分区条（横向按钮组，可滚动）
         parent_bar = QScrollArea()
+        parent_bar.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         parent_bar.setWidgetResizable(True)
         parent_bar.setFrameShape(QFrame.Shape.NoFrame)
         parent_bar.setHorizontalScrollBarPolicy(
@@ -91,6 +93,7 @@ class AreaPickerPanel(QDialog):
 
         # 子分区网格（可滚动）
         child_area = QScrollArea()
+        child_area.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         child_area.setWidgetResizable(True)
         child_area.setFrameShape(QFrame.Shape.NoFrame)
         child_area.setHorizontalScrollBarPolicy(
@@ -117,12 +120,14 @@ class AreaPickerPanel(QDialog):
         self.ok_btn = QPushButton("确认")
         self.ok_btn.setEnabled(False)
         self.ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.ok_btn.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.ok_btn.setMinimumHeight(self.FOOTER_BTN_H)
         self.ok_btn.setSizePolicy(QSizePolicy.Policy.Preferred,
                                   QSizePolicy.Policy.Fixed)
         self.cancel_btn = QPushButton("取消")
         self.cancel_btn.setMinimumHeight(self.FOOTER_BTN_H)
         self.cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cancel_btn.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.cancel_btn.setSizePolicy(QSizePolicy.Policy.Preferred,
                                       QSizePolicy.Policy.Fixed)
         bottom.addWidget(self.ok_btn)
@@ -156,6 +161,7 @@ class AreaPickerPanel(QDialog):
         for i, name in enumerate(parents):
             btn = QPushButton(name)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
             btn.setCheckable(True)
 
             # 固定大小，避免随文本伸缩
@@ -191,6 +197,7 @@ class AreaPickerPanel(QDialog):
         for i, name in enumerate(children):
             btn = QPushButton(name)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
             btn.setCheckable(True)
 
             btn.setFixedSize(self.CHILD_BTN_W, self.CHILD_BTN_H)
@@ -226,8 +233,15 @@ class AreaPickerPanel(QDialog):
     @Slot(str)
     def _on_child_clicked(self, child_text: str):
         self._selected_child = child_text
+        self.recent_bar.select_recent(self._selected_parent,
+                                      self._selected_child)
         self._sync_current_label()
         self._update_ok_enabled()
+
+    @Slot(object)
+    def set_recent_pairs(self, pairs):
+        self.recent_pairs = list(pairs or [])
+        self.recent_bar.set_recent_pairs(pairs)
 
     @Slot(str)
     def _apply_child_filter(self, keyword: str):
@@ -239,6 +253,8 @@ class AreaPickerPanel(QDialog):
         matched = []
         for btn in self._all_child_buttons:
             ok = _match(btn)
+            if btn.hasFocus() and not ok:
+                self.search_edit.setFocus(Qt.FocusReason.TabFocusReason)
             btn.setVisible(ok)  # 视觉隐藏/显示
             if ok:
                 matched.append(btn)

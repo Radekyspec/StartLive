@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from functools import partial
 
-from PySide6.QtCore import Signal, Qt, Slot
+from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel, \
-    QSizePolicy, QStackedLayout
+    QSizePolicy, QStackedLayout, QButtonGroup
 
 
 class RecentAreaBar(QWidget):
@@ -14,6 +14,8 @@ class RecentAreaBar(QWidget):
         super().__init__(parent)
         self._pairs: list[tuple[str, str]] = []
         self._stack = QStackedLayout(self)
+        self._recent_group = QButtonGroup(self)
+        self._recent_group.setExclusive(True)
 
         empty_page = QWidget(self)
         e_layout = QHBoxLayout(empty_page)
@@ -31,8 +33,8 @@ class RecentAreaBar(QWidget):
         self._stack.addWidget(self._list_page)
 
         self._stack.setCurrentIndex(0)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-    @Slot(object)
     def set_recent_pairs(self, pairs):
         self._pairs = list(pairs or [])
         self._rebuild()
@@ -42,6 +44,7 @@ class RecentAreaBar(QWidget):
             item = self._list_layout.takeAt(0)
             w = item.widget()
             if w:
+                self._recent_group.removeButton(w)
                 w.deleteLater()
 
         if not self._pairs:
@@ -54,8 +57,20 @@ class RecentAreaBar(QWidget):
             btn.setSizePolicy(QSizePolicy.Policy.Preferred,
                               QSizePolicy.Policy.Fixed)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setCheckable(False)
+            btn.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+            btn.setCheckable(True)
+            self._recent_group.addButton(btn)
             btn.clicked.connect(partial(self.pairSelected.emit, p, c))
             self._list_layout.addWidget(btn)
 
         self._stack.setCurrentIndex(1)
+
+    def select_recent(self, parent: str, child: str):
+        self._recent_group.setExclusive(False)
+        for btn in self._recent_group.buttons():
+            if btn.text() == f"{parent} - {child}":
+                btn.setChecked(True)
+                break
+            else:
+                btn.setChecked(False)
+        self._recent_group.setExclusive(True)
