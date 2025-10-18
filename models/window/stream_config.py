@@ -216,8 +216,8 @@ class StreamConfigPanel(QWidget):
         self.parent_combo.currentTextChanged.connect(self.update_child_combo)
         self.copy_addr_btn.clicked.connect(self.copy_address)
         self.copy_key_btn.clicked.connect(self.copy_key)
-        self.start_btn.clicked.connect(self._start_live)
-        self.stop_btn.clicked.connect(self._stop_live)
+        self.start_btn.clicked.connect(self.start_live)
+        self.stop_btn.clicked.connect(self.stop_live)
 
     def reset_obs_settings(self):
         config.obs_settings_default()
