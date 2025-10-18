@@ -19,7 +19,7 @@ def get_log_path(*, is_makedir: bool = True) -> tuple[str, str]:
         base_dir = os.path.join(base_dir, "logs")
         log_path = os.path.join(base_dir, "StartLive.log")
     elif system() == "Linux":
-        base_dir = os.path.join(os.path.expanduser("~/.cache"), "StartLive",
+        base_dir = os.path.join(os.path.expanduser("~"), ".cache", "StartLive",
                                 "logs")
         log_path = os.path.join(base_dir, "StartLive.log")
     elif system() == "Darwin":
