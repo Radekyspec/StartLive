@@ -77,6 +77,10 @@ class MainWindow(SingleInstanceWindow):
         self._cred_deleted = False
         self._no_const_update = no_const_update
         self._base_path = base_path
+        self._base_title = f"StartLive 开播器 {VERSION}"
+        self._server_started = False
+        self._new_version_str = None
+
         self._thread_pool = QThreadPool()
         self._current_cookie_idx = 0
         self._cookie_index_len = len(
@@ -86,7 +90,7 @@ class MainWindow(SingleInstanceWindow):
         self._ll_workers = []
         self._worker_typeset = set()
         self.logger.info("Thread Pool initialized.")
-        self.setWindowTitle(f"StartLive 开播器 {VERSION}")
+        self.setWindowTitle(self._base_title)
         self._color_scheme = None
         self._stack = QStackedWidget(self)
         self._side_bar = SideBar(self, expanded_width=100, collapsed_width=56,
@@ -314,9 +318,8 @@ class MainWindow(SingleInstanceWindow):
     def _start_http_server(self):
         if self._server_thread is not None and not self._server_started:
             self._server_thread.start()
-            self.setWindowTitle(
-                self.windowTitle() + " - Web服务已开启")
             self._server_started = True
+            self._rebuild_title()
 
     def _stop_http_server(self):
         """This function should only be called once
@@ -326,17 +329,30 @@ class MainWindow(SingleInstanceWindow):
             self._server_thread.stop()
             self._server_thread.quit()
             self._server_started = False
+            self._rebuild_title()
 
     @Slot(Exception)
     def _http_error_handler(self, e: Exception):
         QMessageBox.critical(self, f"Web服务线程错误",
                              repr(e))
-        self.setWindowTitle(f"StartLive 开播器 {VERSION}")
         self._stop_http_server()
 
     @Slot(str)
     def _new_version_hint(self, new_version: str):
-        self.setWindowTitle(f"有新版本可用: {new_version} - " + self.windowTitle())
+        self._new_version_str = new_version
+        self._rebuild_title()
+
+    def _rebuild_title(self):
+        if self._new_version_str:
+            _new_version_title = f"有新版本可用: {self._new_version_str} - "
+        else:
+            _new_version_title = ""
+        if self._server_started:
+            _web_server_title = " - Web服务已开启"
+        else:
+            _web_server_title = ""
+        self.setWindowTitle(
+            f"{_new_version_title}{self._base_title}{_web_server_title}")
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.WindowStateChange:
