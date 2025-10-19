@@ -9,3 +9,4 @@ class LoginState(QObject):
     qrExpired = Signal()
     qrNotConfirmed = Signal()
     qrScanned = Signal()
+    versionChecked = Signal(str)

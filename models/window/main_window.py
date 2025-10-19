@@ -234,6 +234,7 @@ class MainWindow(SingleInstanceWindow):
         self._login_state.qrScanned.connect(self._post_scan_setup)
         self._login_state.qrExpired.connect(self._qr_expired)
         self._login_state.qrNotConfirmed.connect(self._qr_not_confirmed)
+        self._login_state.versionChecked.connect(self._new_version_hint)
 
         self.logger.info("StreamConfig initialized.")
         # Styling and alignment
@@ -295,6 +296,9 @@ class MainWindow(SingleInstanceWindow):
             const_updater = ConstantUpdateWorker(self._login_state)
             self.add_thread(const_updater,
                             on_finished=const_updater.on_finished)
+            version_check = VersionCheckerWorker(self._login_state)
+            self.add_thread(version_check,
+                            on_finished=version_check.on_finished)
 
     def _init_http_server(self):
         self._server_started = False
@@ -329,6 +333,10 @@ class MainWindow(SingleInstanceWindow):
                              repr(e))
         self.setWindowTitle(f"StartLive 开播器 {VERSION}")
         self._stop_http_server()
+
+    @Slot(str)
+    def _new_version_hint(self, new_version: str):
+        self.setWindowTitle(f"有新版本可用: {new_version} - " + self.windowTitle())
 
     def changeEvent(self, event):
         if event.type() == QEvent.Type.WindowStateChange:
