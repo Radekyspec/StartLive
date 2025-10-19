@@ -52,10 +52,16 @@ class RecentAreaBar(QWidget):
             return
 
         for p, c in self._pairs:
-            btn = QPushButton(f"{p} - {c}", self)
+            name = f"{p} - {c}"
+            btn = QPushButton(name, self)
             btn.setMinimumHeight(self.CHILD_BTN_H)
             btn.setSizePolicy(QSizePolicy.Policy.Preferred,
                               QSizePolicy.Policy.Fixed)
+            fm = btn.fontMetrics()
+            elided = fm.elidedText(name, Qt.TextElideMode.ElideRight,
+                                   140)
+            btn.setText(elided)
+            btn.setToolTip(name)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
             btn.setCheckable(True)
