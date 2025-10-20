@@ -233,8 +233,6 @@ class AreaPickerPanel(QDialog):
     @Slot(str)
     def _on_child_clicked(self, child_text: str):
         self._selected_child = child_text
-        self.recent_bar.select_recent(self._selected_parent,
-                                      self._selected_child)
         self._sync_current_label()
         self._update_ok_enabled()
 
@@ -248,7 +246,7 @@ class AreaPickerPanel(QDialog):
         kw = (keyword or "").strip()
 
         def _match(_btn):
-            return True if not kw else (kw in _btn.text())
+            return True if not kw else (kw in _btn.toolTip())
 
         matched = []
         for btn in self._all_child_buttons:
@@ -262,7 +260,7 @@ class AreaPickerPanel(QDialog):
                 # 如果被隐藏的是当前选中按钮，清理选择，避免“已选但不可见”
                 if btn.isChecked():
                     btn.setChecked(False)
-                    if self._selected_child == btn.text():
+                    if self._selected_child == btn.toolTip():
                         self._selected_child = None
 
         self._reflow_children(matched, kw)
@@ -320,6 +318,8 @@ class AreaPickerPanel(QDialog):
     def _sync_current_label(self):
         p = self._selected_parent or ""
         c = self._selected_child or ""
+        self.recent_bar.select_recent(self._selected_parent,
+                                      self._selected_child)
         self.current_label.setText(f"当前分区：{p} - {c}")
 
     def _update_ok_enabled(self):

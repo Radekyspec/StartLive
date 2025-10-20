@@ -262,7 +262,6 @@ class StreamConfigPanel(QWidget):
 
         @Slot()
         def _apply(parent_text, child_text):
-            # 将选择结果写回你原先的控件/状态，然后沿用现有保存逻辑
             _enabled = self.enable_child_combo_autosave(False)
             self.parent_combo.setCurrentText(parent_text)
             self.enable_child_combo_autosave(_enabled)

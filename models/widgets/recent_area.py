@@ -74,9 +74,8 @@ class RecentAreaBar(QWidget):
     def select_recent(self, parent: str, child: str):
         self._recent_group.setExclusive(False)
         for btn in self._recent_group.buttons():
-            if btn.text() == f"{parent} - {child}":
+            if btn.toolTip() == f"{parent} - {child}":
                 btn.setChecked(True)
-                break
             else:
                 btn.setChecked(False)
         self._recent_group.setExclusive(True)
