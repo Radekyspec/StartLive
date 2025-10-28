@@ -1,7 +1,7 @@
 # module import
 from json import loads
 from os import makedirs
-from os.path import join, isdir, expanduser, abspath
+from os.path import join, expanduser, abspath, exists
 from platform import system
 
 # package import
@@ -62,7 +62,7 @@ class ConstantUpdateWorker(BaseWorker):
         app_state.scan_status["const_updated"] = True
 
     def _load_from_file(self):
-        if not isdir(self._base_dir):
+        if not exists(self._const_path):
             return
         with open(self._const_path, "r", encoding="utf-8") as f:
             self._update_const(loads(f.read()))
