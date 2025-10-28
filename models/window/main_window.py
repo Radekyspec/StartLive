@@ -246,8 +246,7 @@ class MainWindow(SingleInstanceWindow):
             self.logger.info("Constant update disabled.")
             app_state.scan_status["const_updated"] = True
         elif not app_state.scan_status["const_updated"]:
-            const_updater = ConstantUpdateWorker(self._login_state,
-                                                 self._base_path)
+            const_updater = ConstantUpdateWorker(self._login_state)
             self.add_thread(const_updater,
                             on_finished=const_updater.on_finished)
             version_check = VersionCheckerWorker(self._login_state)

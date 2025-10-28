@@ -1,7 +1,8 @@
 # module import
 from json import loads
 from os import makedirs
-from os.path import join, isdir
+from os.path import join, isdir, expanduser, abspath
+from platform import system
 
 # package import
 from PySide6.QtCore import Slot
@@ -16,12 +17,33 @@ from models.workers.base import BaseWorker, run_wrapper
 
 
 class ConstantUpdateWorker(BaseWorker):
-    def __init__(self, state: LoginState, base_dir: str):
+    def __init__(self, state: LoginState):
         super().__init__(name="配置更新")
         self._state = state
-        self._base_dir = join(base_dir, "config")
         self.logger = get_logger(self.__class__.__name__)
+        self._get_const_path()
         self._session.cookies.clear()
+
+    def _get_const_path(self, *, is_makedir: bool = True) -> None:
+        if (_arch := system()) == "Windows":
+            try:
+                self._base_dir = abspath(__compiled__.containing_dir)
+            except NameError:
+                self._base_dir = abspath(".")
+            self._base_dir = join(self._base_dir, "config")
+            self._const_path = join(self._base_dir, "version.json")
+        elif _arch == "Linux":
+            self._base_dir = join(expanduser("~"), ".cache", "StartLive",
+                                  "config")
+            self._const_path = join(self._base_dir, "version.json")
+        elif _arch == "Darwin":
+            self._base_dir = join(expanduser("~"), "Library",
+                                  "Application Support", "StartLive")
+            self._const_path = join(self._base_dir, "version.json")
+        else:
+            raise ValueError("Unsupported system")
+        if is_makedir:
+            makedirs(self._base_dir, exist_ok=True)
 
     @Slot()
     @run_wrapper
@@ -42,14 +64,11 @@ class ConstantUpdateWorker(BaseWorker):
     def _load_from_file(self):
         if not isdir(self._base_dir):
             return
-        with open(join(self._base_dir, "version.json"), "r",
-                  encoding="utf-8") as f:
+        with open(self._const_path, "r", encoding="utf-8") as f:
             self._update_const(loads(f.read()))
 
     def _save_to_file(self, response):
-        makedirs(self._base_dir, exist_ok=True)
-        with open(join(self._base_dir, "version.json"), "w",
-                  encoding="utf-8") as f:
+        with open(self._const_path, "w", encoding="utf-8") as f:
             f.write(dumps(response))
 
     @staticmethod
