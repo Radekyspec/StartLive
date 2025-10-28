@@ -11,18 +11,18 @@ from .handler import QSignalLogHandler
 
 
 def get_log_path(*, is_makedir: bool = True) -> tuple[str, str]:
-    if system() == "Windows":
+    if (_arch := system()) == "Windows":
         try:
             base_dir = os.path.abspath(__compiled__.containing_dir)
         except NameError:
             base_dir = os.path.abspath(".")
         base_dir = os.path.join(base_dir, "logs")
         log_path = os.path.join(base_dir, "StartLive.log")
-    elif system() == "Linux":
+    elif _arch == "Linux":
         base_dir = os.path.join(os.path.expanduser("~"), ".cache", "StartLive",
                                 "logs")
         log_path = os.path.join(base_dir, "StartLive.log")
-    elif system() == "Darwin":
+    elif _arch == "Darwin":
         base_dir = os.path.join(os.path.expanduser("~"), "Library", "Logs",
                                 "StartLive")
         log_path = os.path.join(base_dir, "StartLive.log")

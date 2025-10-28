@@ -241,6 +241,17 @@ class MainWindow(SingleInstanceWindow):
         self._login_state.versionChecked.connect(self._new_version_hint)
 
         self.logger.info("StreamConfig initialized.")
+        if self._no_const_update:
+            self.logger.info("Constant update disabled.")
+            config.scan_status["const_updated"] = True
+        elif not config.scan_status["const_updated"]:
+            print(123)
+            const_updater = ConstantUpdateWorker(self._login_state, self._base_path)
+            self.add_thread(const_updater,
+                            on_finished=const_updater.on_finished)
+            version_check = VersionCheckerWorker(self._login_state)
+            self.add_thread(version_check,
+                            on_finished=version_check.on_finished)
         # Styling and alignment
         for label in [self.login_label, self.status_label]:
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -293,16 +304,6 @@ class MainWindow(SingleInstanceWindow):
                                             self, self._login_state))
 
         self.face_window: Optional[FaceQRWidget] = None
-        if self._no_const_update:
-            self.logger.info("Constant update disabled.")
-            config.scan_status["const_updated"] = True
-        else:
-            const_updater = ConstantUpdateWorker(self._login_state)
-            self.add_thread(const_updater,
-                            on_finished=const_updater.on_finished)
-            version_check = VersionCheckerWorker(self._login_state)
-            self.add_thread(version_check,
-                            on_finished=version_check.on_finished)
 
     def _init_http_server(self):
         self._server_started = False

@@ -35,7 +35,7 @@ _SCAN_STATUS_INITIALIZATION = {
     "cred_loaded": False,
     "timeout": False, "wait_for_confirm": False,
     "area_updated": False, "room_updated": False,
-    "const_updated": True, "announce_updated": False
+    "const_updated": False, "announce_updated": False
 }
 _STREAM_STATUS_INITIALIZATION = {
     "live_status": False,
@@ -130,6 +130,7 @@ def app_settings_default():
 
 def scan_settings_default():
     scan_status.update(_SCAN_STATUS_INITIALIZATION)
+    scan_status["const_updated"] = True
 
 
 def room_info_default():
