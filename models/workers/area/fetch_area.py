@@ -2,7 +2,7 @@
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 from models.log import get_logger
 from models.states import LoginState
 from models.workers.base import BaseWorker, run_wrapper
@@ -25,12 +25,13 @@ class FetchAreaWorker(BaseWorker):
         self.logger.info("Area/getList Response")
         response = response.json()
         for area_info in response["data"]["area_v1_info"]:
-            config.parent_area.append(area_info["name"])
-            config.area_options[area_info["name"]] = []
+            app_state.parent_area.append(area_info["name"])
+            app_state.area_options[area_info["name"]] = []
             for sub_area in area_info["list"]:
-                config.area_codes[sub_area["name"]] = sub_area["id"]
-                config.area_options[area_info["name"]].append(sub_area["name"])
-        config.scan_status["area_updated"] = True
+                app_state.area_codes[sub_area["name"]] = sub_area["id"]
+                app_state.area_options[area_info["name"]].append(
+                    sub_area["name"])
+        app_state.scan_status["area_updated"] = True
 
     @Slot()
     def on_finished(self):

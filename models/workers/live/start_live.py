@@ -5,7 +5,7 @@ from PySide6.QtCore import Slot, QMutex, QWaitCondition, QMutexLocker
 from PySide6.QtWidgets import QMessageBox
 
 # local package import
-import config
+import app_state
 import constant
 from constant import PreferProto
 from exceptions import StartLiveError
@@ -32,14 +32,14 @@ class StartLiveWorker(BaseWorker):
         match self._live_result:
             case 0 | 1:
                 with QMutexLocker(self._mutex):
-                    while config.obs_connecting:
+                    while app_state.obs_connecting:
                         self._cond.wait(self._mutex)
                 self.state.addressUpdated.emit(
-                    config.stream_status["stream_addr"],
-                    config.stream_status["stream_key"])
+                    app_state.stream_status["stream_addr"],
+                    app_state.stream_status["stream_key"])
             case 60024:
                 self.state.faceRequired.emit(
-                    config.stream_status["face_url"])
+                    app_state.stream_status["face_url"])
 
     @classmethod
     def start_live(cls, session, area) -> int:
@@ -50,21 +50,21 @@ class StartLiveWorker(BaseWorker):
             logger.info("startLive sign with csrf")
             live_data = livehime_sign({
                 "area_v2": area,
-                "csrf_token": config.cookies_dict["bili_jct"],
-                "csrf": config.cookies_dict["bili_jct"],
-                "room_id": config.room_info["room_id"],
+                "csrf_token": app_state.cookies_dict["bili_jct"],
+                "csrf": app_state.cookies_dict["bili_jct"],
+                "room_id": app_state.room_info["room_id"],
                 "type": 2,
             })
         else:
             logger.info("startLive sign without csrf")
             live_data = livehime_sign({
-                "room_id": config.room_info["room_id"],
+                "room_id": app_state.room_info["room_id"],
                 "area_v2": area,
                 "type": 2,
             })
             live_data.update({
-                "csrf_token": config.cookies_dict["bili_jct"],
-                "csrf": config.cookies_dict["bili_jct"]
+                "csrf_token": app_state.cookies_dict["bili_jct"],
+                "csrf": app_state.cookies_dict["bili_jct"]
             })
             live_data = order_payload(live_data)
         logger.info(f"startLive Request")
@@ -88,7 +88,7 @@ class StartLiveWorker(BaseWorker):
                         return -1
             case 60024:
                 logger.warning(f"startLive Response face auth: {response}")
-                config.stream_status.update({
+                app_state.stream_status.update({
                     "required_face": True,
                     "face_url": response["data"]["qr"]
                 })
@@ -99,35 +99,35 @@ class StartLiveWorker(BaseWorker):
 
     @staticmethod
     def parse_live_addr(response):
-        prefer_proto = config.app_settings.get("prefer_proto",
-                                               PreferProto.RTMP)
+        prefer_proto = app_state.app_settings.get("prefer_proto",
+                                                  PreferProto.RTMP)
         srt_protos = [d for d in response["data"]["protocols"]
                       if
                       isinstance(d.get("protocol", ""), str) and "srt" in d.get(
                           "protocol", "").casefold()]
         match prefer_proto:
             case PreferProto.RTMP:
-                config.stream_status.update({
+                app_state.stream_status.update({
                     "stream_addr": response["data"]["rtmp"]["addr"],
                     "stream_key": response["data"]["rtmp"]["code"]
                 })
                 return 0
             case PreferProto.SRT_FALLBACK_RTMP:
                 if srt_protos:
-                    config.stream_status.update({
+                    app_state.stream_status.update({
                         "stream_addr": srt_protos[0]["addr"],
                         "stream_key": srt_protos[0]["code"]
                     })
                     return 0
                 else:
-                    config.stream_status.update({
+                    app_state.stream_status.update({
                         "stream_addr": response["data"]["rtmp"]["addr"],
                         "stream_key": response["data"]["rtmp"]["code"]
                     })
                     return 1
             case PreferProto.SRT_ONLY:
                 if srt_protos:
-                    config.stream_status.update({
+                    app_state.stream_status.update({
                         "stream_addr": srt_protos[0]["addr"],
                         "stream_key": srt_protos[0]["code"]
                     })
@@ -144,8 +144,8 @@ class StartLiveWorker(BaseWorker):
             "backup_stream": 0,
         })
         stream_data.update({
-            "csrf_token": config.cookies_dict["bili_jct"],
-            "csrf": config.cookies_dict["bili_jct"]
+            "csrf_token": app_state.cookies_dict["bili_jct"],
+            "csrf": app_state.cookies_dict["bili_jct"]
         })
         stream_data = order_payload(stream_data)
         response = self._session.post(stream_url, data=stream_data)

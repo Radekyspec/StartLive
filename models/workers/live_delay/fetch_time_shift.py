@@ -4,7 +4,7 @@ from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import QLineEdit
 
 # local package import
-import config
+import app_state
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign
@@ -24,9 +24,9 @@ class FetchStreamTimeShiftWorker(BaseWorker):
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/upStreamConfig/GetAnchorSelfStreamTimeShift"
         self.logger.info(f"AnchorSelfStreamTimeShift Request")
         response = self._session.get(url, params=livehime_sign({
-            "csrf": config.cookies_dict["bili_jct"],
-            "csrf_token": config.cookies_dict["bili_jct"],
-            "room_id": config.room_info["room_id"],
+            "csrf": app_state.cookies_dict["bili_jct"],
+            "csrf_token": app_state.cookies_dict["bili_jct"],
+            "room_id": app_state.room_info["room_id"],
         }))
         response.encoding = "utf-8"
         self.logger.info("AnchorSelfStreamTimeShift Response")

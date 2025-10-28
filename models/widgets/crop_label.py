@@ -1,5 +1,6 @@
 from PySide6.QtCore import (
-    Qt, QRect, QPoint, QSize, QVariantAnimation, QEasingCurve, QTimer, Signal, Slot
+    Qt, QRect, QPoint, QSize, QVariantAnimation, QEasingCurve, QTimer, Signal,
+    Slot
 )
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QGuiApplication
 from PySide6.QtWidgets import (

@@ -3,7 +3,7 @@ from typing import Optional, Callable
 from PySide6.QtCore import QRunnable, QObject, Signal
 from requests import Session
 
-from config import create_session
+from app_state import create_session
 
 
 class BaseWorker(QRunnable):

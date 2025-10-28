@@ -6,7 +6,7 @@ from time import sleep
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 from models.log import get_logger
 from models.workers.base import LongLiveWorker, run_wrapper
 
@@ -21,10 +21,10 @@ class FaceAuthWorker(LongLiveWorker):
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/IsUserIdentifiedByFaceAuth"
         verify_data = {
-            "room_id": config.room_info["room_id"],
+            "room_id": app_state.room_info["room_id"],
             "face_auth_code": "60024",
-            "csrf_token": config.cookies_dict["bili_jct"],
-            "csrf": config.cookies_dict["bili_jct"],
+            "csrf_token": app_state.cookies_dict["bili_jct"],
+            "csrf": app_state.cookies_dict["bili_jct"],
             "visit_id": "",
         }
         verified = False

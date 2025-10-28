@@ -2,7 +2,7 @@
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 import constant
 from exceptions import StopLiveError
 from models.log import get_logger
@@ -24,19 +24,19 @@ class StopLiveWorker(BaseWorker):
         if constant.STOP_LIVE_AUTH_CSRF:
             self.logger.info("stopLive sign with csrf")
             stop_data = livehime_sign({
-                "csrf_token": config.cookies_dict["bili_jct"],
-                "csrf": config.cookies_dict["bili_jct"],
-                "room_id": config.room_info["room_id"],
+                "csrf_token": app_state.cookies_dict["bili_jct"],
+                "csrf": app_state.cookies_dict["bili_jct"],
+                "room_id": app_state.room_info["room_id"],
             })
         else:
             self.logger.info("stopLive sign without csrf")
             stop_data = livehime_sign({
-                "room_id": config.room_info["room_id"],
+                "room_id": app_state.room_info["room_id"],
             })
 
             stop_data.update({
-                "csrf_token": config.cookies_dict["bili_jct"],
-                "csrf": config.cookies_dict["bili_jct"]
+                "csrf_token": app_state.cookies_dict["bili_jct"],
+                "csrf": app_state.cookies_dict["bili_jct"]
             })
             stop_data = order_payload(stop_data)
         self.logger.info(f"stopLive Request")

@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QApplication, QFrame)
 
 # local package import
-import config
+import app_state
 from constant import CoverStatus
 from models.classes import FocusAwareLineEdit, \
     CompletionComboBox
@@ -46,20 +46,20 @@ class StreamConfigPanel(QWidget):
         self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         def _addr_save():
-            config.obs_settings["ip_addr"] = self.host_input.text()
+            app_state.obs_settings["ip_addr"] = self.host_input.text()
 
         def _port_save():
-            config.obs_settings["port"] = self.port_input.text()
+            app_state.obs_settings["port"] = self.port_input.text()
 
         def _password_save():
-            config.obs_settings["password"] = self.pass_input.text()
+            app_state.obs_settings["password"] = self.pass_input.text()
 
         def _auto_live_save():
-            config.obs_settings[
+            app_state.obs_settings[
                 "auto_live"] = self.obs_auto_live_checkbox.isChecked()
 
         def _auto_connect_save():
-            config.obs_settings[
+            app_state.obs_settings[
                 "auto_connect"] = self.obs_auto_connect_checkbox.isChecked()
 
         # 顶部区域：OBS 连接信息
@@ -169,7 +169,7 @@ class StreamConfigPanel(QWidget):
         area_group_layout.addWidget(self.save_announce_btn, 1, 8)
 
         area_group_layout.addWidget(QLabel("分区选择:"), 2, 0, 1, 1)
-        self.parent_combo = CompletionComboBox(config.parent_area)
+        self.parent_combo = CompletionComboBox(app_state.parent_area)
         # self.parent_combo.addItems(config.parent_area)
         area_group_layout.addWidget(self.parent_combo, 2, 1, 1, 3)
         self._child_combo_autosave = False
@@ -220,10 +220,10 @@ class StreamConfigPanel(QWidget):
         self.stop_btn.clicked.connect(self.stop_live)
 
     def reset_obs_settings(self):
-        config.obs_settings_default()
-        self.host_input.setText(config.obs_settings["ip_addr"])
-        self.port_input.setText(config.obs_settings["port"])
-        self.pass_input.setText(config.obs_settings["password"])
+        app_state.obs_settings_default()
+        self.host_input.setText(app_state.obs_settings["ip_addr"])
+        self.port_input.setText(app_state.obs_settings["port"])
+        self.pass_input.setText(app_state.obs_settings["password"])
         self.obs_auto_connect_checkbox.setChecked(False)
         self.obs_auto_live_checkbox.setChecked(False)
 
@@ -233,10 +233,10 @@ class StreamConfigPanel(QWidget):
         return old
 
     def update_child_combo(self, text):
-        if text in config.area_options:
+        if text in app_state.area_options:
             _enabled = self.enable_child_combo_autosave(False)
             self.child_combo.clear()
-            self.child_combo.addItems(config.area_options[text])
+            self.child_combo.addItems(app_state.area_options[text])
             self.child_combo.setEnabled(True)
             self.enable_child_combo_autosave(_enabled)
             self._save_area()
@@ -248,8 +248,8 @@ class StreamConfigPanel(QWidget):
     def _open_area_dialog(self):
         self.modify_area_btn.setEnabled(False)
         dlg = AreaPickerPanel(self,
-                              recent_pairs=config.room_info["recent_areas"])
-        if not config.room_info["recent_areas"]:
+                              recent_pairs=app_state.room_info["recent_areas"])
+        if not app_state.room_info["recent_areas"]:
             update_recent = FetchRecentAreaWorker()
             self.parent_window.add_thread(
                 update_recent,
@@ -283,7 +283,7 @@ class StreamConfigPanel(QWidget):
 
     @Slot()
     def start_live(self):
-        config.room_info["recent_areas"].clear()
+        app_state.room_info["recent_areas"].clear()
         self._start_live()
 
     @Slot()
@@ -300,12 +300,12 @@ class StreamConfigPanel(QWidget):
         # self.parent_combo.setEnabled(False)
         # self.child_combo.setEnabled(False)
         # self.save_area_btn.setEnabled(False)
-        if config.obs_settings.get("auto_connect",
-                                   False) and config.obs_client is None:
+        if app_state.obs_settings.get("auto_connect",
+                                      False) and app_state.obs_client is None:
             self.connect_btn.click()
-        area_code = config.area_codes[self.child_combo.currentText()]
-        config.room_info["parent_area"] = self.parent_combo.currentText()
-        config.room_info["area"] = self.child_combo.currentText()
+        area_code = app_state.area_codes[self.child_combo.currentText()]
+        app_state.room_info["parent_area"] = self.parent_combo.currentText()
+        app_state.room_info["area"] = self.child_combo.currentText()
         start_live_worker = StartLiveWorker(self.stream_state,
                                             mutex=self._mutex, cond=self._cond,
                                             area=area_code)
@@ -324,13 +324,13 @@ class StreamConfigPanel(QWidget):
         self.parent_window.tray_stop_live_action.setEnabled(False)
         # self.parent_combo.setEnabled(True)
         # self.child_combo.setEnabled(True)
-        config.stream_status["stream_key"] = None
-        config.stream_status["stream_addr"] = None
+        app_state.stream_status["stream_key"] = None
+        app_state.stream_status["stream_addr"] = None
         self.addr_input.setText("")
         self.key_input.setText("")
-        if config.obs_client is not None:
+        if app_state.obs_client is not None:
             if self.obs_auto_live_checkbox.isChecked():
-                config.obs_req_queue.put(("StopStream", {}))
+                app_state.obs_req_queue.put(("StopStream", {}))
         stop_live_worker = StopLiveWorker()
         self.parent_window.add_thread(
             stop_live_worker,
@@ -339,15 +339,15 @@ class StreamConfigPanel(QWidget):
         )
 
     def fill_stream_info(self, addr: str, key: str):
-        if config.obs_connecting:
+        if app_state.obs_connecting:
             return
         self.addr_input.setText(
             str(addr))
         self.key_input.setText(
             str(key))
 
-        if config.obs_client is not None:
-            config.obs_req_queue.put(("SetStreamServiceSettings", {
+        if app_state.obs_client is not None:
+            app_state.obs_req_queue.put(("SetStreamServiceSettings", {
                 "streamServiceType": "rtmp_custom",
                 "streamServiceSettings": {
                     "bwtest": False,
@@ -357,11 +357,11 @@ class StreamConfigPanel(QWidget):
                 }
             }))
             if self.obs_auto_live_checkbox.isChecked():
-                config.obs_req_queue.put(("StartStream", {}))
+                app_state.obs_req_queue.put(("StartStream", {}))
 
     @Slot()
     def _connect_obs(self):
-        if config.obs_client is None and not config.obs_op:
+        if app_state.obs_client is None and not app_state.obs_op:
             obs_host = self.host_input.text()
             try:
                 ip_object = ip_address(obs_host)
@@ -381,7 +381,7 @@ class StreamConfigPanel(QWidget):
                 on_exception=partial(connector.on_exception, self,
                                      self.obs_btn_state)
             )
-        elif config.obs_client is not None and not config.obs_op:
+        elif app_state.obs_client is not None and not app_state.obs_op:
             ObsDaemonWorker.disconnect_obs(self.obs_btn_state)
             self.obs_auto_live_checkbox.setEnabled(False)
 
@@ -398,15 +398,16 @@ class StreamConfigPanel(QWidget):
         self.connect_btn.setText("连接")
 
     def cover_audit_state(self):
-        if config.room_info["cover_status"] == CoverStatus.AUDIT_PASSED:
+        if app_state.room_info["cover_status"] == CoverStatus.AUDIT_PASSED:
             self.cover_status.setText("审核通过~")
             self.cover_status.setStyleSheet("color: green")
-        elif config.room_info["cover_status"] == CoverStatus.AUDIT_IN_PROGRESS:
+        elif app_state.room_info[
+            "cover_status"] == CoverStatus.AUDIT_IN_PROGRESS:
             self.cover_status.setText("审核中...可以先行开播喔~")
             self.cover_status.setStyleSheet("color: orange")
-        elif config.room_info["cover_status"] == CoverStatus.AUDIT_FAILED:
+        elif app_state.room_info["cover_status"] == CoverStatus.AUDIT_FAILED:
             self.cover_status.setText(
-                f"审核未通过: {config.room_info['cover_audit_reason']}")
+                f"审核未通过: {app_state.room_info['cover_audit_reason']}")
             self.cover_status.setStyleSheet("color: red")
 
     @Slot()
@@ -421,7 +422,7 @@ class StreamConfigPanel(QWidget):
 
     @Slot()
     def _edit_cover(self):
-        if config.room_info["cover_status"] == 0:
+        if app_state.room_info["cover_status"] == 0:
             return
         self.cover_edit_btn.setEnabled(False)
         self.cover_crop_widget = CoverCropWidget(self)
@@ -457,8 +458,8 @@ class StreamConfigPanel(QWidget):
         parent_choose = self.parent_combo.currentText()
         if parent_choose == "请选择":
             return False
-        return parent_choose in config.parent_area and self.child_combo.currentText() in \
-            config.area_options[self.parent_combo.currentText()]
+        return parent_choose in app_state.parent_area and self.child_combo.currentText() in \
+            app_state.area_options[self.parent_combo.currentText()]
 
     @Slot()
     def _save_area(self):

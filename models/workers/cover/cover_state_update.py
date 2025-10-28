@@ -5,7 +5,7 @@ from time import sleep
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 from models.log import get_logger
 from models.workers.base import run_wrapper, LongLiveWorker
 from sign import livehime_sign
@@ -19,7 +19,7 @@ class CoverStateUpdateWorker(LongLiveWorker):
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
-        while self.is_running and config.room_info["cover_status"] == 0:
+        while self.is_running and app_state.room_info["cover_status"] == 0:
             url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/PreLive"
             params = livehime_sign({
                 "area": "true",
@@ -36,7 +36,7 @@ class CoverStateUpdateWorker(LongLiveWorker):
             self.logger.info("PreLive Response")
             response = response.json()
             self.logger.info(f"PreLive Result: {response}")
-            config.room_info.update({
+            app_state.room_info.update({
                 "cover_audit_reason": response["data"]["cover"]["auditReason"],
                 "cover_url": response["data"]["cover"]["url"],
                 "cover_status": response["data"]["cover"]["auditStatus"],

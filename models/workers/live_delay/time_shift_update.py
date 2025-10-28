@@ -3,7 +3,7 @@ from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QPushButton
 
 # local package import
-import config
+import app_state
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign
@@ -21,9 +21,9 @@ class StreamTimeShiftUpdateWorker(BaseWorker):
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/upStreamConfig/SetAnchorSelfStreamTimeShift"
         self.logger.info(f"SetAnchorSelfStreamTimeShift Request")
         response = self._session.post(url, data=livehime_sign({
-            "csrf": config.cookies_dict["bili_jct"],
-            "csrf_token": config.cookies_dict["bili_jct"],
-            "room_id": config.room_info["room_id"],
+            "csrf": app_state.cookies_dict["bili_jct"],
+            "csrf_token": app_state.cookies_dict["bili_jct"],
+            "room_id": app_state.room_info["room_id"],
             "time_shift": self._delay,
         }))
         response.encoding = "utf-8"

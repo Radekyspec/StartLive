@@ -4,7 +4,7 @@ from functools import partial
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 from constant import CoverStatus
 from models.log import get_logger
 from models.states import LoginState
@@ -21,14 +21,14 @@ class FetchPreLiveWorker(BaseWorker):
 
     def _fetch_room_info(self):
         live_info_url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/GetInfo"
-        info_data = livehime_sign({"uId": config.cookies_dict["DedeUserID"]})
+        info_data = livehime_sign({"uId": app_state.cookies_dict["DedeUserID"]})
         info_data = order_payload(info_data)
         self.logger.info("live_info Request")
         response = self._session.get(live_info_url, params=info_data)
         response.encoding = "utf-8"
         self.logger.info("live_info Response")
         response = response.json()
-        config.room_info.update(
+        app_state.room_info.update(
             {
                 "room_id": response["data"]["room_id"],
                 "parent_area": response["data"]["parent_name"],
@@ -36,7 +36,7 @@ class FetchPreLiveWorker(BaseWorker):
             }
         )
         if response["data"]["live_status"] == 1:
-            config.stream_status["live_status"] = True
+            app_state.stream_status["live_status"] = True
             # [0.3.4] fix fetch upstream
             # Here we choose to start live again because as observation of duplicate live
             # The API only returns a message="重复开播" with streaming address
@@ -44,7 +44,7 @@ class FetchPreLiveWorker(BaseWorker):
             # Subject to change if there is an unknown side effect
             StartLiveWorker.start_live(self._session,
                                        response["data"]["area_v2_id"])
-        config.scan_status["room_updated"] = True
+        app_state.scan_status["room_updated"] = True
 
     @Slot()
     @run_wrapper
@@ -65,7 +65,7 @@ class FetchPreLiveWorker(BaseWorker):
         self.logger.info("PreLive Response")
         response = response.json()
         self.logger.info(f"PreLive Result: {response}")
-        config.room_info.update({
+        app_state.room_info.update({
             "cover_audit_reason": response["data"]["cover"]["auditReason"],
             "cover_url": response["data"]["cover"]["url"],
             "cover_status": response["data"]["cover"]["auditStatus"],
@@ -76,20 +76,20 @@ class FetchPreLiveWorker(BaseWorker):
     @Slot()
     def on_finished(self, parent_window: "StreamConfigPanel",
                     state: LoginState):
-        parent_window.title_input.setText(config.room_info["title"])
+        parent_window.title_input.setText(app_state.room_info["title"])
         parent_window.title_input.textEdited.connect(
             lambda: parent_window.save_title_btn.setEnabled(True))
-        if config.stream_status["live_status"]:
+        if app_state.stream_status["live_status"]:
             parent_window.addr_input.setText(
-                config.stream_status["stream_addr"])
+                app_state.stream_status["stream_addr"])
             parent_window.key_input.setText(
-                config.stream_status["stream_key"])
+                app_state.stream_status["stream_key"])
             parent_window.start_btn.setEnabled(False)
             parent_window.parent_window.tray_start_live_action.setEnabled(False)
             parent_window.stop_btn.setEnabled(True)
             parent_window.parent_window.tray_stop_live_action.setEnabled(True)
         parent_window.cover_audit_state()
-        if config.room_info["cover_status"] == CoverStatus.AUDIT_IN_PROGRESS:
+        if app_state.room_info["cover_status"] == CoverStatus.AUDIT_IN_PROGRESS:
             # add updating logic
             cover_state_updater = CoverStateUpdateWorker()
             parent_window.parent_window.add_thread(

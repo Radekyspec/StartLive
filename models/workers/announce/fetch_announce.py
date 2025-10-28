@@ -2,7 +2,7 @@
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign
@@ -25,14 +25,14 @@ class FetchAnnounceWorker(BaseWorker):
         response = response.json()
         self.logger.info(f"Announcement info Result: {response}")
         content: dict = response["data"]["announces"]
-        config.room_info["announcement"] = content.get("1", {}).get(
+        app_state.room_info["announcement"] = content.get("1", {}).get(
             "content", ""
         )
-        config.scan_status["announce_updated"] = True
+        app_state.scan_status["announce_updated"] = True
 
     @Slot()
     def on_finished(self, panel: "StreamConfigPanel"):
-        panel.announce_input.setText(config.room_info["announcement"])
+        panel.announce_input.setText(app_state.room_info["announcement"])
         panel.announce_input.textEdited.connect(
             lambda: panel.save_announce_btn.setEnabled(True))
         self._session.close()

@@ -4,7 +4,7 @@
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 import constant
 from exceptions import AreaUpdateError
 from models.log import get_logger
@@ -23,12 +23,12 @@ class AreaUpdateWorker(BaseWorker):
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/xlive/app-blink/v2/room/AnchorChangeRoomArea"
         area_data = {
-            "area_id": config.area_codes[self.area],
+            "area_id": app_state.area_codes[self.area],
             "build": constant.LIVEHIME_BUILD,
-            "csrf_token": config.cookies_dict["bili_jct"],
-            "csrf": config.cookies_dict["bili_jct"],
+            "csrf_token": app_state.cookies_dict["bili_jct"],
+            "csrf": app_state.cookies_dict["bili_jct"],
             "platform": "pc_link",
-            "room_id": config.room_info["room_id"],
+            "room_id": app_state.room_info["room_id"],
         }
         self.logger.info(f"AnchorChangeRoomArea Request")
         response = self._session.post(url, params=livehime_sign({}),
@@ -44,9 +44,9 @@ class AreaUpdateWorker(BaseWorker):
 
     @Slot()
     def on_finished(self, parent_window: "StreamConfigPanel"):
-        config.room_info[
+        app_state.room_info[
             "parent_area"] = parent_window.parent_combo.currentText()
-        config.room_info[
+        app_state.room_info[
             "area"] = parent_window.child_combo.currentText()
         self._session.close()
 
@@ -55,7 +55,7 @@ class AreaUpdateWorker(BaseWorker):
     def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
         enabled = parent_window.enable_child_combo_autosave(False)
         parent_window.parent_combo.setCurrentText(
-            config.room_info["parent_area"])
-        parent_window.child_combo.setCurrentText(config.room_info["area"])
+            app_state.room_info["parent_area"])
+        parent_window.child_combo.setCurrentText(app_state.room_info["area"])
         parent_window.enable_child_combo_autosave(enabled)
         parent_window.modify_area_btn.setEnabled(True)

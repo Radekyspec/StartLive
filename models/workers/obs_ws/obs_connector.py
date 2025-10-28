@@ -5,7 +5,7 @@ from PySide6.QtCore import Slot, QMutex, QWaitCondition, QMutexLocker
 from obsws_python import ReqClient
 
 # local package import
-import config
+import app_state
 from models.log import get_logger
 from models.states import ObsBtnState
 from models.workers.base import BaseWorker, run_wrapper
@@ -28,17 +28,17 @@ class ObsConnectorWorker(BaseWorker):
     @run_wrapper
     def run(self, /) -> None:
         with QMutexLocker(self._mutex):
-            config.obs_op = True
-            config.obs_connecting = True
+            app_state.obs_op = True
+            app_state.obs_connecting = True
             self._cond.wakeAll()
         self.state.obsConnecting.emit()
         self.logger.info("OBS connecting")
-        config.obs_client = ReqClient(host=self.host, port=self.port,
-                                      password=self.password,
-                                      timeout=5)
+        app_state.obs_client = ReqClient(host=self.host, port=self.port,
+                                         password=self.password,
+                                         timeout=5)
         with QMutexLocker(self._mutex):
-            config.obs_op = False
-            config.obs_connecting = False
+            app_state.obs_op = False
+            app_state.obs_connecting = False
             self._cond.wakeAll()
 
     @Slot()
@@ -48,14 +48,14 @@ class ObsConnectorWorker(BaseWorker):
         self.logger.error(f"OBS connect failed.")
         parent_window.obs_auto_live_checkbox.setEnabled(False)
         with QMutexLocker(self._mutex):
-            config.obs_op = False
-            config.obs_connecting = False
+            app_state.obs_op = False
+            app_state.obs_connecting = False
             self._cond.wakeAll()
         state.obsDisconnected.emit()
 
     @Slot()
     def on_finished(self, parent_window, state: ObsBtnState):
-        if config.obs_client is not None:
+        if app_state.obs_client is not None:
             state.obsConnected.emit()
             self.logger.info("OBS connected")
             parent_window.obs_auto_live_checkbox.setEnabled(True)

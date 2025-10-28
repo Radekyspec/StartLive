@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QApplication
 from qdarktheme import enable_hi_dpi
 
 # local package import
-import config
+import app_state
 from constant import *
 from models.window import MainWindow
 
@@ -51,7 +51,7 @@ if __name__ == '__main__':
     base_path = abspath(dirname(__file__))
     app.setWindowIcon(
         QIcon(join(base_path, "resources", icon_file)))
-    if (font := config.app_settings["custom_font"]) and (
+    if (font := app_state.app_settings["custom_font"]) and (
             f := QFont()).fromString(font):
         app.setFont(f)
     else:

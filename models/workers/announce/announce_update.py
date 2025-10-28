@@ -4,7 +4,7 @@
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 from exceptions import AnnounceUpdateError
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
@@ -25,8 +25,8 @@ class AnnounceUpdateWorker(BaseWorker):
         announce_data.update(
             {
                 "content": self.content,
-                "csrf_token": config.cookies_dict["bili_jct"],
-                "csrf": config.cookies_dict["bili_jct"],
+                "csrf_token": app_state.cookies_dict["bili_jct"],
+                "csrf": app_state.cookies_dict["bili_jct"],
                 "type": "1",
             }
         )
@@ -41,7 +41,7 @@ class AnnounceUpdateWorker(BaseWorker):
         self.logger.info(f"AnnounceCommit Result: {response}")
         if response["code"] != 0:
             raise AnnounceUpdateError(response["message"])
-        config.room_info["announcement"] = self.content
+        app_state.room_info["announcement"] = self.content
 
     @staticmethod
     @Slot()

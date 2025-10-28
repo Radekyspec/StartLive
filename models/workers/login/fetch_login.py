@@ -6,7 +6,7 @@ from time import sleep
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 import constant
 from exceptions import LoginError
 from models.log import get_logger
@@ -30,7 +30,7 @@ class FetchLoginWorker(LongLiveWorker):
 
     @staticmethod
     def post_login(parent: "MainWindow", state: LoginState):
-        if config.scan_status["scanned"]:
+        if app_state.scan_status["scanned"]:
             fetch_status = FetchRoomStatusWorker()
             parent.add_thread(
                 fetch_status,
@@ -58,14 +58,14 @@ class FetchLoginWorker(LongLiveWorker):
     @run_wrapper
     def run(self, /) -> None:
         check_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
-        while config.scan_status["qr_key"] is None and self.is_running:
+        while app_state.scan_status["qr_key"] is None and self.is_running:
             sleep(0.1)
         params = {
-            "qrcode_key": config.scan_status["qr_key"],
+            "qrcode_key": app_state.scan_status["qr_key"],
             "source": "live_pc",
             "web_location": "0.0"
         }
-        while not config.scan_status["scanned"] and self.is_running:
+        while not app_state.scan_status["scanned"] and self.is_running:
             self.logger.info("QR poll Request")
             response = self._session.get(check_url, params=params)
             response.encoding = "utf-8"
@@ -78,24 +78,24 @@ class FetchLoginWorker(LongLiveWorker):
                     continue
                 case 86038:  # QR expired
                     self.logger.info(f"QR poll Result: {result}")
-                    config.scan_status["timeout"] = True
+                    app_state.scan_status["timeout"] = True
                     self.state.qrExpired.emit()
                     break
                 case 86090:  # Scanned but not confirmed
                     self.logger.info(f"QR poll Result: {result}")
-                    config.scan_status["wait_for_confirm"] = True
+                    app_state.scan_status["wait_for_confirm"] = True
                     self.state.qrNotConfirmed.emit()
                     sleep(1)
                     continue
                 case 0:  # Login successful
-                    config.cookies_dict.clear()
-                    config.cookies_dict.update(response.cookies.get_dict())
+                    app_state.cookies_dict.clear()
+                    app_state.cookies_dict.update(response.cookies.get_dict())
                     # config.cookies_dict["refresh_token"] = result["data"][
                     #     "refresh_token"]
                     from models.workers.credentials.credential_manager import \
                         CredentialManagerWorker
                     self.cookie_key = CredentialManagerWorker.add_cookie()
-                    config.scan_status["scanned"] = True
+                    app_state.scan_status["scanned"] = True
                     self.state.qrScanned.emit()
                     break
                 case _:

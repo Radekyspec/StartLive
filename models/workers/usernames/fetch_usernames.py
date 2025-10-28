@@ -6,7 +6,7 @@ from PySide6.QtCore import Slot
 from keyring import get_password
 
 # local package import
-import config
+import app_state
 import constant
 from constant import *
 from models.log import get_logger
@@ -25,10 +25,10 @@ class FetchUsernamesWorker(BaseWorker):
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
-        if not config.scan_status["scanned"]:
+        if not app_state.scan_status["scanned"]:
             return
         url = "https://api.bilibili.com/x/web-interface/nav"
-        for key in config.usernames:
+        for key in app_state.usernames:
             if key == self._current_user or (
                     cookies := get_password(KEYRING_SERVICE_NAME,
                                             key)) is None:
@@ -52,7 +52,7 @@ class FetchUsernamesWorker(BaseWorker):
             response = response.json()
             if response["code"] != 0:
                 continue
-            config.usernames[key] = USERNAME_DISPLAY_TEMPLATE.format(
+            app_state.usernames[key] = USERNAME_DISPLAY_TEMPLATE.format(
                 response["data"]["uname"],
                 response["data"]["mid"]
             )

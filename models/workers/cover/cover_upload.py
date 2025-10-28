@@ -5,7 +5,7 @@ from functools import partial
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 import constant
 from exceptions import CoverUploadError
 from models.log import get_logger
@@ -27,7 +27,7 @@ class CoverUploadWorker(BaseWorker):
         url = "https://api.bilibili.com/x/upload/web/image"
         self.logger.info("CoverUpload Request")
         params = {
-            "csrf": config.cookies_dict["bili_jct"],
+            "csrf": app_state.cookies_dict["bili_jct"],
         }
         upload_data = {
             "bucket": (None, "live"),
@@ -53,8 +53,8 @@ class CoverUploadWorker(BaseWorker):
             "cover": cover_url,
             "coverVertical": "",
             "liveDirectionType": "1",
-            "csrf_token": config.cookies_dict["bili_jct"],
-            "csrf": config.cookies_dict["bili_jct"],
+            "csrf_token": app_state.cookies_dict["bili_jct"],
+            "csrf": app_state.cookies_dict["bili_jct"],
             "visit_id": "",
         }
         response = self._session.post(url, data=data)
@@ -64,7 +64,7 @@ class CoverUploadWorker(BaseWorker):
         self.logger.info(f"UpdatePreLiveInfo Result: {response}")
         if response["code"] != 0:
             raise CoverUploadError(response["message"])
-        config.room_info.update({
+        app_state.room_info.update({
             "cover_url": cover_url,
             "cover_audit_reason": response["data"]["audit_info"][
                 "audit_title_reason"],

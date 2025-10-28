@@ -6,7 +6,7 @@ from queue import Empty
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 from models.log import get_logger
 from models.states import ObsBtnState
 from models.workers.base import LongLiveWorker, run_wrapper
@@ -22,24 +22,24 @@ class ObsDaemonWorker(LongLiveWorker):
     @Slot()
     @run_wrapper
     def run(self, /):
-        while config.obs_client is not None and self.is_running:
+        while app_state.obs_client is not None and self.is_running:
             with suppress(Empty):
-                req, body = config.obs_req_queue.get(timeout=.2)
-                config.obs_client.send(req, body)
+                req, body = app_state.obs_req_queue.get(timeout=.2)
+                app_state.obs_client.send(req, body)
 
     @classmethod
     def disconnect_obs(cls, state: ObsBtnState):
         logger = get_logger(cls.__name__)
         logger.info("OBS disconnecting")
-        config.obs_op = True
-        if config.obs_client is not None:
-            config.obs_client.disconnect()
+        app_state.obs_op = True
+        if app_state.obs_client is not None:
+            app_state.obs_client.disconnect()
         logger.info("OBS disconnected")
         state.obsDisconnected.emit()
-        config.obs_client = None
-        config.obs_op = False
+        app_state.obs_client = None
+        app_state.obs_op = False
 
     @Slot()
     def on_finished(self, state: ObsBtnState):
-        if config.obs_client is not None:
+        if app_state.obs_client is not None:
             self.disconnect_obs(state)

@@ -2,7 +2,7 @@
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 from exceptions import TitleUpdateError
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
@@ -20,9 +20,9 @@ class TitleUpdateWorker(BaseWorker):
     def run(self, /) -> None:
         url = "https://api.live.bilibili.com/room/v1/Room/updateV2"
         title_data = {
-            "csrf": config.cookies_dict["bili_jct"],
-            "csrf_token": config.cookies_dict["bili_jct"],
-            "room_id": config.room_info["room_id"],
+            "csrf": app_state.cookies_dict["bili_jct"],
+            "csrf_token": app_state.cookies_dict["bili_jct"],
+            "room_id": app_state.room_info["room_id"],
             "title": self.title,
         }
         self.logger.info(f"updateV2 Request")
@@ -34,7 +34,7 @@ class TitleUpdateWorker(BaseWorker):
         self.logger.info(f"updateV2 Result: {response}")
         if response["code"] != 0:
             raise TitleUpdateError(response["message"])
-        config.room_info["title"] = self.title
+        app_state.room_info["title"] = self.title
 
     @staticmethod
     @Slot()

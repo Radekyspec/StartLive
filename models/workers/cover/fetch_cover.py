@@ -3,7 +3,7 @@ from PySide6.QtCore import Slot
 from PySide6.QtGui import QPixmap
 
 # local package import
-import config
+import app_state
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 
@@ -16,16 +16,16 @@ class FetchCoverWorker(BaseWorker):
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
-        url = config.room_info["cover_url"]
+        url = app_state.room_info["cover_url"]
         self.logger.info(f"cover data Request")
         response = self._session.get(url)
         self.logger.info("cover data Response")
-        config.room_info["cover_data"] = response.content
+        app_state.room_info["cover_data"] = response.content
 
     @Slot()
     def on_finished(self, parent: "CoverCropWidget"):
         pix = QPixmap()
-        pix.loadFromData(config.room_info["cover_data"])
-        config.room_info["cover_data"] = None
+        pix.loadFromData(app_state.room_info["cover_data"])
+        app_state.room_info["cover_data"] = None
         parent.label.coverUpdated.emit(pix)
         self._session.close()

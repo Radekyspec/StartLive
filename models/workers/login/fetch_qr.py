@@ -5,7 +5,7 @@ from time import time_ns
 from PySide6.QtCore import Slot
 
 # local package import
-import config
+import app_state
 import constant
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
@@ -37,10 +37,10 @@ class FetchQRWorker(BaseWorker):
         self.logger.info("QRGenerate Response")
         response = response.json()
         self.logger.info(f"QRGenerate Result: {response}")
-        config.scan_status["qr_key"] = response["data"]["qrcode_key"]
-        config.scan_status["qr_url"] = response["data"]["url"]
+        app_state.scan_status["qr_key"] = response["data"]["qrcode_key"]
+        app_state.scan_status["qr_url"] = response["data"]["url"]
 
     @Slot()
     def on_finished(self, parent_window: "MainWindow"):
-        parent_window.update_qr_image(config.scan_status["qr_url"])
+        parent_window.update_qr_image(app_state.scan_status["qr_url"])
         self._session.close()

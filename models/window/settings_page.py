@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QPushButton, QFrame, QFileDialog, QFontDialog, QApplication
 )
 
-import config
+import app_state
 from constant import ProxyMode, PreferProto
 from models.classes import FocusPlaceholderLineEdit
 from models.workers.live_delay import StreamTimeShiftUpdateWorker
@@ -34,8 +34,8 @@ class SettingsPage(QWidget):
         self.title_font.setPointSize(14)
         self.title_font.setBold(True)
 
-        proxy_default_index = config.app_settings.get("proxy_mode",
-                                                      ProxyMode.NONE)
+        proxy_default_index = app_state.app_settings.get("proxy_mode",
+                                                         ProxyMode.NONE)
         self.proxy_group = self.add_multi_choice_item(
             "代理设置",
             ["不使用代理", "使用系统代理", "使用自定义代理"],
@@ -45,13 +45,13 @@ class SettingsPage(QWidget):
         self.proxy_addr_edit, self.proxy_addr_btn = self.add_text_item(
             "自定义代理服务器地址（URL）",
             "保存并应用",
-            placeholder=config.app_settings.get("custom_proxy_url",
-                                                "socks5://127.0.0.1:7898")
+            placeholder=app_state.app_settings.get("custom_proxy_url",
+                                                   "socks5://127.0.0.1:7898")
         )
         self.proxy_addr_edit.setToolTip(
             "代理协议支持 http://，https://，socks5://，socks5h://")
         self.proxy_addr_edit.setText(
-            config.app_settings.get("custom_proxy_url", ""))
+            app_state.app_settings.get("custom_proxy_url", ""))
         self.proxy_addr_btn.clicked.connect(self._save_custom_proxy)
 
         self.proxy_group.idClicked.connect(self._on_proxy_mode_changed)
@@ -72,8 +72,8 @@ class SettingsPage(QWidget):
             lambda: self.delay_save_btn.setEnabled(True))
         self.delay_save_btn.clicked.connect(self._on_delay_save)
 
-        proto_default_index = config.app_settings.get("prefer_proto",
-                                                      PreferProto.RTMP)
+        proto_default_index = app_state.app_settings.get("prefer_proto",
+                                                         PreferProto.RTMP)
         self.prefer_proto_group = self.add_multi_choice_item(
             "推流协议选择",
             ["优先RTMP", "优先SRT，无SRT流时回退至RTMP",
@@ -85,12 +85,12 @@ class SettingsPage(QWidget):
         self.tray_icon_edit, self.tray_icon_btn = self.add_file_picker_item(
             "自定义托盘图标", dialog_title="选择托盘图标图片",
             name_filter="图片文件 (*.jfif;*.pjpeg;*.jpeg;*.pjp;*.jpg;*.png);;所有文件 (*)",
-            placeholder=config.app_settings["custom_tray_icon"]
+            placeholder=app_state.app_settings["custom_tray_icon"]
         )
         self.tray_icon_edit.textChanged.connect(
             self._parent_window.switch_tray_icon)
 
-        custom_tray_hint = config.app_settings["custom_tray_hint"]
+        custom_tray_hint = app_state.app_settings["custom_tray_hint"]
         self.tray_hint_edit, self.tray_hint_btn = self.add_text_item(
             "自定义托盘图标提示",
             "保存更改",
@@ -123,12 +123,12 @@ class SettingsPage(QWidget):
     def _on_prefer_proto_changed(self, _id: int):
         match _id:
             case 0:
-                config.app_settings["prefer_proto"] = PreferProto.RTMP
+                app_state.app_settings["prefer_proto"] = PreferProto.RTMP
             case 1:
-                config.app_settings[
+                app_state.app_settings[
                     "prefer_proto"] = PreferProto.SRT_FALLBACK_RTMP
             case 2:
-                config.app_settings["prefer_proto"] = PreferProto.SRT_ONLY
+                app_state.app_settings["prefer_proto"] = PreferProto.SRT_ONLY
             case _:
                 raise ValueError("Unexpected protocol choice")
 
@@ -139,18 +139,18 @@ class SettingsPage(QWidget):
         self.proxy_addr_btn.setEnabled(is_custom)
         match _id:
             case 0:
-                config.app_settings["proxy_mode"] = ProxyMode.NONE
+                app_state.app_settings["proxy_mode"] = ProxyMode.NONE
             case 1:
-                config.app_settings["proxy_mode"] = ProxyMode.SYSTEM
+                app_state.app_settings["proxy_mode"] = ProxyMode.SYSTEM
             case 2:
-                config.app_settings["proxy_mode"] = ProxyMode.CUSTOM
+                app_state.app_settings["proxy_mode"] = ProxyMode.CUSTOM
             case _:
                 raise ValueError("Unexpected proxy mode")
 
     @Slot()
     def _save_custom_proxy(self):
         url = self.proxy_addr_edit.text().strip()
-        config.app_settings["custom_proxy_url"] = url
+        app_state.app_settings["custom_proxy_url"] = url
 
         if self.proxy_group.checkedId() != 2:
             btn = self.proxy_group.button(2)
@@ -375,7 +375,7 @@ class SettingsPage(QWidget):
             )
             if ok:
                 font_edit.setText(font.family())
-                config.app_settings["custom_font"] = font.toString()
+                app_state.app_settings["custom_font"] = font.toString()
 
         font_btn.clicked.connect(
             open_dialog)
@@ -388,14 +388,14 @@ class SettingsPage(QWidget):
         return font_edit, font_btn
 
     def reset_default(self):
-        pm = config.app_settings["proxy_mode"]
+        pm = app_state.app_settings["proxy_mode"]
         self._on_proxy_mode_changed(pm)
         self.proxy_group.button(pm).setChecked(
             True)
-        self.tray_icon_edit.setText(config.app_settings["custom_tray_icon"])
-        self.tray_hint_edit.setText(config.app_settings["custom_tray_hint"])
+        self.tray_icon_edit.setText(app_state.app_settings["custom_tray_icon"])
+        self.tray_hint_edit.setText(app_state.app_settings["custom_tray_hint"])
         self.tray_hint_edit.update_placeholder("你所热爱的 就是你的生活")
-        self.proxy_addr_edit.setText(config.app_settings["custom_proxy_url"])
+        self.proxy_addr_edit.setText(app_state.app_settings["custom_proxy_url"])
         self.proxy_addr_edit.update_placeholder("socks5://127.0.0.1:7898")
         self.prefer_proto_group.button(
-            config.app_settings["prefer_proto"]).setChecked(True)
+            app_state.app_settings["prefer_proto"]).setChecked(True)

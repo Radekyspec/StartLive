@@ -6,9 +6,9 @@ from keyring import get_password, set_password, delete_password
 from requests.cookies import cookiejar_from_dict
 
 # local package import
-import config
+import app_state
 import constant
-from config import dumps
+from app_state import dumps
 from constant import *
 from exceptions import CredentialExpiredError, CredentialDuplicatedError
 from models.log import get_logger
@@ -34,16 +34,16 @@ class CredentialManagerWorker(BaseWorker):
             if not isinstance(cookies_index, list):
                 return []
             # valid, update cache
-            config.cookie_indices.clear()
-            config.cookie_indices.extend(cookies_index)
-            return config.cookie_indices
+            app_state.cookie_indices.clear()
+            app_state.cookie_indices.extend(cookies_index)
+            return app_state.cookie_indices
         return []
 
     @staticmethod
     def reset_default():
-        config.room_info_default()
-        config.scan_settings_default()
-        config.stream_status_default()
+        app_state.room_info_default()
+        app_state.scan_settings_default()
+        app_state.stream_status_default()
 
     @staticmethod
     def add_cookie():
@@ -60,40 +60,40 @@ class CredentialManagerWorker(BaseWorker):
         :return: The unique key for the added cookie credential.
         :rtype: str
         """
-        uid = config.cookies_dict["DedeUserID"]
+        uid = app_state.cookies_dict["DedeUserID"]
         cookie_key = f"cookies|{uid}"
         CredentialManagerWorker.get_cookie_indices()
-        if cookie_key in config.cookie_indices:
+        if cookie_key in app_state.cookie_indices:
             raise CredentialDuplicatedError(cookie_key)
-        config.cookie_indices.append(cookie_key)
-        config.usernames[cookie_key] = cookie_key
+        app_state.cookie_indices.append(cookie_key)
+        app_state.usernames[cookie_key] = cookie_key
         set_password(KEYRING_SERVICE_NAME, cookie_key,
-                     dumps(config.cookies_dict))
+                     dumps(app_state.cookies_dict))
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
-                     dumps(config.cookie_indices))
+                     dumps(app_state.cookie_indices))
         return cookie_key
 
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
-        if config.obs_settings.internal:
+        if app_state.obs_settings.internal:
             self.logger.info(
-                f"use existing obs settings: {config.obs_settings.internal}")
+                f"use existing obs settings: {app_state.obs_settings.internal}")
         elif (saved_settings := get_password(KEYRING_SERVICE_NAME,
                                              KEYRING_SETTINGS)) is not None:
-            config.obs_settings.update(loads(saved_settings))
+            app_state.obs_settings.update(loads(saved_settings))
             self.logger.info(f"obs_settings loaded: {saved_settings}")
         else:
-            config.obs_settings_default()
+            app_state.obs_settings_default()
             self.logger.info(f"obs_default_settings loaded")
         if get_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO) is not None:
             delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
-        config.room_info_default()
+        app_state.room_info_default()
         self.logger.info(f"room_default_settings loaded")
 
         if self.is_new:
             self.logger.info(f"new credentials created, exiting")
-            config.cookies_dict.clear()
+            app_state.cookies_dict.clear()
             return
 
         # Old version cookie storage, change to index
@@ -111,13 +111,13 @@ class CredentialManagerWorker(BaseWorker):
             self.logger.info(f"cookies index created")
 
         self.get_cookie_indices()
-        self.logger.info(f"cookies index loaded: {config.cookie_indices}")
-        config.usernames.clear()
-        config.usernames.update({i: i for i in config.cookie_indices})
-        if not config.cookie_indices or (
+        self.logger.info(f"cookies index loaded: {app_state.cookie_indices}")
+        app_state.usernames.clear()
+        app_state.usernames.update({i: i for i in app_state.cookie_indices})
+        if not app_state.cookie_indices or (
                 saved_cookies := get_password(
                     KEYRING_SERVICE_NAME,
-                    config.cookie_indices[
+                    app_state.cookie_indices[
                         self.cookie_index])) is None:
             self.is_new = True
             return
@@ -137,39 +137,39 @@ class CredentialManagerWorker(BaseWorker):
         self.logger.info("nav Response")
         response = response.json()
         if response["code"] != 0:
-            config.scan_status["expired"] = True
+            app_state.scan_status["expired"] = True
             raise CredentialExpiredError("登录凭据过期, 请重新登录")
-        if (current_username := config.cookie_indices[
-            self.cookie_index]) in config.usernames:
-            config.usernames[
+        if (current_username := app_state.cookie_indices[
+            self.cookie_index]) in app_state.usernames:
+            app_state.usernames[
                 current_username] = USERNAME_DISPLAY_TEMPLATE.format(
                 response["data"]["uname"],
                 response["data"]["mid"]
             )
-        config.cookies_dict.clear()
-        config.cookies_dict.update(saved_cookies)
-        config.scan_status["scanned"] = True
+        app_state.cookies_dict.clear()
+        app_state.cookies_dict.update(saved_cookies)
+        app_state.scan_status["scanned"] = True
 
     @Slot()
     def on_finished(self, parent_window: "MainWindow", state: LoginState):
         FetchLoginWorker.post_login(parent_window, state)
         if not self.is_new:
             fetch_usernames = FetchUsernamesWorker(
-                config.cookie_indices[self.cookie_index])
+                app_state.cookie_indices[self.cookie_index])
             parent_window.add_thread(
                 fetch_usernames,
                 on_finished=fetch_usernames.on_finished,
             )
         else:
-            config.scan_status["is_new"] = True
+            app_state.scan_status["is_new"] = True
         state.credentialLoaded.emit()
         panel = parent_window.panel
         panel.host_input.setText(
-            config.obs_settings.get("ip_addr", "localhost"))
-        panel.port_input.setText(config.obs_settings.get("port", "4455"))
-        panel.pass_input.setText(config.obs_settings.get("password", ""))
+            app_state.obs_settings.get("ip_addr", "localhost"))
+        panel.port_input.setText(app_state.obs_settings.get("port", "4455"))
+        panel.pass_input.setText(app_state.obs_settings.get("password", ""))
         panel.obs_auto_live_checkbox.setChecked(
-            config.obs_settings.get("auto_live", False))
+            app_state.obs_settings.get("auto_live", False))
         panel.obs_auto_connect_checkbox.setChecked(
-            config.obs_settings.get("auto_connect", False))
+            app_state.obs_settings.get("auto_connect", False))
         self._session.close()

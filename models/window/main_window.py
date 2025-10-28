@@ -21,8 +21,8 @@ from qdarktheme import setup_theme
 from qrcode.main import QRCode
 
 # local package import
-import config
-from config import dumps
+import app_state
+from app_state import dumps
 from constant import *
 from models.classes import ClickableLabel, SingleInstanceWindow
 from models.log import init_logger, get_logger, get_log_path
@@ -113,15 +113,16 @@ class MainWindow(SingleInstanceWindow):
         self.setGeometry(300, 200, 610, 470)
         self.tray_icon = QSystemTrayIcon(self)
         # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
-        if config.app_settings["custom_tray_icon"]:
+        if app_state.app_settings["custom_tray_icon"]:
             self.tray_icon.setIcon(QIcon(
-                abspath(config.app_settings["custom_tray_icon"])))
+                abspath(app_state.app_settings["custom_tray_icon"])))
         else:
             self.tray_icon.setIcon(QIcon(
                 join(self._base_path, "resources",
                      "icon_left.ico")))
-        if config.app_settings["custom_tray_hint"]:
-            self.tray_icon.setToolTip(config.app_settings["custom_tray_hint"])
+        if app_state.app_settings["custom_tray_hint"]:
+            self.tray_icon.setToolTip(
+                app_state.app_settings["custom_tray_hint"])
         else:
             self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         self.tray_icon.setVisible(True)
@@ -214,7 +215,7 @@ class MainWindow(SingleInstanceWindow):
     def setup_ui(self, *, is_new: bool = False):
         for worker in self._ll_workers:
             worker.stop()
-        if config.obs_client is not None:
+        if app_state.obs_client is not None:
             ObsDaemonWorker.disconnect_obs(self.panel.obs_btn_state)
         if self.panel is not None:
             self.tray_start_live_action.triggered.disconnect(
@@ -243,10 +244,11 @@ class MainWindow(SingleInstanceWindow):
         self.logger.info("StreamConfig initialized.")
         if self._no_const_update:
             self.logger.info("Constant update disabled.")
-            config.scan_status["const_updated"] = True
-        elif not config.scan_status["const_updated"]:
+            app_state.scan_status["const_updated"] = True
+        elif not app_state.scan_status["const_updated"]:
             print(123)
-            const_updater = ConstantUpdateWorker(self._login_state, self._base_path)
+            const_updater = ConstantUpdateWorker(self._login_state,
+                                                 self._base_path)
             self.add_thread(const_updater,
                             on_finished=const_updater.on_finished)
             version_check = VersionCheckerWorker(self._login_state)
@@ -368,14 +370,14 @@ class MainWindow(SingleInstanceWindow):
             self.logger.info("Credentials deleted. Exiting application.")
             event.accept()
             return
-        if config.obs_settings.internal:
+        if app_state.obs_settings.internal:
             self.logger.info("Saving OBS connection settings.")
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
-                         dumps(config.obs_settings.internal))
-        if config.app_settings.internal:
+                         dumps(app_state.obs_settings.internal))
+        if app_state.app_settings.internal:
             self.logger.info("Saving app settings.")
             set_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS,
-                         dumps(config.app_settings.internal))
+                         dumps(app_state.app_settings.internal))
         for worker in self._ll_workers:
             worker.stop()
         self._stop_http_server()
@@ -413,7 +415,7 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot()
     def _delete_cookies(self):
-        if not config.scan_status["scanned"]:
+        if not app_state.scan_status["scanned"]:
             return
         cookie_index = CredentialManagerWorker.get_cookie_indices()
         with suppress(PasswordDeleteError):
@@ -439,7 +441,7 @@ class MainWindow(SingleInstanceWindow):
     def _delete_app_settings(self):
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
-        config.app_settings_default()
+        app_state.app_settings_default()
         self._settings_page.reset_default()
         self.tray_icon.setIcon(QIcon(
             join(self._base_path, "resources",
@@ -491,13 +493,14 @@ class MainWindow(SingleInstanceWindow):
         :rtype: bool
         """
         return self._current_cookie_idx == self._cookie_index_len or all(
-            [config.scan_status["scanned"],
-             config.scan_status["area_updated"],
-             config.scan_status["room_updated"],
-             config.scan_status["const_updated"],
-             config.scan_status["announce_updated"]
-             ]) or (config.scan_status["cred_loaded"] and not
-        config.scan_status["expired"] and not config.scan_status["scanned"])
+            [app_state.scan_status["scanned"],
+             app_state.scan_status["area_updated"],
+             app_state.scan_status["room_updated"],
+             app_state.scan_status["const_updated"],
+             app_state.scan_status["announce_updated"]
+             ]) or (app_state.scan_status["cred_loaded"] and not
+        app_state.scan_status["expired"] and not app_state.scan_status[
+            "scanned"])
 
     @Slot()
     def _populate_account_menu(self):
@@ -506,11 +509,11 @@ class MainWindow(SingleInstanceWindow):
                                           exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
         self.account_group.triggered.connect(self._switch_account)
 
-        cookie_indices = config.cookie_indices
+        cookie_indices = app_state.cookie_indices
         self._cookie_index_len = len(cookie_indices)
         self.logger.info(f"cookie index length: {self._cookie_index_len}")
         for idx, cookie_index in enumerate(cookie_indices):
-            act = QAction(config.usernames.get(cookie_index, cookie_index),
+            act = QAction(app_state.usernames.get(cookie_index, cookie_index),
                           self, checkable=True)
             act.setData(idx)
             self.account_group.addAction(act)
@@ -524,14 +527,14 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot()
     def _populate_tray_menu(self):
-        cookie_indices = config.cookie_indices
+        cookie_indices = app_state.cookie_indices
         self._cookie_index_len = len(cookie_indices)
         if self._current_cookie_idx == self._cookie_index_len:
             self.tray_curr_user.setText("当前账号未登录")
             self.tray_curr_user.setEnabled(False)
             return
         self.tray_curr_user.setText(
-            f"当前账号：{config.usernames[cookie_indices[self._current_cookie_idx]]}")
+            f"当前账号：{app_state.usernames[cookie_indices[self._current_cookie_idx]]}")
         self.tray_curr_user.setEnabled(True)
 
     def _add_new_account(self):
@@ -543,19 +546,20 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot(str)
     def switch_tray_icon(self, icon_path: str):
-        config.app_settings["custom_tray_icon"] = icon_path
+        app_state.app_settings["custom_tray_icon"] = icon_path
         self.tray_icon.setIcon(QIcon(icon_path))
 
     def switch_tray_hint(self, hint: str):
-        config.app_settings["custom_tray_hint"] = hint
+        app_state.app_settings["custom_tray_hint"] = hint
         self.tray_icon.setToolTip(hint)
 
     @Slot()
     def load_credentials(self):
-        config.scan_status["cred_loaded"] = True
-        if config.scan_status["scanned"]:
+        app_state.scan_status["cred_loaded"] = True
+        if app_state.scan_status["scanned"]:
             self._post_scan_setup()
-        elif config.scan_status["expired"] or config.scan_status["is_new"]:
+        elif app_state.scan_status["expired"] or app_state.scan_status[
+            "is_new"]:
             # Needs update credential
             self._fetch_qr()
         else:
@@ -564,12 +568,12 @@ class MainWindow(SingleInstanceWindow):
     def _fetch_qr(self, retry: bool = False):
         # Start fetching QR and begin polling thread
         self.logger.info("Starting login flow.")
-        config.scan_status["timeout"] = False
+        app_state.scan_status["timeout"] = False
         if retry and self.login_worker is not None:
             self.status_label.clicked.disconnect(self._refresh_qr)
             self.login_worker.stop()
             # Reset status
-            config.scan_status.update({
+            app_state.scan_status.update({
                 "qr_key": None, "qr_url": None,
                 "wait_for_confirm": False
             })
@@ -654,44 +658,44 @@ class MainWindow(SingleInstanceWindow):
 
     def _after_login_success(self):
         self.panel.parent_combo.clear()
-        self.panel.parent_combo.addItems(config.parent_area)
+        self.panel.parent_combo.addItems(app_state.parent_area)
         self._stack.setCurrentIndex(1)
         self._side_bar.btn_home.setChecked(True)
-        if config.obs_settings.get("auto_connect", False):
+        if app_state.obs_settings.get("auto_connect", False):
             self.panel.connect_btn.click()
         self.panel.parent_combo.setCurrentText(
-            config.room_info.get("parent_area", "请选择"))
+            app_state.room_info.get("parent_area", "请选择"))
         self.panel.child_combo.setCurrentText(
-            config.room_info.get("area", ""))
+            app_state.room_info.get("area", ""))
         self.panel.enable_child_combo_autosave(True)
         self._start_http_server()
 
     @Slot()
     def _post_scan_setup(self):
-        if not config.scan_status["scanned"]:
+        if not app_state.scan_status["scanned"]:
             return
         if self.status_label.text() != "登录成功！":
             self.status_label.setText("登录成功！")
             self.status_label.setStyleSheet("color: green;font-size: 16pt;")
-        if config.scan_status["area_updated"]:
+        if app_state.scan_status["area_updated"]:
             login_hint1 = "分区已更新！"
         else:
             login_hint1 = "正在更新分区..."
-        if config.scan_status["room_updated"] and config.scan_status[
+        if app_state.scan_status["room_updated"] and app_state.scan_status[
             "announce_updated"]:
             login_hint2 = "房间信息已更新！"
         else:
             login_hint2 = "正在更新房间信息..."
-        if config.scan_status["const_updated"]:
+        if app_state.scan_status["const_updated"]:
             login_hint3 = "请求参数已更新！"
         else:
             login_hint3 = "正在更新请求参数..."
         login_hint = f"{login_hint1}\n{login_hint2}\n{login_hint3}"
         self.login_label.setText(login_hint)
-        if not config.scan_status["area_updated"] or \
-                not config.scan_status["room_updated"] or \
-                not config.scan_status["const_updated"] or \
-                not config.scan_status["announce_updated"]:
+        if not app_state.scan_status["area_updated"] or \
+                not app_state.scan_status["room_updated"] or \
+                not app_state.scan_status["const_updated"] or \
+                not app_state.scan_status["announce_updated"]:
             return
         self._after_login_success()
 
@@ -706,7 +710,7 @@ class MainWindow(SingleInstanceWindow):
         self.status_label.setText("已扫码，等待确认登录...")
 
     def popup_face_widget(self, face_url: str):
-        config.stream_status["required_face"] = False
+        app_state.stream_status["required_face"] = False
         self.panel.start_btn.setEnabled(True)
         self.tray_start_live_action.setEnabled(True)
         self.panel.stop_btn.setEnabled(False)
@@ -746,7 +750,7 @@ class MainWindow(SingleInstanceWindow):
             self._apply_dark_scheme()
 
     def _stack_switch(self, i: int):
-        if i == 1 and not config.scan_status["scanned"]:
+        if i == 1 and not app_state.scan_status["scanned"]:
             self._stack.setCurrentIndex(0)
             return
         self._stack.setCurrentIndex(i)

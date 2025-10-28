@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QScrollArea, QFrame, QButtonGroup, QSizePolicy
 )
 
-import config
+import app_state
 from models.widgets import RecentAreaBar
 
 
@@ -137,14 +137,14 @@ class AreaPickerPanel(QDialog):
         self.ok_btn.clicked.connect(self._confirm)
         self.cancel_btn.clicked.connect(self.reject)
 
-        self._build_parent_buttons(config.parent_area)
+        self._build_parent_buttons(app_state.parent_area)
 
     def set_initial_selection(self, parent_text: str | None,
                               child_text: str | None):
-        if parent_text and parent_text in config.parent_area:
+        if parent_text and parent_text in app_state.parent_area:
             self._select_parent(parent_text)
-            if child_text and parent_text in config.area_options and child_text in \
-                    config.area_options[parent_text]:
+            if child_text and parent_text in app_state.area_options and child_text in \
+                    app_state.area_options[parent_text]:
                 self._select_child(child_text)
 
     def _build_parent_buttons(self, parents: list[str]):
@@ -193,7 +193,7 @@ class AreaPickerPanel(QDialog):
                 self.child_group.removeButton(w)
                 w.deleteLater()
 
-        children = config.area_options.get(parent_text, [])
+        children = app_state.area_options.get(parent_text, [])
         for i, name in enumerate(children):
             btn = QPushButton(name)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
