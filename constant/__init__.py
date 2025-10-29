@@ -1,11 +1,11 @@
-from enum import unique, IntEnum
+from enum import unique, IntEnum, StrEnum
 
 __all__ = [
     "KEYRING_SERVICE_NAME", "KEYRING_COOKIES", "KEYRING_COOKIES_INDEX",
     "KEYRING_SETTINGS", "KEYRING_ROOM_INFO", "KEYRING_APP_SETTINGS",
     "LOCAL_SERVER_NAME", "LOGGER_NAME", "USERNAME_DISPLAY_TEMPLATE", "VERSION",
     "DARK_CSS", "LIGHT_CSS", "ProxyMode", "PreferProto", "CoverStatus",
-    "WidgetIndex"
+    "WidgetIndex", "CacheType"
 ]
 
 
@@ -30,11 +30,18 @@ class CoverStatus(IntEnum):
     AUDIT_PASSED = 1
 
 
+@unique
 class WidgetIndex(IntEnum):
     WIDGET_LOGIN = 0
     WIDGET_PANEL = 1
     WIDGET_LOGGING = 2
     WIDGET_SETTINGS = 3
+
+
+@unique
+class CacheType(StrEnum):
+    LOGS = "logs"
+    CONFIG = "config"
 
 
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"
@@ -46,7 +53,7 @@ KEYRING_ROOM_INFO = "roomInfo"
 LOCAL_SERVER_NAME = "StartLive|singleInstanceServer"
 LOGGER_NAME = "StartLiveLogger"
 USERNAME_DISPLAY_TEMPLATE = "{}（{}）"
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 
 APP_KEY = "aae92bc66f3edfab"
 APP_SECRET = "af125a0d5279fd576c1b4418a3e8276d"
