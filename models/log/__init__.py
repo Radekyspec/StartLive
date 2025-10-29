@@ -1,36 +1,17 @@
-import os
 from logging import DEBUG
 from logging import Logger, LoggerAdapter
 from logging import getLogger
 from logging.handlers import TimedRotatingFileHandler
-from platform import system
 
-from constant import LOGGER_NAME
+from constant import LOGGER_NAME, CacheType
+from models.cache import get_cache_path
 from .formatter import ThreadClassFormatter
 from .handler import QSignalLogHandler
 
 
 def get_log_path(*, is_makedir: bool = True) -> tuple[str, str]:
-    if (_arch := system()) == "Windows":
-        try:
-            base_dir = os.path.abspath(__compiled__.containing_dir)
-        except NameError:
-            base_dir = os.path.abspath(".")
-        base_dir = os.path.join(base_dir, "logs")
-        log_path = os.path.join(base_dir, "StartLive.log")
-    elif _arch == "Linux":
-        base_dir = os.path.join(os.path.expanduser("~"), ".cache", "StartLive",
-                                "logs")
-        log_path = os.path.join(base_dir, "StartLive.log")
-    elif _arch == "Darwin":
-        base_dir = os.path.join(os.path.expanduser("~"), "Library", "Logs",
-                                "StartLive")
-        log_path = os.path.join(base_dir, "StartLive.log")
-    else:
-        raise ValueError("Unsupported system")
-    if is_makedir:
-        os.makedirs(base_dir, exist_ok=True)
-    return base_dir, log_path
+    return get_cache_path(CacheType.LOGS, "StartLive.log",
+                          is_makedir=is_makedir)
 
 
 def init_logger(name: str = LOGGER_NAME) -> tuple[Logger, QSignalLogHandler]:

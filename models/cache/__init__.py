@@ -1,0 +1,38 @@
+from os import makedirs
+from os.path import join, expanduser, abspath
+from platform import system
+
+from constant import CacheType
+
+
+def _cache_base_dir(kind: CacheType) -> str:
+    if (_arch := system()) == "Windows":
+        try:
+            _base_dir = abspath(__compiled__.containing_dir)
+        except NameError:
+            _base_dir = abspath("")
+        _base_dir = join(_base_dir, kind)
+    elif _arch == "Linux":
+        _base_dir = join(expanduser("~"), ".cache", "StartLive",
+                         kind)
+    elif _arch == "Darwin":
+        if kind == CacheType.CONFIG:
+            _base_dir = join(expanduser("~"), "Library",
+                             "Application Support", "StartLive")
+        elif kind == CacheType.LOGS:
+            _base_dir = join(expanduser("~"), "Library",
+                             "Logs", "StartLive")
+        else:
+            raise ValueError("Unsupported cache type")
+    else:
+        raise ValueError("Unsupported system")
+    return _base_dir
+
+
+def get_cache_path(kind: CacheType, f_name: str, /, *,
+                   is_makedir: bool = True) -> tuple[str, str]:
+    _base_dir = _cache_base_dir(kind)
+    _const_path = join(_base_dir, f_name)
+    if is_makedir:
+        makedirs(_base_dir, exist_ok=True)
+    return _base_dir, _const_path

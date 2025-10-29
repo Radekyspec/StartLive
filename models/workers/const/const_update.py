@@ -1,8 +1,6 @@
 # module import
 from json import loads
-from os import makedirs
-from os.path import join, expanduser, abspath, exists
-from platform import system
+from os.path import exists
 
 # package import
 from PySide6.QtCore import Slot
@@ -11,6 +9,8 @@ from PySide6.QtCore import Slot
 import app_state
 import constant
 from app_state import dumps
+from constant import CacheType
+from models.cache import get_cache_path
 from models.log import get_logger
 from models.states import LoginState
 from models.workers.base import BaseWorker, run_wrapper
@@ -21,29 +21,9 @@ class ConstantUpdateWorker(BaseWorker):
         super().__init__(name="配置更新")
         self._state = state
         self.logger = get_logger(self.__class__.__name__)
-        self._get_const_path()
+        self._base_dir, self._const_path = get_cache_path(CacheType.CONFIG,
+                                                          "version.json")
         self._session.cookies.clear()
-
-    def _get_const_path(self, *, is_makedir: bool = True) -> None:
-        if (_arch := system()) == "Windows":
-            try:
-                self._base_dir = abspath(__compiled__.containing_dir)
-            except NameError:
-                self._base_dir = abspath(".")
-            self._base_dir = join(self._base_dir, "config")
-            self._const_path = join(self._base_dir, "version.json")
-        elif _arch == "Linux":
-            self._base_dir = join(expanduser("~"), ".cache", "StartLive",
-                                  "config")
-            self._const_path = join(self._base_dir, "version.json")
-        elif _arch == "Darwin":
-            self._base_dir = join(expanduser("~"), "Library",
-                                  "Application Support", "StartLive")
-            self._const_path = join(self._base_dir, "version.json")
-        else:
-            raise ValueError("Unsupported system")
-        if is_makedir:
-            makedirs(self._base_dir, exist_ok=True)
 
     @Slot()
     @run_wrapper
