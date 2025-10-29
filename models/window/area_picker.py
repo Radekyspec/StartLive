@@ -249,19 +249,22 @@ class AreaPickerPanel(QDialog):
             return True if not kw else (kw in _btn.toolTip())
 
         matched = []
+        self.child_group.setExclusive(False)
         for btn in self._all_child_buttons:
             ok = _match(btn)
-            if btn.hasFocus() and not ok:
-                self.search_edit.setFocus(Qt.FocusReason.TabFocusReason)
             btn.setVisible(ok)  # 视觉隐藏/显示
             if ok:
                 matched.append(btn)
-            else:
-                # 如果被隐藏的是当前选中按钮，清理选择，避免“已选但不可见”
-                if btn.isChecked():
-                    btn.setChecked(False)
-                    if self._selected_child == btn.toolTip():
-                        self._selected_child = None
+                continue
+            # 如果被隐藏的是当前选中按钮，清理选择，避免“已选但不可见”
+            if btn.hasFocus():
+                btn.clearFocus()
+                self.search_edit.setFocus(Qt.FocusReason.MouseFocusReason)
+            if btn.isChecked():
+                btn.setChecked(False)
+                if self._selected_child == btn.toolTip():
+                    self._selected_child = None
+        self.child_group.setExclusive(True)
 
         self._reflow_children(matched, kw)
 
