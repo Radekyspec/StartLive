@@ -1,7 +1,8 @@
 # module import
 from contextlib import suppress
 from functools import partial
-from os.path import join, abspath
+from os.path import join, abspath, isdir
+from shutil import rmtree
 from traceback import format_exception
 from typing import Optional, Callable
 
@@ -24,6 +25,7 @@ from qrcode.main import QRCode
 import app_state
 from app_state import dumps
 from constant import *
+from models.cache import cache_base_dir
 from models.classes import ClickableLabel, SingleInstanceWindow
 from models.log import init_logger, get_logger, get_log_path
 from models.states import LoginState
@@ -445,6 +447,8 @@ class MainWindow(SingleInstanceWindow):
             join(self._base_path, "resources",
                  "icon_left.ico")))
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
+        if isdir(cache_base_dir(CacheType.CONFIG)):
+            rmtree(cache_base_dir(CacheType.CONFIG))
         QMessageBox.information(self, "设置清空", "APP设置清除成功\n"
                                                   "字体相关设置需要重启生效")
 

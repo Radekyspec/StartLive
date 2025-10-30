@@ -4,8 +4,12 @@ from platform import system
 
 from constant import CacheType
 
+_cache_dir: dict[CacheType, str] = {}
 
-def _cache_base_dir(kind: CacheType) -> str:
+
+def cache_base_dir(kind: CacheType) -> str:
+    if kind in _cache_dir:
+        return _cache_dir[kind]
     if (_arch := system()) == "Windows":
         try:
             _base_dir = abspath(__compiled__.containing_dir)
@@ -26,12 +30,14 @@ def _cache_base_dir(kind: CacheType) -> str:
             raise ValueError("Unsupported cache type")
     else:
         raise ValueError("Unsupported system")
+    _cache_dir[kind] = _base_dir
+    print(_cache_dir)
     return _base_dir
 
 
 def get_cache_path(kind: CacheType, f_name: str, /, *,
                    is_makedir: bool = True) -> tuple[str, str]:
-    _base_dir = _cache_base_dir(kind)
+    _base_dir = cache_base_dir(kind)
     _const_path = join(_base_dir, f_name)
     if is_makedir:
         makedirs(_base_dir, exist_ok=True)
