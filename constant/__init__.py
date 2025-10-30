@@ -96,7 +96,7 @@ QLineEdit, QTextEdit, QPlainTextEdit {
     border: none;
     border-radius: 4px;
     padding: 4px 1px 4px 4px;
-    padding-left: 8px;
+    padding-left: 10px;
     border: 1px solid #3C404D;
     height: 22 + 8 - 4px * 2;
 }

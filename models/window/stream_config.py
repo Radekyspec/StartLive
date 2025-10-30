@@ -153,7 +153,7 @@ class StreamConfigPanel(QWidget):
         area_group = QGroupBox("直播信息")
         area_group_layout = QGridLayout()
         area_group_layout.addWidget(QLabel("房间标题:"), 0, 0, 1, 1)
-        self.title_input = QLineEdit()
+        self.title_input = CompletionComboBox([])
         area_group_layout.addWidget(self.title_input, 0, 1, 1, 6)
         self.save_title_btn = QPushButton("保存")
         self.save_title_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -413,7 +413,7 @@ class StreamConfigPanel(QWidget):
     @Slot()
     def _save_title(self):
         self.save_title_btn.setEnabled(False)
-        title_updater = TitleUpdateWorker(self.title_input.text())
+        title_updater = TitleUpdateWorker(self.title_input.currentText())
         self.parent_window.add_thread(
             title_updater,
             on_finished=title_updater.on_finished,

@@ -76,8 +76,8 @@ class FetchPreLiveWorker(BaseWorker):
     @Slot()
     def on_finished(self, parent_window: "StreamConfigPanel",
                     state: LoginState):
-        parent_window.title_input.setText(app_state.room_info["title"])
-        parent_window.title_input.textEdited.connect(
+        parent_window.title_input.addItems([app_state.room_info["title"]])
+        parent_window.title_input.currentTextChanged.connect(
             lambda: parent_window.save_title_btn.setEnabled(True))
         if app_state.stream_status["live_status"]:
             parent_window.addr_input.setText(

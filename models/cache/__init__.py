@@ -31,7 +31,6 @@ def cache_base_dir(kind: CacheType) -> str:
     else:
         raise ValueError("Unsupported system")
     _cache_dir[kind] = _base_dir
-    print(_cache_dir)
     return _base_dir
 
 
