@@ -1,23 +1,19 @@
 # module import
-from contextlib import suppress
 from functools import partial
-from os.path import join, abspath, isdir
-from shutil import rmtree
+from os.path import join, abspath
 from traceback import format_exception
 from typing import Optional, Callable
 
 # package import
 from PIL import ImageQt
-from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool, QUrl, Slot)
-from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup, \
-    QDesktopServices
+from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool, Slot)
+from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup
 from PySide6.QtWidgets import (QLabel, QMessageBox, QVBoxLayout, QWidget,
                                QApplication, QSystemTrayIcon, QMenu,
                                QStackedWidget, QButtonGroup, QHBoxLayout
                                )
 from darkdetect import isLight
-from keyring import set_password, delete_password
-from keyring.errors import PasswordDeleteError
+from keyring import set_password
 from qdarktheme import setup_theme
 from qrcode.main import QRCode
 
@@ -25,9 +21,8 @@ from qrcode.main import QRCode
 import app_state
 from app_state import dumps
 from constant import *
-from models.cache import cache_base_dir
 from models.classes import ClickableLabel, SingleInstanceWindow
-from models.log import init_logger, get_logger, get_log_path
+from models.log import init_logger, get_logger
 from models.states import LoginState
 from models.widgets import *
 from models.window import *
@@ -151,58 +146,15 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon.activated.connect(self._on_tray_icon_activated)
         self.logger.info("Tray menu initialized.")
 
-        menu_bar = self.menuBar()
-
-        self._tools_menu = QMenu("文件", self)
-        _open_log_folder_action = QAction("显示日志文件", self)
-        _open_log_folder_action.triggered.connect(self._open_log_folder)
-        self._tools_menu.addAction(_open_log_folder_action)
-        menu_bar.addMenu(self._tools_menu)
-
-        self._setting_menu = QMenu("缓存设置", self)
-        menu_bar.addMenu(self._setting_menu)
-
-        delete_cookies_action = QAction("退出账号登录", self)
-        delete_cookies_action.triggered.connect(self._delete_cookies)
-        self._setting_menu.addAction(delete_cookies_action)
-
-        delete_settings_action = QAction("清除OBS连接设置", self)
-        delete_settings_action.triggered.connect(self._delete_settings)
-        self._setting_menu.addAction(delete_settings_action)
-
-        delete_app_settings = QAction("清除APP设置", self)
-        delete_app_settings.triggered.connect(self._delete_app_settings)
-        self._setting_menu.addAction(delete_app_settings)
-
-        delete_cred = QAction("清空所有凭据", self)
-        delete_cred.triggered.connect(self._delete_cred)
-        self._setting_menu.addAction(delete_cred)
-
-        self.account_menu = QMenu("账号切换", self)
-        menu_bar.addMenu(self.account_menu)
-        self.account_menu.aboutToShow.connect(self._populate_account_menu)
-        self._populate_account_menu()
-
-        # self.proxy_menu = QMenu("代理设置", self)
-        # menu_bar.addMenu(self.proxy_menu)
-        # # self.proxy_menu.aboutToShow.connect(self._populate_proxy_menu)
-        # proxy_group = QActionGroup(
-        #     self,
-        #     exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive
-        # )
-        # proxy_group.triggered.connect(self._switch_proxy)
-        # no_proxy = QAction("不使用代理", self, checkable=True)
-        # no_proxy.setData(False)
-        # proxy_group.addAction(no_proxy)
-        # self.proxy_menu.addAction(no_proxy)
-        # system_proxy = QAction("使用系统代理", self, checkable=True)
-        # system_proxy.setData(True)
-        # proxy_group.addAction(system_proxy)
-        # self.proxy_menu.addAction(system_proxy)
-        # if config.app_settings["use_proxy"]:
-        #     system_proxy.setChecked(True)
-        # else:
-        #     no_proxy.setChecked(True)
+        menu_bar = StartLiveMenuBar(self)
+        menu_bar.cookieDeleted.connect(self._on_delete_cookies)
+        menu_bar.obsSettingsDeleted.connect(self._on_delete_settings)
+        menu_bar.appSettingsDeleted.connect(self._on_delete_app_settings)
+        menu_bar.credDeleted.connect(self._on_delete_cred)
+        menu_bar.accountSwitch.connect(self._on_switch_account)
+        menu_bar.accountAdded.connect(self._on_add_account)
+        menu_bar.accountMenuPopulated.connect(self._on_populate_menu)
+        self.setMenuBar(menu_bar)
         self.logger.info("Menu bar initialized.")
 
         if first_run:
@@ -407,79 +359,38 @@ class MainWindow(SingleInstanceWindow):
                         on_finished=partial(fetch_delay.on_finished,
                                             self._settings_page.delay_edit))
 
-    @staticmethod
-    @Slot()
-    def _open_log_folder():
-        log_dir, _ = get_log_path(is_makedir=False)
-        QDesktopServices.openUrl(QUrl.fromLocalFile(log_dir))
-
-    @Slot()
-    def _delete_cookies(self):
-        if not app_state.scan_status["scanned"]:
-            return
-        cookie_index = CredentialManagerWorker.get_cookie_indices()
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME,
-                            cookie_index[self._current_cookie_idx])
-        cookie_index.remove(cookie_index[self._current_cookie_idx])
-        set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
-                     dumps(cookie_index))
-        self._current_cookie_idx = max(0, self._current_cookie_idx - 1)
-        self._populate_account_menu()
-        CredentialManagerWorker.reset_default()
+    @Slot(bool)
+    def _on_delete_cookies(self, is_new: bool):
         QMessageBox.information(self, "账号退出", "账号退出成功")
-        self.setup_ui(is_new=self._cookie_index_len == 0)
+        self.setup_ui(is_new=is_new)
 
     @Slot()
-    def _delete_settings(self):
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
-        self.panel.reset_obs_settings()
+    def _on_delete_settings(self):
         QMessageBox.information(self, "设置清空", "OBS连接设置清除成功")
 
     @Slot()
-    def _delete_app_settings(self):
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
-        app_state.app_settings_default()
+    def _on_delete_app_settings(self):
         self._settings_page.reset_default()
         self.tray_icon.setIcon(QIcon(
             join(self._base_path, "resources",
                  "icon_left.ico")))
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
-        if isdir(cache_base_dir(CacheType.CONFIG)):
-            rmtree(cache_base_dir(CacheType.CONFIG))
         QMessageBox.information(self, "设置清空", "APP设置清除成功\n"
                                                   "字体相关设置需要重启生效")
 
-    @Slot()
-    def _delete_cred(self):
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
-        for cookie in CredentialManagerWorker.get_cookie_indices():
-            with suppress(PasswordDeleteError):
-                delete_password(KEYRING_SERVICE_NAME, cookie)
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX)
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
-        self._cred_deleted = True
+    @Slot(bool)
+    def _on_delete_cred(self, _cred_deleted):
+        self._cred_deleted = _cred_deleted
         QMessageBox.information(self, "凭据清空",
                                 "已清空全部凭据, 程序即将退出")
         for worker in self._ll_workers:
             worker.stop()
         QApplication.quit()
 
-    @Slot()
-    def _switch_account(self, action: QAction):
-        idx = action.data()
-        self.logger.info(f"select account index: {idx}")
-        if idx == self._cookie_index_len or not self._ready_switch_account():
-            return
-        elif idx != self._current_cookie_idx:
-            self._current_cookie_idx = idx
-            CredentialManagerWorker.reset_default()
-            self.setup_ui()
+    @Slot(int)
+    def _on_switch_account(self, _current_cookie_idx: int):
+        self._current_cookie_idx = _current_cookie_idx
+        self.setup_ui()
 
     def _ready_switch_account(self):
         """
@@ -504,28 +415,9 @@ class MainWindow(SingleInstanceWindow):
         app_state.scan_status["expired"] and not app_state.scan_status[
             "scanned"])
 
-    @Slot()
-    def _populate_account_menu(self):
-        self.account_menu.clear()
-        self.account_group = QActionGroup(self,
-                                          exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
-        self.account_group.triggered.connect(self._switch_account)
-
-        cookie_indices = app_state.cookie_indices
-        self._cookie_index_len = len(cookie_indices)
-        self.logger.info(f"cookie index length: {self._cookie_index_len}")
-        for idx, cookie_index in enumerate(cookie_indices):
-            act = QAction(app_state.usernames.get(cookie_index, cookie_index),
-                          self, checkable=True)
-            act.setData(idx)
-            self.account_group.addAction(act)
-            self.account_menu.addAction(act)
-            if idx == self._current_cookie_idx:
-                act.setChecked(True)
-        self.account_menu.addSeparator()
-        add_new_account = QAction("添加新账号", self)
-        add_new_account.triggered.connect(self._add_new_account)
-        self.account_menu.addAction(add_new_account)
+    @Slot(int)
+    def _on_populate_menu(self, _cookie_index_len: int):
+        self._cookie_index_len = _cookie_index_len
 
     @Slot()
     def _populate_tray_menu(self):
@@ -539,11 +431,8 @@ class MainWindow(SingleInstanceWindow):
             f"当前账号：{app_state.usernames[cookie_indices[self._current_cookie_idx]]}")
         self.tray_curr_user.setEnabled(True)
 
-    def _add_new_account(self):
-        if self._cookie_index_len == 0 or self._current_cookie_idx == self._cookie_index_len:
-            return
-        self._current_cookie_idx = self._cookie_index_len
-        CredentialManagerWorker.reset_default()
+    @Slot()
+    def _on_add_account(self):
         self.setup_ui(is_new=True)
 
     @Slot(str)
