@@ -9,7 +9,7 @@ class CompletionComboBox(QComboBox):
     def __init__(self, items: list[str], parent=None):
         super().__init__(parent)
         self.setEditable(True)
-        self.items = items.copy()
+        self.items = set(items.copy())
         self.model = QStringListModel(items)
         self.setModel(self.model)
         self.completer = QCompleter(items, self)
@@ -18,14 +18,18 @@ class CompletionComboBox(QComboBox):
         super().addItems(items)
 
     def addItem(self, text: str, /, userData: Any = ...) -> None:
-        self.items.append(text)
-        self.model.setStringList(self.items)
-        super().addItem(text, userData)
+        self.items.add(text)
+        updated_texts = list(self.items)
+        self.model.setStringList(updated_texts)
+        super().clear()
+        super().addItems(updated_texts)
 
     def addItems(self, texts: Sequence[str], /) -> None:
-        super().addItems(texts)
-        self.items.extend(texts)
-        self.model.setStringList(self.items)
+        self.items.update(texts)
+        updated_texts = list(self.items)
+        self.model.setStringList(updated_texts)
+        super().clear()
+        super().addItems(updated_texts)
 
     def clear(self):
         super().clear()
