@@ -13,8 +13,9 @@ from sign import livehime_sign
 
 
 class AreaUpdateWorker(BaseWorker):
-    def __init__(self, area: str):
+    def __init__(self, parent: "StreamConfigPanel", /, area: str):
         super().__init__(name="分区更新")
+        self.parent = parent
         self.area = area
         self.logger = get_logger(self.__class__.__name__)
 
@@ -43,19 +44,18 @@ class AreaUpdateWorker(BaseWorker):
             raise AreaUpdateError(response["message"])
 
     @Slot()
-    def on_finished(self, parent_window: "StreamConfigPanel"):
+    def on_finished(self, *args, **kwargs):
         app_state.room_info[
-            "parent_area"] = parent_window.parent_combo.currentText()
+            "parent_area"] = self.parent.parent_combo.currentText()
         app_state.room_info[
-            "area"] = parent_window.child_combo.currentText()
+            "area"] = self.parent.child_combo.currentText()
         self._session.close()
 
-    @staticmethod
     @Slot()
-    def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
-        enabled = parent_window.enable_child_combo_autosave(False)
-        parent_window.parent_combo.setCurrentText(
+    def on_exception(self, *args, **kwargs):
+        enabled = self.parent.enable_child_combo_autosave(False)
+        self.parent.parent_combo.setCurrentText(
             app_state.room_info["parent_area"])
-        parent_window.child_combo.setCurrentText(app_state.room_info["area"])
-        parent_window.enable_child_combo_autosave(enabled)
-        parent_window.modify_area_btn.setEnabled(True)
+        self.parent.child_combo.setCurrentText(app_state.room_info["area"])
+        self.parent.enable_child_combo_autosave(enabled)
+        self.parent.modify_area_btn.setEnabled(True)

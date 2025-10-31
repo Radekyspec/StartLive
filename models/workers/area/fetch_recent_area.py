@@ -9,8 +9,9 @@ from sign import livehime_sign
 
 
 class FetchRecentAreaWorker(BaseWorker):
-    def __init__(self):
+    def __init__(self, parent: "AreaPickerPanel", /):
         super().__init__(name="历史分区获取")
+        self.parent = parent
         self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
@@ -31,6 +32,6 @@ class FetchRecentAreaWorker(BaseWorker):
                 (area_data["parent_name"], area_data["name"]))
 
     @Slot()
-    def on_finished(self, dlg: "AreaPickerPanel", /, *args, **kwargs):
-        dlg.historyUpdated.emit(app_state.room_info["recent_areas"])
+    def on_finished(self, *args, **kwargs):
+        self.parent.historyUpdated.emit(app_state.room_info["recent_areas"])
         self._session.close()

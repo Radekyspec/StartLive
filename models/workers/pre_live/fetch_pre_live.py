@@ -9,8 +9,9 @@ from constant import CoverStatus
 from models.log import get_logger
 from models.states import LoginState
 from models.workers.base import BaseWorker, run_wrapper
-from models.workers.cover.cover_state_update import CoverStateUpdateWorker
-from models.workers.live.start_live import StartLiveWorker
+from models.workers.cover import CoverStateUpdateWorker
+from models.workers.live import StartLiveWorker
+from models.workers.title import LoadRecentTitleWorker
 from sign import livehime_sign, order_payload
 
 
@@ -76,9 +77,15 @@ class FetchPreLiveWorker(BaseWorker):
     @Slot()
     def on_finished(self, parent_window: "StreamConfigPanel",
                     state: LoginState):
-        parent_window.title_input.addItems([app_state.room_info["title"]])
+        title_text = app_state.room_info["title"]
+        app_state.room_info["recent_title"].insert(0, title_text)
         parent_window.title_input.currentTextChanged.connect(
             lambda: parent_window.save_title_btn.setEnabled(True))
+        recent_title_loader = LoadRecentTitleWorker(parent_window)
+        parent_window.parent_window.add_thread(
+            recent_title_loader,
+            on_finished=recent_title_loader.on_finished,
+        )
         if app_state.stream_status["live_status"]:
             parent_window.addr_input.setText(
                 app_state.stream_status["stream_addr"])

@@ -16,9 +16,10 @@ from sign import livehime_sign, order_payload
 
 
 class StartLiveWorker(BaseWorker):
-    def __init__(self, state: StreamState, /, mutex: QMutex,
-                 cond: QWaitCondition, *, area):
+    def __init__(self, parent: "StreamConfigPanel", state: StreamState, /,
+                 mutex: QMutex, cond: QWaitCondition, *, area):
         super().__init__(name="开播任务")
+        self.parent = parent
         self.state = state
         self.area = area
         self._mutex = mutex
@@ -42,7 +43,7 @@ class StartLiveWorker(BaseWorker):
                     app_state.stream_status["face_url"])
 
     @classmethod
-    def start_live(cls, session, area) -> int:
+    def start_live(cls, session, area) -> int | None:
         logger = get_logger(cls.__name__)
         live_url = "https://api.live.bilibili.com/room/v1/Room/startLive"
         # self.fetch_upstream()
@@ -154,25 +155,24 @@ class StartLiveWorker(BaseWorker):
         return response["data"]["addr"]["addr"], response["data"]["addr"][
             "code"]
 
-    @staticmethod
     @Slot()
-    def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
-        parent_window.start_btn.setEnabled(True)
-        parent_window.parent_window.tray_start_live_action.setEnabled(True)
-        parent_window.stop_btn.setEnabled(False)
-        parent_window.parent_window.tray_stop_live_action.setEnabled(False)
+    def on_exception(self, *args, **kwargs):
+        self.parent.start_btn.setEnabled(True)
+        self.parent.parent_window.tray_start_live_action.setEnabled(True)
+        self.parent.stop_btn.setEnabled(False)
+        self.parent.parent_window.tray_stop_live_action.setEnabled(False)
         # parent_window.parent_combo.setEnabled(True)
         # parent_window.child_combo.setEnabled(True)
-        parent_window.modify_area_btn.setEnabled(True)
+        self.parent.modify_area_btn.setEnabled(True)
 
     @Slot()
-    def on_finished(self, parent_window: "StreamConfigPanel" = None):
+    def on_finished(self, *args, **kwargs):
         self._session.close()
         match self._live_result:
             case 1:
-                QMessageBox.warning(parent_window, "无可用SRT流",
+                QMessageBox.warning(self.parent, "无可用SRT流",
                                     "没有检测到可用的SRT服务器，已切换到RTMP协议")
             case -1:
-                QMessageBox.warning(parent_window, "无可用SRT流",
+                QMessageBox.warning(self.parent, "无可用SRT流",
                                     "没有检测到可用的SRT服务器，已停止直播")
-                parent_window.stop_btn.click()
+                self.parent.stop_btn.click()

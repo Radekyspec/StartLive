@@ -14,8 +14,8 @@ from exceptions import CredentialExpiredError, CredentialDuplicatedError
 from models.log import get_logger
 from models.states import LoginState
 from models.workers.base import BaseWorker, run_wrapper
-from models.workers.login.fetch_login import FetchLoginWorker
-from models.workers.usernames.fetch_usernames import FetchUsernamesWorker
+from models.workers.login import FetchLoginWorker
+from models.workers.usernames import FetchUsernamesWorker
 from sign import livehime_sign
 
 

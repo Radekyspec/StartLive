@@ -3,15 +3,18 @@ from PySide6.QtCore import Slot
 
 # local package import
 import app_state
+from constant import CacheType
 from exceptions import TitleUpdateError
+from models.cache import get_cache_path
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
 from sign import livehime_sign
 
 
 class TitleUpdateWorker(BaseWorker):
-    def __init__(self, title):
+    def __init__(self, parent: "StreamConfigPanel", /, title):
         super().__init__(name="标题更新")
+        self.parent = parent
         self.title = title
         self.logger = get_logger(self.__class__.__name__)
 
@@ -35,12 +38,21 @@ class TitleUpdateWorker(BaseWorker):
         if response["code"] != 0:
             raise TitleUpdateError(response["message"])
         app_state.room_info["title"] = self.title
+        if self.title in app_state.room_info["recent_title"]:
+            app_state.room_info["recent_title"].remove(self.title)
+        app_state.room_info["recent_title"].insert(0, self.title)
+        _, _title_file = get_cache_path(
+            CacheType.CONFIG,
+            f"title{app_state.cookies_dict["DedeUserID"]}")
+        with open(_title_file, "w", encoding="utf-8") as f:
+            f.write("\n".join(app_state.room_info["recent_title"]))
 
-    @staticmethod
     @Slot()
-    def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
-        parent_window.save_title_btn.setEnabled(True)
+    def on_exception(self, *args, **kwargs):
+        self.parent.save_title_btn.setEnabled(True)
 
     @Slot()
-    def on_finished(self):
+    def on_finished(self, *args, **kwargs):
         self._session.close()
+        self.parent.title_input.clear()
+        self.parent.title_input.addItems(app_state.room_info["recent_title"])

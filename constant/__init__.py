@@ -198,7 +198,7 @@ QLineEdit {
     border-color: #5B6273;
     border-radius: 4px;
     padding: 4px 1px 4px 4px;
-    padding-left: 8px;
+    padding-left: 10px;
     border: 1px solid #d3d3d3;
     height: 22 + 8 - 4px * 2;
 }

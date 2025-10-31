@@ -250,10 +250,10 @@ class StreamConfigPanel(QWidget):
         dlg = AreaPickerPanel(self,
                               recent_pairs=app_state.room_info["recent_areas"])
         if not app_state.room_info["recent_areas"]:
-            update_recent = FetchRecentAreaWorker()
+            update_recent = FetchRecentAreaWorker(dlg)
             self.parent_window.add_thread(
                 update_recent,
-                on_finished=partial(update_recent.on_finished, dlg),
+                on_finished=update_recent.on_finished,
             )
         # 可选：设置默认选中
         if self._valid_area():
@@ -306,13 +306,13 @@ class StreamConfigPanel(QWidget):
         area_code = app_state.area_codes[self.child_combo.currentText()]
         app_state.room_info["parent_area"] = self.parent_combo.currentText()
         app_state.room_info["area"] = self.child_combo.currentText()
-        start_live_worker = StartLiveWorker(self.stream_state,
+        start_live_worker = StartLiveWorker(self, self.stream_state,
                                             mutex=self._mutex, cond=self._cond,
                                             area=area_code)
         self.parent_window.add_thread(
             start_live_worker,
-            on_finished=partial(start_live_worker.on_finished, self),
-            on_exception=partial(start_live_worker.on_exception, self),
+            on_finished=start_live_worker.on_finished,
+            on_exception=start_live_worker.on_exception,
         )
 
     def _stop_live(self):
@@ -369,17 +369,15 @@ class StreamConfigPanel(QWidget):
                     obs_host = f"[{obs_host}]"
             except ValueError:
                 pass
-            connector = ObsConnectorWorker(self.obs_btn_state,
+            connector = ObsConnectorWorker(self, self.obs_btn_state,
                                            self._mutex, self._cond,
                                            host=obs_host,
                                            port=self.port_input.text(),
                                            password=self.pass_input.text())
             self.parent_window.add_thread(
                 connector,
-                on_finished=partial(connector.on_finished, self,
-                                    self.obs_btn_state),
-                on_exception=partial(connector.on_exception, self,
-                                     self.obs_btn_state)
+                on_finished=connector.on_finished,
+                on_exception=connector.on_exception,
             )
         elif app_state.obs_client is not None and not app_state.obs_op:
             ObsDaemonWorker.disconnect_obs(self.obs_btn_state)
@@ -413,11 +411,11 @@ class StreamConfigPanel(QWidget):
     @Slot()
     def _save_title(self):
         self.save_title_btn.setEnabled(False)
-        title_updater = TitleUpdateWorker(self.title_input.currentText())
+        title_updater = TitleUpdateWorker(self, self.title_input.currentText())
         self.parent_window.add_thread(
             title_updater,
             on_finished=title_updater.on_finished,
-            on_exception=partial(title_updater.on_exception, self)
+            on_exception=title_updater.on_exception
         )
 
     @Slot()
@@ -427,11 +425,10 @@ class StreamConfigPanel(QWidget):
         self.cover_edit_btn.setEnabled(False)
         self.cover_crop_widget = CoverCropWidget(self)
         self.cover_crop_widget.destroyed.connect(self._on_cover_exit)
-        fetch_cover_worker = FetchCoverWorker()
+        fetch_cover_worker = FetchCoverWorker(self.cover_crop_widget)
         self.parent_window.add_thread(
             fetch_cover_worker,
-            on_finished=partial(fetch_cover_worker.on_finished,
-                                self.cover_crop_widget),
+            on_finished=fetch_cover_worker.on_finished,
         )
         self.cover_crop_widget.show()
 
@@ -465,9 +462,10 @@ class StreamConfigPanel(QWidget):
     def _save_area(self):
         if self._valid_area() and self._child_combo_autosave:
             # self.save_area_btn.setEnabled(False)
-            area_updater = AreaUpdateWorker(self.child_combo.currentText())
+            area_updater = AreaUpdateWorker(self,
+                                            self.child_combo.currentText())
             self.parent_window.add_thread(
                 area_updater,
-                on_finished=partial(area_updater.on_finished, self),
-                on_exception=partial(area_updater.on_exception, self)
+                on_finished=area_updater.on_finished,
+                on_exception=area_updater.on_exception,
             )

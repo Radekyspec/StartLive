@@ -9,8 +9,9 @@ from models.workers.base import BaseWorker, run_wrapper
 
 
 class FetchCoverWorker(BaseWorker):
-    def __init__(self):
+    def __init__(self, parent: "CoverCropWidget", /):
         super().__init__(name="封面获取")
+        self.parent = parent
         self.logger = get_logger(self.__class__.__name__)
 
     @Slot()
@@ -23,9 +24,9 @@ class FetchCoverWorker(BaseWorker):
         app_state.room_info["cover_data"] = response.content
 
     @Slot()
-    def on_finished(self, parent: "CoverCropWidget"):
+    def on_finished(self):
         pix = QPixmap()
         pix.loadFromData(app_state.room_info["cover_data"])
         app_state.room_info["cover_data"] = None
-        parent.label.coverUpdated.emit(pix)
+        self.parent.label.coverUpdated.emit(pix)
         self._session.close()
