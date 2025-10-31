@@ -162,6 +162,7 @@ class AreaPickerPanel(QDialog):
             btn = QPushButton(name)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+            btn.setAutoDefault(False)
             btn.setCheckable(True)
 
             # 固定大小，避免随文本伸缩
@@ -198,6 +199,7 @@ class AreaPickerPanel(QDialog):
             btn = QPushButton(name)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+            btn.setAutoDefault(False)
             btn.setCheckable(True)
 
             btn.setFixedSize(self.CHILD_BTN_W, self.CHILD_BTN_H)

@@ -64,6 +64,7 @@ class RecentAreaBar(QWidget):
             btn.setToolTip(name)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+            btn.setAutoDefault(False)
             btn.setCheckable(True)
             self._recent_group.addButton(btn)
             btn.clicked.connect(partial(self.pairSelected.emit, p, c))
