@@ -1,5 +1,5 @@
-from os import makedirs
-from os.path import join, expanduser, abspath
+from os import makedirs, remove
+from os.path import join, expanduser, abspath, exists
 from platform import system
 
 from constant import CacheType
@@ -41,3 +41,9 @@ def get_cache_path(kind: CacheType, f_name: str, /, *,
     if is_makedir:
         makedirs(_base_dir, exist_ok=True)
     return _base_dir, _const_path
+
+
+def del_cache_user(uid: str):
+    _, _title_f = get_cache_path(CacheType.CONFIG, f"title{uid}")
+    if exists(_title_f):
+        remove(_title_f)

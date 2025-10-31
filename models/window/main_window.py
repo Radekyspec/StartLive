@@ -21,6 +21,7 @@ from qrcode.main import QRCode
 import app_state
 from app_state import dumps
 from constant import *
+from models.cache import del_cache_user
 from models.classes import ClickableLabel, SingleInstanceWindow
 from models.log import init_logger, get_logger
 from models.states import LoginState
@@ -359,13 +360,16 @@ class MainWindow(SingleInstanceWindow):
                         on_finished=partial(fetch_delay.on_finished,
                                             self._settings_page.delay_edit))
 
-    @Slot(bool)
-    def _on_delete_cookies(self, is_new: bool):
+    @Slot(int, bool)
+    def _on_delete_cookies(self, _current_cookie_idx: int, is_new: bool):
+        self._current_cookie_idx = _current_cookie_idx
+        del_cache_user(app_state.cookies_dict["DedeUserID"])
         QMessageBox.information(self, "账号退出", "账号退出成功")
         self.setup_ui(is_new=is_new)
 
     @Slot()
     def _on_delete_settings(self):
+        self.panel.reset_obs_settings()
         QMessageBox.information(self, "设置清空", "OBS连接设置清除成功")
 
     @Slot()

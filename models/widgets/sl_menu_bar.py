@@ -17,7 +17,7 @@ from models.workers import CredentialManagerWorker
 
 
 class StartLiveMenuBar(QMenuBar):
-    cookieDeleted = Signal(bool)
+    cookieDeleted = Signal(int, bool)
     obsSettingsDeleted = Signal()
     appSettingsDeleted = Signal()
     credDeleted = Signal(bool)
@@ -59,15 +59,17 @@ class StartLiveMenuBar(QMenuBar):
         self.account_menu = QMenu("账号切换", self)
         self.addMenu(self.account_menu)
         self.account_menu.aboutToShow.connect(self._populate_account_menu)
+        self.account_group = QActionGroup(self,
+                                          exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
+        self.account_group.triggered.connect(self._switch_account)
         self._populate_account_menu()
 
     @Slot()
     def _populate_account_menu(self):
         self.account_menu.clear()
-        self.account_group = QActionGroup(self,
-                                          exclusionPolicy=QActionGroup.ExclusionPolicy.Exclusive)
-        self.account_group.triggered.connect(self._switch_account)
-
+        for act in self.account_group.actions():
+            self.account_group.removeAction(act)
+            act.deleteLater()
         cookie_indices = app_state.cookie_indices
         self._cookie_index_len = len(cookie_indices)
         self.logger.info(f"cookie index length: {self._cookie_index_len}")
@@ -105,7 +107,8 @@ class StartLiveMenuBar(QMenuBar):
         self._current_cookie_idx = max(0, self._current_cookie_idx - 1)
         self._populate_account_menu()
         CredentialManagerWorker.reset_default()
-        self.cookieDeleted.emit(self._cookie_index_len == 0)
+        self.cookieDeleted.emit(self._current_cookie_idx,
+                                self._cookie_index_len == 0)
 
     @Slot()
     def _delete_settings(self):
@@ -118,8 +121,6 @@ class StartLiveMenuBar(QMenuBar):
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
         app_state.app_settings_default()
-        if isdir(cache_base_dir(CacheType.CONFIG)):
-            rmtree(cache_base_dir(CacheType.CONFIG))
         self.appSettingsDeleted.emit()
 
     @Slot()
@@ -133,6 +134,8 @@ class StartLiveMenuBar(QMenuBar):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX)
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
+        if isdir(cache_base_dir(CacheType.CONFIG)):
+            rmtree(cache_base_dir(CacheType.CONFIG))
         self.credDeleted.emit(True)
 
     @Slot()
@@ -170,7 +173,8 @@ class StartLiveMenuBar(QMenuBar):
             "scanned"])
 
     def _add_new_account(self):
-        if self._cookie_index_len == 0 or self._current_cookie_idx == self._cookie_index_len:
+        if self._cookie_index_len == 0 or \
+                self._current_cookie_idx == self._cookie_index_len:
             return
         self._current_cookie_idx = self._cookie_index_len
         CredentialManagerWorker.reset_default()
