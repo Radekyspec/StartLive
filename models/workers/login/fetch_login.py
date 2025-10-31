@@ -11,12 +11,11 @@ import constant
 from exceptions import LoginError
 from models.log import get_logger
 from models.states import LoginState
-from models.workers.announce.fetch_announce import FetchAnnounceWorker
-from models.workers.area.fetch_area import FetchAreaWorker
+from models.workers.announce import FetchAnnounceWorker
+from models.workers.area import FetchAreaWorker
 from models.workers.base import LongLiveWorker, run_wrapper
-from models.workers.pre_live.fetch_pre_live import FetchPreLiveWorker
-from models.workers.pre_live.fetch_room_status import FetchRoomStatusWorker
-from models.workers.usernames.fetch_usernames import FetchUsernamesWorker
+from models.workers.pre_live import FetchPreLiveWorker, FetchRoomStatusWorker
+from models.workers.usernames import FetchUsernamesWorker
 
 
 class FetchLoginWorker(LongLiveWorker):
