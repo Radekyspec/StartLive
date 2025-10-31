@@ -149,12 +149,9 @@ class AreaPickerPanel(QDialog):
 
     def _build_parent_buttons(self, parents: list[str]):
         # 先清空
-        while self.parent_layout.count():
-            item = self.parent_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                self.parent_group.removeButton(w)
-                w.deleteLater()
+        for w in self.parent_group.buttons():
+            self.parent_group.removeButton(w)
+            w.deleteLater()
 
         # 生成
         cols = len(parents)
@@ -187,12 +184,9 @@ class AreaPickerPanel(QDialog):
     def _populate_children(self, parent_text: str):
         # 清空旧子分区
         self._all_child_buttons.clear()
-        while self.child_layout.count():
-            item = self.child_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                self.child_group.removeButton(w)
-                w.deleteLater()
+        for w in self.child_group.buttons():
+            self.child_group.removeButton(w)
+            w.deleteLater()
 
         children = app_state.area_options.get(parent_text, [])
         for i, name in enumerate(children):

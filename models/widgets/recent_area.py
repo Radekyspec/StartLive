@@ -40,12 +40,9 @@ class RecentAreaBar(QWidget):
         self._rebuild()
 
     def _rebuild(self):
-        while self._list_layout.count():
-            item = self._list_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                self._recent_group.removeButton(w)
-                w.deleteLater()
+        for w in self._recent_group.buttons():
+            self._recent_group.removeButton(w)
+            w.deleteLater()
 
         if not self._pairs:
             self._stack.setCurrentIndex(0)
