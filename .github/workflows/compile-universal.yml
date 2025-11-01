@@ -81,7 +81,8 @@ jobs:
           # mingw64: true
           msvc: latest
           mode: app
-          enable-plugins: pyside6,upx
+          # enable-plugins: pyside6,upx
+          enable-plugins: pyside6
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
@@ -95,8 +96,8 @@ jobs:
           noinclude-data-files: |
             "resources/version.json"
             "resources/icon_left_macOS.ico"
-          onefile-no-compression: true
-          upx-disable-cache: true
+          # onefile-no-compression: true
+          # upx-disable-cache: true
           deployment: true
 
       - name: Build Executable for Mac
