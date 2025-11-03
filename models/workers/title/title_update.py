@@ -3,7 +3,7 @@ from PySide6.QtCore import Slot
 
 # local package import
 import app_state
-from constant import CacheType
+from constant import CacheType, MAX_RECENT_TITLE
 from exceptions import TitleUpdateError
 from models.cache import get_cache_path
 from models.log import get_logger
@@ -46,7 +46,8 @@ class TitleUpdateWorker(BaseWorker):
             CacheType.CONFIG,
             f"title{app_state.cookies_dict["DedeUserID"]}")
         with open(_title_file, "w", encoding="utf-8") as f:
-            f.write("\n".join(app_state.room_info["recent_title"]))
+            f.write("\n".join(
+                app_state.room_info["recent_title"][:MAX_RECENT_TITLE]))
 
     @Slot()
     def on_exception(self, *args, **kwargs):

@@ -3,8 +3,9 @@ from enum import unique, IntEnum, StrEnum
 __all__ = [
     "KEYRING_SERVICE_NAME", "KEYRING_COOKIES", "KEYRING_COOKIES_INDEX",
     "KEYRING_SETTINGS", "KEYRING_ROOM_INFO", "KEYRING_APP_SETTINGS",
-    "LOCAL_SERVER_NAME", "LOGGER_NAME", "USERNAME_DISPLAY_TEMPLATE", "VERSION",
-    "DARK_CSS", "LIGHT_CSS", "ProxyMode", "PreferProto", "CoverStatus",
+    "LOCAL_SERVER_NAME", "LOGGER_NAME", "USERNAME_DISPLAY_TEMPLATE",
+    "MAX_RECENT_TITLE", "VERSION", "DARK_CSS", "LIGHT_CSS",
+    "ProxyMode", "PreferProto", "CoverStatus",
     "WidgetIndex", "CacheType"
 ]
 
@@ -53,6 +54,7 @@ KEYRING_ROOM_INFO = "roomInfo"
 LOCAL_SERVER_NAME = "StartLive|singleInstanceServer"
 LOGGER_NAME = "StartLiveLogger"
 USERNAME_DISPLAY_TEMPLATE = "{}（{}）"
+MAX_RECENT_TITLE = 5
 VERSION = "0.7.2"
 
 APP_KEY = "aae92bc66f3edfab"
