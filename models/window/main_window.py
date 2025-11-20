@@ -52,6 +52,7 @@ class MainWindow(SingleInstanceWindow):
     account_group: QActionGroup
     account_menu: QMenu
     login_label: QLabel
+    menu_bar: StartLiveMenuBar
     status_label: ClickableLabel
     qr_label: QLabel
     panel: StreamConfigPanel | None
@@ -147,15 +148,15 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon.activated.connect(self._on_tray_icon_activated)
         self.logger.info("Tray menu initialized.")
 
-        menu_bar = StartLiveMenuBar(self)
-        menu_bar.cookieDeleted.connect(self._on_delete_cookies)
-        menu_bar.obsSettingsDeleted.connect(self._on_delete_settings)
-        menu_bar.appSettingsDeleted.connect(self._on_delete_app_settings)
-        menu_bar.credDeleted.connect(self._on_delete_cred)
-        menu_bar.accountSwitch.connect(self._on_switch_account)
-        menu_bar.accountAdded.connect(self._on_add_account)
-        menu_bar.accountMenuPopulated.connect(self._on_populate_menu)
-        self.setMenuBar(menu_bar)
+        self.menu_bar = StartLiveMenuBar(self)
+        self.menu_bar.cookieDeleted.connect(self._on_delete_cookies)
+        self.menu_bar.obsSettingsDeleted.connect(self._on_delete_settings)
+        self.menu_bar.appSettingsDeleted.connect(self._on_delete_app_settings)
+        self.menu_bar.credDeleted.connect(self._on_delete_cred)
+        self.menu_bar.accountSwitch.connect(self._on_switch_account)
+        self.menu_bar.accountAdded.connect(self._on_add_account)
+        self.menu_bar.accountMenuPopulated.connect(self._on_populate_menu)
+        self.setMenuBar(self.menu_bar)
         self.logger.info("Menu bar initialized.")
 
         if first_run:
@@ -360,12 +361,14 @@ class MainWindow(SingleInstanceWindow):
                         on_finished=partial(fetch_delay.on_finished,
                                             self._settings_page.delay_edit))
 
-    @Slot(int, bool)
-    def _on_delete_cookies(self, _current_cookie_idx: int, is_new: bool):
+    @Slot(int, bool, bool)
+    def _on_delete_cookies(self, _current_cookie_idx: int, is_new: bool,
+                           expired: bool):
         self._current_cookie_idx = _current_cookie_idx
-        del_cache_user(app_state.cookies_dict["DedeUserID"])
-        QMessageBox.information(self, "账号退出", "账号退出成功")
-        self.setup_ui(is_new=is_new)
+        if not expired:
+            del_cache_user(app_state.cookies_dict["DedeUserID"])
+            QMessageBox.information(self, "账号退出", "账号退出成功")
+            self.setup_ui(is_new=is_new)
 
     @Slot()
     def _on_delete_settings(self):
@@ -453,9 +456,11 @@ class MainWindow(SingleInstanceWindow):
         app_state.scan_status["cred_loaded"] = True
         if app_state.scan_status["scanned"]:
             self._post_scan_setup()
-        elif app_state.scan_status["expired"] or app_state.scan_status[
-            "is_new"]:
+        elif app_state.scan_status["is_new"]:
             # Needs update credential
+            self._fetch_qr()
+        elif app_state.scan_status["expired"]:
+            self.menu_bar.delete_cookies()
             self._fetch_qr()
         else:
             self.login_label.setText("登录时发生错误！请重试...")

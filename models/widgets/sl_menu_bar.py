@@ -17,7 +17,7 @@ from models.workers import CredentialManagerWorker
 
 
 class StartLiveMenuBar(QMenuBar):
-    cookieDeleted = Signal(int, bool)
+    cookieDeleted = Signal(int, bool, bool)
     obsSettingsDeleted = Signal()
     appSettingsDeleted = Signal()
     credDeleted = Signal(bool)
@@ -41,7 +41,7 @@ class StartLiveMenuBar(QMenuBar):
         self.addMenu(self._setting_menu)
 
         delete_cookies_action = QAction("退出账号登录", self)
-        delete_cookies_action.triggered.connect(self._delete_cookies)
+        delete_cookies_action.triggered.connect(self.delete_cookies)
         self._setting_menu.addAction(delete_cookies_action)
 
         delete_settings_action = QAction("清除OBS连接设置", self)
@@ -94,9 +94,11 @@ class StartLiveMenuBar(QMenuBar):
         QDesktopServices.openUrl(QUrl.fromLocalFile(log_dir))
 
     @Slot()
-    def _delete_cookies(self):
-        if not app_state.scan_status["scanned"]:
+    def delete_cookies(self):
+        if not app_state.scan_status["scanned"] and \
+                not app_state.scan_status["expired"]:
             return
+        expired = app_state.scan_status["expired"]
         cookie_index = CredentialManagerWorker.get_cookie_indices()
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME,
@@ -108,7 +110,7 @@ class StartLiveMenuBar(QMenuBar):
         self._populate_account_menu()
         CredentialManagerWorker.reset_default()
         self.cookieDeleted.emit(self._current_cookie_idx,
-                                self._cookie_index_len == 0)
+                                self._cookie_index_len == 0, expired)
 
     @Slot()
     def _delete_settings(self):
