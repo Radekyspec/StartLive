@@ -21,10 +21,11 @@ class TitleUpdateWorker(BaseWorker):
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
-        url = "https://api.live.bilibili.com/room/v1/Room/updateV2"
+        url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/UpdatePreLiveInfo"
         title_data = {
             "csrf": app_state.cookies_dict["bili_jct"],
             "csrf_token": app_state.cookies_dict["bili_jct"],
+            "mobi_app": "pc_link",
             "room_id": app_state.room_info["room_id"],
             "title": self.title,
         }
@@ -37,6 +38,7 @@ class TitleUpdateWorker(BaseWorker):
         self.logger.info(f"updateV2 Result: {response}")
         if response["code"] != 0:
             raise TitleUpdateError(response["message"])
+        print(response)
         self.title = response["data"]["audit_info"]["audit_title"]
         app_state.room_info["title"] = self.title
         if self.title in app_state.room_info["recent_title"]:
