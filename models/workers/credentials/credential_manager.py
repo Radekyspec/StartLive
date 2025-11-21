@@ -76,7 +76,7 @@ class CredentialManagerWorker(BaseWorker):
     @Slot()
     @run_wrapper
     def run(self, /) -> None:
-        if app_state.obs_settings.internal:
+        if app_state.obs_settings:
             self.logger.info(
                 f"use existing obs settings: {app_state.obs_settings.internal}")
         elif (saved_settings := get_password(KEYRING_SERVICE_NAME,

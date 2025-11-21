@@ -5,16 +5,28 @@ from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QRadioButton, QButtonGroup, QCheckBox,
-    QPushButton, QFrame, QFileDialog, QFontDialog, QApplication
+    QPushButton, QFrame, QFileDialog, QFontDialog, QApplication, QSlider
 )
 
 import app_state
+from app_state import bg_settings_default
 from constant import ProxyMode, PreferProto
 from models.classes import FocusPlaceholderLineEdit
 from models.workers.live_delay import StreamTimeShiftUpdateWorker
 
 
 class SettingsPage(QWidget):
+    proxy_group: QButtonGroup
+    delay_edit: QLineEdit
+    delay_save_btn: QPushButton
+    prefer_proto_group: QButtonGroup
+    cover_edit: QLineEdit
+    cover_btn: QPushButton
+    bg_mode_group: QButtonGroup
+    bg_opacity_slider: QSlider
+    bg_blur_slider: QSlider
+    tray_icon_edit: QLineEdit
+
     def __init__(self, parent: "MainWindow" = None):
         super().__init__(parent)
 
@@ -81,6 +93,39 @@ class SettingsPage(QWidget):
             default=proto_default_index
         )
         self.prefer_proto_group.idClicked.connect(self._on_prefer_proto_changed)
+
+        self.cover_edit, self.cover_btn = self.add_file_picker_item(
+            "自定义背景图片", dialog_title="选择背景图片",
+            name_filter="图片文件 (*.jfif;*.pjpeg;*.jpeg;*.pjp;*.jpg;*.png);;所有文件 (*)",
+            placeholder=app_state.app_settings.get("background_image", "")
+        )
+        self.cover_edit.setText(
+            app_state.app_settings.custom_bg
+        )
+        self.cover_edit.textChanged.connect(self._on_cover_changed)
+        self._on_cover_changed()
+
+        bg_mode_default = app_state.app_settings.custom_bg_mode
+        self.bg_mode_group = self.add_multi_choice_item(
+            "背景缩放模式",
+            ["无拉伸", "拉伸填充", "等比填充", "等比适应"],
+            default=bg_mode_default
+        )
+        self.bg_mode_group.idClicked.connect(self._on_bg_mode_changed)
+
+        bg_opacity_default = app_state.app_settings.custom_bg_opacity
+        self.bg_opacity_slider = self.add_slider_item(
+            "背景不透明度", min_value=10, max_value=100,
+            default=bg_opacity_default, suffix="%"
+        )
+        self.bg_opacity_slider.valueChanged.connect(self._on_bg_opacity_changed)
+
+        bg_blur_default = app_state.app_settings.custom_bg_blur_radius
+        self.bg_blur_slider = self.add_slider_item(
+            "背景模糊半径", min_value=0, max_value=40,
+            default=bg_blur_default, suffix=""
+        )
+        self.bg_blur_slider.valueChanged.connect(self._on_bg_blur_changed)
 
         self.tray_icon_edit, self.tray_icon_btn = self.add_file_picker_item(
             "自定义托盘图标", dialog_title="选择托盘图标图片",
@@ -156,6 +201,39 @@ class SettingsPage(QWidget):
             btn = self.proxy_group.button(2)
             if btn:
                 btn.setChecked(True)
+
+    @Slot()
+    def _on_cover_changed(self):
+        path = self.cover_edit.text().strip()
+        app_state.app_settings.custom_bg = path
+
+        if self._parent_window is not None and hasattr(self._parent_window,
+                                                       "set_background_image"):
+            self._parent_window.set_background_image(path)
+            self._on_bg_opacity_changed(
+                app_state.app_settings.custom_bg_opacity)
+            self._on_bg_blur_changed(app_state.app_settings.custom_bg_blur_radius)
+
+    @Slot(int)
+    def _on_bg_mode_changed(self, mode_index: int):
+        app_state.app_settings.custom_bg_mode = mode_index
+        if self._parent_window is not None and hasattr(self._parent_window,
+                                                       "set_background_mode"):
+            self._parent_window.set_background_mode(mode_index)
+
+    @Slot(int)
+    def _on_bg_opacity_changed(self, value: int):
+        app_state.app_settings.custom_bg_opacity = value
+        if self._parent_window is not None and hasattr(self._parent_window,
+                                                       "set_background_opacity"):
+            self._parent_window.set_background_opacity(value / 100.0)
+
+    @Slot(int)
+    def _on_bg_blur_changed(self, value: int):
+        app_state.app_settings.custom_bg_blur_radius = value
+        if self._parent_window is not None and hasattr(self._parent_window,
+                                                       "set_background_blur_radius"):
+            self._parent_window.set_background_blur_radius(value)
 
     def add_section_title(self, text: str):
         frame = QFrame()
@@ -387,6 +465,60 @@ class SettingsPage(QWidget):
         self.main_vbox.addWidget(frame)
         return font_edit, font_btn
 
+    def add_slider_item(self, label: str, *, min_value: int, max_value: int,
+                        default: float, suffix: str = "") -> QSlider:
+        """
+        通用滑条项：Label + Slider + 当前数值标签。
+        返回 QSlider，方便绑定 valueChanged。
+        """
+        frame = QFrame()
+        v = QVBoxLayout(frame)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(6)
+
+        lbl = QLabel(label)
+        lbl.setFont(self.title_font)
+        v.addWidget(lbl)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        slider = QSlider(Qt.Orientation.Horizontal)
+        slider.setRange(min_value, max_value)
+        slider.setValue(default)
+
+        value_lbl = QLabel(f"{default}{suffix}")
+        value_lbl.setFixedWidth(60)
+
+        @Slot(int)
+        def _update_value(val: int):
+            value_lbl.setText(f"{val}{suffix}")
+
+        slider.valueChanged.connect(_update_value)
+
+        row.addWidget(slider, 1)
+        row.addWidget(value_lbl, 0)
+        v.addLayout(row)
+
+        self.main_vbox.addWidget(frame)
+        return slider
+
+    def reset_bg(self):
+        bg_settings_default()
+        self.cover_edit.setText(app_state.app_settings.custom_bg)
+
+        bg_mode_default = app_state.app_settings.custom_bg_mode
+        self.bg_mode_group.button(bg_mode_default).setChecked(True)
+
+        self.bg_opacity_slider.setValue(
+            app_state.app_settings.custom_bg_opacity
+        )
+        self.bg_blur_slider.setValue(
+            app_state.app_settings.custom_bg_blur_radius
+        )
+        self._on_cover_changed()
+
     def reset_default(self):
         pm = app_state.app_settings["proxy_mode"]
         self._on_proxy_mode_changed(pm)
@@ -399,3 +531,4 @@ class SettingsPage(QWidget):
         self.proxy_addr_edit.update_placeholder("socks5://127.0.0.1:7898")
         self.prefer_proto_group.button(
             app_state.app_settings["prefer_proto"]).setChecked(True)
+        self.reset_bg()

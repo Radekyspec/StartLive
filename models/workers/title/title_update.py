@@ -38,9 +38,8 @@ class TitleUpdateWorker(BaseWorker):
         self.logger.info(f"updateV2 Result: {response}")
         if response["code"] != 0:
             raise TitleUpdateError(response["message"])
-        print(response)
-        self.title = response["data"]["audit_info"]["audit_title"]
-        app_state.room_info["title"] = self.title
+        new_title = response["data"]["audit_info"]["audit_title"]
+        app_state.room_info["title"] = new_title if new_title else self.title
         if self.title in app_state.room_info["recent_title"]:
             app_state.room_info["recent_title"].remove(self.title)
         app_state.room_info["recent_title"].insert(0, self.title)

@@ -17,7 +17,7 @@ dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))
 
 
-@dataclass
+@dataclass(slots=True)
 class AppSettings(StateBase):
     proxy_mode: ProxyMode = ProxyMode.NONE
     custom_proxy_url: str = ""
@@ -25,9 +25,13 @@ class AppSettings(StateBase):
     custom_tray_hint: str = ""
     custom_font: str = ""
     prefer_proto: PreferProto = PreferProto.RTMP
+    custom_bg: str = ""
+    custom_bg_blur_radius: float = 10.0
+    custom_bg_opacity: float = 50.0
+    custom_bg_mode: BackgroundMode = BackgroundMode.COVER
 
 
-@dataclass
+@dataclass(slots=True)
 class ObsSettings(StateBase):
     ip_addr: str = "localhost"
     port: str = "4455"
@@ -36,7 +40,7 @@ class ObsSettings(StateBase):
     auto_connect: bool = False
 
 
-@dataclass
+@dataclass(slots=True)
 class ScanStatus(StateBase):
     scanned: bool = False
     qr_key: Optional[str] = None
@@ -52,7 +56,7 @@ class ScanStatus(StateBase):
     announce_updated: bool = False
 
 
-@dataclass
+@dataclass(slots=True)
 class StreamStatus(StateBase):
     live_status: bool = False
     required_face: bool = False
@@ -62,7 +66,7 @@ class StreamStatus(StateBase):
     stream_key: Optional[str] = None
 
 
-@dataclass
+@dataclass(slots=True)
 class RoomInfo(StateBase):
     cover_audit_reason: str = ""
     cover_url: str = ""
@@ -145,6 +149,13 @@ def create_session() -> Session:
 
 def app_settings_default() -> None:
     app_settings.reset()
+
+
+def bg_settings_default() -> None:
+    app_settings["custom_bg"] = ""
+    app_settings["custom_bg_blur_radius"] = 10.0
+    app_settings["custom_bg_opacity"] = 10.0
+    app_settings["custom_bg_mode"] = BackgroundMode.COVER
 
 
 def scan_settings_default() -> None:

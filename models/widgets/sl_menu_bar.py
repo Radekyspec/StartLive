@@ -20,6 +20,7 @@ class StartLiveMenuBar(QMenuBar):
     cookieDeleted = Signal(int, bool, bool)
     obsSettingsDeleted = Signal()
     appSettingsDeleted = Signal()
+    bgDeleted = Signal()
     credDeleted = Signal(bool)
     accountSwitch = Signal(int)
     accountAdded = Signal()
@@ -51,6 +52,10 @@ class StartLiveMenuBar(QMenuBar):
         delete_app_settings = QAction("清除APP设置", self)
         delete_app_settings.triggered.connect(self._delete_app_settings)
         self._setting_menu.addAction(delete_app_settings)
+
+        delete_bg = QAction("清除背景设置", self)
+        delete_bg.triggered.connect(self._on_delete_bg)
+        self._setting_menu.addAction(delete_bg)
 
         delete_cred = QAction("清空所有凭据", self)
         delete_cred.triggered.connect(self._delete_cred)
@@ -139,6 +144,10 @@ class StartLiveMenuBar(QMenuBar):
         if isdir(cache_base_dir(CacheType.CONFIG)):
             rmtree(cache_base_dir(CacheType.CONFIG))
         self.credDeleted.emit(True)
+
+    @Slot()
+    def _on_delete_bg(self):
+        self.bgDeleted.emit()
 
     @Slot()
     def _switch_account(self, action: QAction):

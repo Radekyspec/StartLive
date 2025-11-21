@@ -6,11 +6,19 @@ from typing import Optional, Callable
 
 # package import
 from PIL import ImageQt
-from PySide6.QtCore import (QEvent, Qt, QTimer, QThreadPool, Slot)
-from PySide6.QtGui import QAction, QPixmap, QIcon, QActionGroup
-from PySide6.QtWidgets import (QLabel, QMessageBox, QVBoxLayout, QWidget,
-                               QApplication, QSystemTrayIcon, QMenu,
-                               QStackedWidget, QButtonGroup, QHBoxLayout
+from PySide6.QtCore import (QEvent, QTimer, QThreadPool, Slot)
+from PySide6.QtCore import Qt, QRect
+from PySide6.QtGui import QAction, QIcon, QActionGroup
+from PySide6.QtGui import QPixmap, QImage, QPainter
+from PySide6.QtWidgets import (QApplication,
+                               QWidget,
+                               QVBoxLayout,
+                               QHBoxLayout,
+                               QLabel,
+                               QMessageBox, QSystemTrayIcon, QMenu,
+                               QStackedWidget, QButtonGroup,
+                               QGraphicsBlurEffect, QGraphicsScene,
+                               QGraphicsPixmapItem
                                )
 from darkdetect import isLight
 from keyring import set_password
@@ -70,6 +78,11 @@ class MainWindow(SingleInstanceWindow):
         self._log_viewer = LogViewer(self)
         gui_handler.recordUpdated.connect(self._log_viewer.append_line)
         self.logger = get_logger(self.__class__.__name__)
+        self._bg_pixmap: QPixmap | None = None
+        self._bg_cache: QPixmap | None = None
+        self._blur_radius: float = 10.0
+        self._opacity: float = 0.8
+        self._mode: BackgroundMode = BackgroundMode.COVER
         self.logger.info(f"App {VERSION} created with host={host}, port={port}")
         self._host = host
         self._port = port
@@ -156,6 +169,7 @@ class MainWindow(SingleInstanceWindow):
         self.menu_bar.accountSwitch.connect(self._on_switch_account)
         self.menu_bar.accountAdded.connect(self._on_add_account)
         self.menu_bar.accountMenuPopulated.connect(self._on_populate_menu)
+        self.menu_bar.bgDeleted.connect(self._settings_page.reset_bg)
         self.setMenuBar(self.menu_bar)
         self.logger.info("Menu bar initialized.")
 
@@ -242,6 +256,8 @@ class MainWindow(SingleInstanceWindow):
         self._side_bar.btn_home.setChecked(True)
 
         central = QWidget(self)
+        central.setAutoFillBackground(False)
+        self._stack.setAutoFillBackground(False)
         root = QHBoxLayout()
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -311,6 +327,21 @@ class MainWindow(SingleInstanceWindow):
         self.setWindowTitle(
             f"{_new_version_title}{self._base_title}{_web_server_title}")
 
+    def resizeEvent(self, event):
+        self._update_background_cache()
+        super().resizeEvent(event)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+
+        if not self._bg_cache:
+            return
+
+        painter = QPainter(self)
+        painter.setOpacity(self._opacity)
+        painter.drawPixmap(self.rect(), self._bg_cache, self._bg_cache.rect())
+        painter.end()
+
     def changeEvent(self, event):
         if event.type() == QEvent.Type.WindowStateChange:
             if self.isMinimized():
@@ -324,11 +355,11 @@ class MainWindow(SingleInstanceWindow):
             self.logger.info("Credentials deleted. Exiting application.")
             event.accept()
             return
-        if app_state.obs_settings.internal:
+        if app_state.obs_settings:
             self.logger.info("Saving OBS connection settings.")
             set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
                          dumps(app_state.obs_settings.internal))
-        if app_state.app_settings.internal:
+        if app_state.app_settings:
             self.logger.info("Saving app settings.")
             set_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS,
                          dumps(app_state.app_settings.internal))
@@ -625,6 +656,18 @@ class MainWindow(SingleInstanceWindow):
                                             self.face_window))
         self.face_window.show()
 
+    def _apply_global_qss(self) -> None:
+        app = QApplication.instance()
+        if app is None:
+            return
+
+        color_scheme = app.styleHints().colorScheme()
+        if color_scheme == Qt.ColorScheme.Dark:
+            self._apply_dark_scheme()
+        else:
+            self._apply_light_scheme()
+
+    @Slot(Qt.ColorScheme)
     def apply_color_scheme(self, scheme: Qt.ColorScheme):
         self._color_scheme = scheme
         if scheme == Qt.ColorScheme.Light:
@@ -633,11 +676,17 @@ class MainWindow(SingleInstanceWindow):
             self._apply_dark_scheme()
 
     def _apply_dark_scheme(self):
-        setup_theme("dark", additional_qss=DARK_CSS)
+        if self._bg_pixmap is None:
+            setup_theme("dark", additional_qss=DARK_CSS)
+        else:
+            setup_theme("dark", additional_qss=DARK_COVER_CSS)
         self._side_bar.apply_dark_mode()
 
     def _apply_light_scheme(self):
-        setup_theme("light", additional_qss=LIGHT_CSS)
+        if self._bg_pixmap is None:
+            setup_theme("light", additional_qss=LIGHT_CSS)
+        else:
+            setup_theme("light", additional_qss=LIGHT_COVER_CSS)
         self._side_bar.apply_light_mode()
 
     def _change_color_scheme(self):
@@ -654,3 +703,124 @@ class MainWindow(SingleInstanceWindow):
             self._stack.setCurrentIndex(0)
             return
         self._stack.setCurrentIndex(i)
+
+    def set_background_image(self, path: str) -> None:
+        pm = QPixmap(path)
+        if pm.isNull():
+            self._bg_pixmap = None
+            self._bg_cache = None
+            self._apply_global_qss()
+            self.update()
+            return
+
+        self._bg_pixmap = pm
+        self._update_background_cache()
+        self._apply_global_qss()
+        self.update()
+
+    def set_background_opacity(self, opacity: float) -> None:
+        self._opacity = max(0.0, min(1.0, opacity))
+        self.update()
+
+    def set_background_blur_radius(self, radius: float) -> None:
+        self._blur_radius = max(0.0, radius)
+        self._update_background_cache()
+        self.update()
+
+    def set_background_mode(self, mode: BackgroundMode) -> None:
+        if self._mode is mode:
+            return
+        self._mode = mode
+        self._update_background_cache()
+        self.update()
+
+    def _update_background_cache(self) -> None:
+        if not self._bg_pixmap:
+            self._bg_cache = None
+            return
+
+        if self.width() <= 0 or self.height() <= 0:
+            self._bg_cache = None
+            return
+
+        win_w, win_h = self.width(), self.height()
+
+        canvas = QImage(self.size(), QImage.Format.Format_ARGB32)
+        canvas.fill(Qt.GlobalColor.black)
+
+        painter = QPainter(canvas)
+
+        img = self._bg_pixmap
+        img_w, img_h = img.width(), img.height()
+
+        if self._mode == BackgroundMode.NO_SCALE:
+            x = (win_w - img_w) // 2
+            y = (win_h - img_h) // 2
+            painter.drawPixmap(x, y, img)
+
+        elif self._mode == BackgroundMode.STRETCH:
+            scaled = img.scaled(
+                win_w,
+                win_h,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            painter.drawPixmap(0, 0, scaled)
+
+        elif self._mode == BackgroundMode.FIT:
+            scaled = img.scaled(
+                self.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            x = (win_w - scaled.width()) // 2
+            y = (win_h - scaled.height()) // 2
+            painter.drawPixmap(x, y, scaled)
+
+        elif self._mode == BackgroundMode.COVER:
+            scale = max(win_w / img_w, win_h / img_h)
+            scaled_w = int(img_w * scale)
+            scaled_h = int(img_h * scale)
+
+            scaled = img.scaled(
+                scaled_w,
+                scaled_h,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+
+            src_x = max(0, (scaled.width() - win_w) // 2)
+            src_y = max(0, (scaled.height() - win_h) // 2)
+            src_rect = QRect(src_x, src_y, win_w, win_h)
+
+            painter.drawPixmap(QRect(0, 0, win_w, win_h), scaled, src_rect)
+
+        painter.end()
+
+        if self._blur_radius > 0:
+            blurred = self.apply_blur_to_image(canvas, self._blur_radius)
+            self._bg_cache = QPixmap.fromImage(blurred)
+        else:
+            self._bg_cache = QPixmap.fromImage(canvas)
+
+    @staticmethod
+    def apply_blur_to_image(image: QImage, radius: float) -> QImage:
+        if image.isNull() or radius <= 0:
+            return image
+
+        blur = QGraphicsBlurEffect()
+        blur.setBlurRadius(radius)
+
+        scene = QGraphicsScene()
+        item = QGraphicsPixmapItem(QPixmap.fromImage(image))
+        item.setGraphicsEffect(blur)
+        scene.addItem(item)
+
+        result = QImage(image.size(), QImage.Format.Format_ARGB32)
+        result.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(result)
+        scene.render(painter)
+        painter.end()
+
+        return result

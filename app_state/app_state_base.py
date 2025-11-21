@@ -5,9 +5,10 @@ from copy import deepcopy
 from PySide6.QtCore import QMutex, QMutexLocker
 
 
-@dataclass
+@dataclass(slots=True)
 class StateBase:
     _lock: QMutex = field(default_factory=QMutex, init=False, repr=False)
+    _default: bool = False
 
     # obj["field"]
     def __getitem__(self, key: str) -> Any:
@@ -18,6 +19,7 @@ class StateBase:
 
     # obj["field"] = value
     def __setitem__(self, key: str, value: Any) -> None:
+        self._default = False
         with QMutexLocker(self._lock):
             if not hasattr(self, key):
                 raise KeyError(key)
@@ -33,6 +35,7 @@ class StateBase:
     # obj.update({...})
     def update(self, mapping: Mapping[str, Any] | None = None,
                **kwargs: Any) -> None:
+        self._default = False
         with QMutexLocker(self._lock):
             if mapping:
                 for k, v in mapping.items():
@@ -70,6 +73,7 @@ class StateBase:
         return result
 
     def reset(self) -> None:
+        self._default = True
         defaults = type(self).default_dict()
         with QMutexLocker(self._lock):
             for name, value in defaults.items():
@@ -100,4 +104,4 @@ class StateBase:
             return len([f for f in fields(self) if not f.name.startswith("_")])
 
     def __bool__(self) -> bool:
-        return bool(len(self))
+        return self._default
