@@ -1,7 +1,8 @@
+from dataclasses import dataclass, field
 from functools import partial
 from json import dumps, loads
 from queue import Queue
-from typing import Optional
+from typing import Optional, Any, List
 
 from keyring import get_password
 from obsws_python import ReqClient
@@ -10,74 +11,91 @@ from requests.cookies import cookiejar_from_dict
 
 import constant
 from constant import *
-from models.classes import ThreadSafeDict
+from .app_state_base import StateBase
 
 dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))
-_APP_CONFIG_INITIALIZATION = {
-    "proxy_mode": ProxyMode.NONE,
-    "custom_proxy_url": "",
-    "custom_tray_icon": "",
-    "custom_tray_hint": "",
-    "custom_font": "",
-    "prefer_proto": PreferProto.RTMP,
-}
-_OBS_SETTINGS_INITIALIZATION = {
-    "ip_addr": "localhost",
-    "port": "4455",
-    "password": "",
-    "auto_live": False,
-    "auto_connect": False
-}
-_SCAN_STATUS_INITIALIZATION = {
-    "scanned": False, "qr_key": None, "qr_url": None,
-    "expired": False, "is_new": False,
-    "cred_loaded": False,
-    "timeout": False, "wait_for_confirm": False,
-    "area_updated": False, "room_updated": False,
-    "const_updated": False, "announce_updated": False
-}
-_STREAM_STATUS_INITIALIZATION = {
-    "live_status": False,
-    "required_face": False,
-    "identified_face": False,
-    "face_url": None,
-    "stream_addr": None,
-    "stream_key": None
-}
-_ROOM_INFO_INITIALIZATION = {
-    "cover_audit_reason": "",
-    "cover_url": "",
-    "cover_status": CoverStatus.AUDIT_IN_PROGRESS,
-    "cover_data": None,
-    "room_id": "",
-    "title": "",
-    "parent_area": "",
-    "area": "",
-    "announcement": "",
-    "recent_areas": [],
-    "recent_title": [],
-}
+
+
+@dataclass
+class AppSettings(StateBase):
+    proxy_mode: ProxyMode = ProxyMode.NONE
+    custom_proxy_url: str = ""
+    custom_tray_icon: str = ""
+    custom_tray_hint: str = ""
+    custom_font: str = ""
+    prefer_proto: PreferProto = PreferProto.RTMP
+
+
+@dataclass
+class ObsSettings(StateBase):
+    ip_addr: str = "localhost"
+    port: str = "4455"
+    password: str = ""
+    auto_live: bool = False
+    auto_connect: bool = False
+
+
+@dataclass
+class ScanStatus(StateBase):
+    scanned: bool = False
+    qr_key: Optional[str] = None
+    qr_url: Optional[str] = None
+    expired: bool = False
+    is_new: bool = False
+    cred_loaded: bool = False
+    timeout: bool = False
+    wait_for_confirm: bool = False
+    area_updated: bool = False
+    room_updated: bool = False
+    const_updated: bool = False
+    announce_updated: bool = False
+
+
+@dataclass
+class StreamStatus(StateBase):
+    live_status: bool = False
+    required_face: bool = False
+    identified_face: bool = False
+    face_url: Optional[str] = None
+    stream_addr: Optional[str] = None
+    stream_key: Optional[str] = None
+
+
+@dataclass
+class RoomInfo(StateBase):
+    cover_audit_reason: str = ""
+    cover_url: str = ""
+    cover_status: CoverStatus = CoverStatus.AUDIT_IN_PROGRESS
+    cover_data: Any = None
+    room_id: str = ""
+    title: str = ""
+    parent_area: str = ""
+    area: str = ""
+    announcement: str = ""
+    recent_areas: List[str] = field(default_factory=list)
+    recent_title: List[str] = field(default_factory=list)
+
 
 # Queue to communicate with OBS in a separate thread
 obs_req_queue = Queue()
 
 # Scan status flags for login
-scan_status = ThreadSafeDict.new(_SCAN_STATUS_INITIALIZATION)
+scan_status = ScanStatus()
 
 # Stream status stores fetched RTMP info and verification state
-stream_status = ThreadSafeDict.new(_STREAM_STATUS_INITIALIZATION)
+stream_status = StreamStatus()
 
-app_settings = ThreadSafeDict.new(_APP_CONFIG_INITIALIZATION)
+app_settings = AppSettings()
 
 if (app := get_password(KEYRING_SERVICE_NAME,
                         KEYRING_APP_SETTINGS)) is not None:
     app_settings.update(loads(app))
 
 # Managed by models.workers.credential_manager
-room_info = ThreadSafeDict({})
-obs_settings = ThreadSafeDict({})
-usernames = ThreadSafeDict({})
+room_info = RoomInfo()
+obs_settings = ObsSettings()
+usernames = {}
 # A cache of cookie indices
 cookie_indices = []
 
@@ -125,24 +143,24 @@ def create_session() -> Session:
     return session
 
 
-def app_settings_default():
-    app_settings.update(_APP_CONFIG_INITIALIZATION)
+def app_settings_default() -> None:
+    app_settings.reset()
 
 
-def scan_settings_default():
-    scan_status.update(_SCAN_STATUS_INITIALIZATION)
+def scan_settings_default() -> None:
+    scan_status.reset()
     scan_status["const_updated"] = True
 
 
-def room_info_default():
-    _ROOM_INFO_INITIALIZATION["recent_areas"].clear()
-    _ROOM_INFO_INITIALIZATION["recent_title"].clear()
-    room_info.update(_ROOM_INFO_INITIALIZATION)
+def room_info_default() -> None:
+    room_info.recent_areas.clear()
+    room_info.recent_title.clear()
+    room_info.reset()
 
 
-def stream_status_default():
-    stream_status.update(_STREAM_STATUS_INITIALIZATION)
+def stream_status_default() -> None:
+    stream_status.reset()
 
 
-def obs_settings_default():
-    obs_settings.update(_OBS_SETTINGS_INITIALIZATION)
+def obs_settings_default() -> None:
+    obs_settings.reset()
