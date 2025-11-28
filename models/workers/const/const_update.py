@@ -26,7 +26,7 @@ class ConstantUpdateWorker(BaseWorker):
         self._session.cookies.clear()
 
     @Slot()
-    @run_wrapper
+    @run_wrapper(silent=True)
     def run(self, /) -> None:
         # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
         self._load_from_file()

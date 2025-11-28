@@ -20,7 +20,7 @@ class VersionCheckerWorker(BaseWorker):
         self._latest_version = None
 
     @Slot()
-    @run_wrapper
+    @run_wrapper(silent=True)
     def run(self, /) -> None:
         # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
         url = "https://gh.vtbs.ai/https://api.github.com/repos/Radekyspec/StartLive/releases/latest"

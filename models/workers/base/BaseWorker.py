@@ -1,4 +1,5 @@
-from typing import Optional, Callable
+from functools import wraps
+from typing import Optional, Callable, Type
 
 from PySide6.QtCore import QRunnable, QObject, Signal
 from requests import Session
@@ -50,17 +51,29 @@ class BaseWorker(QRunnable):
         raise NotImplementedError
 
     @staticmethod
-    def run_wrapper(func: Callable):
+    def run_wrapper(_func: Callable | None = None, /, silent: bool = False,
+                    *exc_types: Type[BaseException], ):
+        caught: tuple[Type[BaseException], ...] = (
+            exc_types if exc_types else (Exception,)
+        )
 
-        def wrapped(self, *args, **kwargs):
-            try:
-                func(self, *args, **kwargs)
-            except Exception as e:
-                self.signals.exception.emit(e)
-            finally:
-                self.signals.finished.emit()
+        def decorator(func: Callable):
+            @wraps(func)
+            def wrapped(self, *args, **kwargs):
+                try:
+                    return func(self, *args, **kwargs)
+                except caught as e:
+                    if not silent:
+                        self.signals.exception.emit(e)
+                finally:
+                    self.signals.finished.emit()
 
-        return wrapped
+            return wrapped
+
+        if _func is None:
+            return decorator
+
+        return decorator(_func)
 
     def on_finished(self, *args, **kwargs):
         """
