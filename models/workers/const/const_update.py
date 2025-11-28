@@ -39,7 +39,6 @@ class ConstantUpdateWorker(BaseWorker):
         self.logger.info(f"version.json Result: {response}")
         self._update_const(response)
         self._save_to_file(response)
-        app_state.scan_status["const_updated"] = True
 
     def _load_from_file(self):
         if not exists(self._const_path):
@@ -64,5 +63,6 @@ class ConstantUpdateWorker(BaseWorker):
 
     @Slot()
     def on_finished(self):
+        app_state.scan_status["const_updated"] = True
         self._state.constUpdated.emit()
         self._session.close()
