@@ -1,6 +1,6 @@
 # module import
 from functools import partial
-from os.path import join, abspath
+from pathlib import Path
 from traceback import format_exception
 from typing import Optional, Callable
 
@@ -71,7 +71,7 @@ class MainWindow(SingleInstanceWindow):
     tray_stop_live_action: QAction
 
     def __init__(self, host, port, first_run, no_const_update, /, *,
-                 base_path: str):
+                 base_path: Path):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         _, gui_handler = init_logger()
@@ -106,7 +106,7 @@ class MainWindow(SingleInstanceWindow):
         self._color_scheme = None
         self._stack = QStackedWidget(self)
         self._side_bar = SideBar(self, expanded_width=100, collapsed_width=56,
-                                 icon_path=join(self._base_path, "resources"))
+                                 icon_path=self._base_path / "resources")
         btn_group = QButtonGroup(self)
         btn_group.setExclusive(True)
         btn_group.addButton(self._side_bar.btn_theme)
@@ -127,11 +127,10 @@ class MainWindow(SingleInstanceWindow):
         # https://nuitka.net/user-documentation/common-issue-solutions.html#onefile-finding-files
         if app_state.app_settings["custom_tray_icon"]:
             self.tray_icon.setIcon(QIcon(
-                abspath(app_state.app_settings["custom_tray_icon"])))
+                str(app_state.app_settings["custom_tray_icon"])))
         else:
             self.tray_icon.setIcon(QIcon(
-                join(self._base_path, "resources",
-                     "icon_left.ico")))
+                str(self._base_path / "resources" / "icon_left.ico")))
         if app_state.app_settings["custom_tray_hint"]:
             self.tray_icon.setToolTip(
                 app_state.app_settings["custom_tray_hint"])
@@ -410,8 +409,7 @@ class MainWindow(SingleInstanceWindow):
     def _on_delete_app_settings(self):
         self._settings_page.reset_default()
         self.tray_icon.setIcon(QIcon(
-            join(self._base_path, "resources",
-                 "icon_left.ico")))
+            str(self._base_path / "resources" / "icon_left.ico")))
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         QMessageBox.information(self, "设置清空", "APP设置清除成功\n"
                                                   "字体相关设置需要重启生效")

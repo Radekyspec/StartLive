@@ -2,6 +2,7 @@ from logging import DEBUG
 from logging import Logger, LoggerAdapter
 from logging import getLogger
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 
 from constant import LOGGER_NAME, CacheType
 from models.cache import get_cache_path
@@ -9,7 +10,7 @@ from .formatter import ThreadClassFormatter
 from .handler import QSignalLogHandler
 
 
-def get_log_path(*, is_makedir: bool = True) -> tuple[str, str]:
+def get_log_path(*, is_makedir: bool = True) -> tuple[Path, Path]:
     return get_cache_path(CacheType.LOGS, "StartLive.log",
                           is_makedir=is_makedir)
 

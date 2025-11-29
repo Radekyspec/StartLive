@@ -13,11 +13,18 @@ jobs:
     env:
       UPX_VERSION: "5.0.2"
       UPX_DIR: "${{ github.workspace }}/tools/upx"
-      VERSION: "0.8.1.0"
+      VERSION: "0.8.1"
 
     steps:
       - name: Check-out repository
         uses: actions/checkout@v4
+
+      - name: Set VERSION for push
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "VERSION=${VERSION}+${SHORT_SHA}" >> "$GITHUB_ENV"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -31,6 +38,10 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
+
+      - name: Generate _version.py
+        run: |
+          python tools/write_version.py
 
       - name: Download UPX (Windows)
         shell: pwsh

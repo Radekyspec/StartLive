@@ -1,5 +1,4 @@
 from contextlib import suppress
-from os.path import isdir
 from shutil import rmtree
 
 from PySide6.QtCore import Slot, QUrl, Signal
@@ -141,7 +140,7 @@ class StartLiveMenuBar(QMenuBar):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX)
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
-        if isdir(cache_base_dir(CacheType.CONFIG)):
+        if cache_base_dir(CacheType.CONFIG).is_dir():
             rmtree(cache_base_dir(CacheType.CONFIG))
         self.credDeleted.emit(True)
 

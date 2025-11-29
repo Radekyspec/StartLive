@@ -1,4 +1,4 @@
-from os.path import join
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QEasingCurve, QVariantAnimation, QSize, Slot
 from PySide6.QtGui import QIcon
@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 
 
 class SideBar(QFrame):
-    def __init__(self, parent=None, *, icon_path: str, expanded_width: int,
+    def __init__(self, parent=None, *, icon_path: Path, expanded_width: int,
                  collapsed_width: int):
         super().__init__(parent)
         self._expanded_width = expanded_width
@@ -20,18 +20,18 @@ class SideBar(QFrame):
         self.setObjectName("SideBar")
         self.setFixedWidth(self._collapsed_width)
         self._light_icons = [
-            QIcon(join(icon_path, "light-menu.svg")),
-            QIcon(join(icon_path, "light-theme.svg")),
-            QIcon(join(icon_path, "light-home.svg")),
-            QIcon(join(icon_path, "light-log.svg")),
-            QIcon(join(icon_path, "light-settings.svg")),
+            QIcon(str(icon_path / "light-menu.svg")),
+            QIcon(str(icon_path / "light-theme.svg")),
+            QIcon(str(icon_path / "light-home.svg")),
+            QIcon(str(icon_path / "light-log.svg")),
+            QIcon(str(icon_path / "light-settings.svg")),
         ]
         self._dark_icons = [
-            QIcon(join(icon_path, "dark-menu.svg")),
-            QIcon(join(icon_path, "dark-theme.svg")),
-            QIcon(join(icon_path, "dark-home.svg")),
-            QIcon(join(icon_path, "dark-log.svg")),
-            QIcon(join(icon_path, "dark-settings.svg")),
+            QIcon(str(icon_path / "dark-menu.svg")),
+            QIcon(str(icon_path / "dark-theme.svg")),
+            QIcon(str(icon_path / "dark-home.svg")),
+            QIcon(str(icon_path / "dark-log.svg")),
+            QIcon(str(icon_path / "dark-settings.svg")),
         ]
 
         def mk_btn(text: str, icon_index, *, checkable: bool = True):

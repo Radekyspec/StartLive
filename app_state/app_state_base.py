@@ -1,6 +1,6 @@
+from copy import deepcopy
 from dataclasses import dataclass, field, fields, MISSING
 from typing import Any, Mapping, Iterator, Tuple
-from copy import deepcopy
 
 from PySide6.QtCore import QMutex, QMutexLocker
 

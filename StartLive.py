@@ -2,7 +2,7 @@
 # module import
 import sys
 from argparse import ArgumentParser
-from os.path import abspath, join, isdir, exists, dirname
+from pathlib import Path
 from platform import system
 from subprocess import Popen
 
@@ -24,10 +24,10 @@ if __name__ == '__main__':
         font_size = 9
         icon_file = "icon_left.ico"
         try:
-            install_path = abspath(__compiled__.containing_dir)
-            updater_path = join(install_path, "Update.exe")
-            app_path = join(install_path, f"app-{VERSION}")
-            if exists(updater_path) and isdir(app_path):
+            install_path = Path(__compiled__.containing_dir).resolve()
+            updater_path = install_path / "Update.exe"
+            app_path = install_path / f"app-{VERSION}"
+            if updater_path.exists() and app_path.is_dir():
                 Popen([updater_path, "--update=https://startlive.vtbs.ai/"])
         except NameError:
             pass
@@ -48,9 +48,9 @@ if __name__ == '__main__':
     args, qt_args = parser.parse_known_args()
     enable_hi_dpi()
     app = QApplication(qt_args)
-    base_path = abspath(dirname(__file__))
+    base_path = Path(__file__).resolve().parent
     app.setWindowIcon(
-        QIcon(join(base_path, "resources", icon_file)))
+        QIcon(str(base_path / "resources" / icon_file)))
     if (font := app_state.app_settings["custom_font"]) and (
             f := QFont()).fromString(font):
         app.setFont(f)

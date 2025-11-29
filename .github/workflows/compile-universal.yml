@@ -17,11 +17,18 @@ jobs:
     env:
       UPX_VERSION: "5.0.2"
       UPX_DIR: "${{ github.workspace }}/tools/upx"
-      VERSION: "0.8.1.0"
+      VERSION: "0.8.1"
 
     steps:
       - name: Check-out repository
         uses: actions/checkout@v4
+
+      - name: Set VERSION for push
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "VERSION=${VERSION}+${SHORT_SHA}" >> "$GITHUB_ENV"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -59,6 +66,10 @@ jobs:
           brew remove --force --ignore-dependencies openssl@3
           brew cleanup openssl@3
         if: matrix.os == 'macos-15-intel'
+
+      - name: Generate _version.py
+        run: |
+          python tools/write_version.py
 
       - name: Download UPX (Windows)
         if: matrix.os == 'windows-latest'

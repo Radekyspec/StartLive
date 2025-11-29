@@ -1,6 +1,5 @@
 # module import
 from json import loads
-from os.path import exists
 
 # package import
 from PySide6.QtCore import Slot
@@ -41,7 +40,7 @@ class ConstantUpdateWorker(BaseWorker):
         self._save_to_file(response)
 
     def _load_from_file(self):
-        if not exists(self._const_path):
+        if not self._const_path.exists():
             return
         with open(self._const_path, "r", encoding="utf-8") as f:
             self._update_const(loads(f.read()))

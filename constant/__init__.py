@@ -1,5 +1,7 @@
 from enum import unique, IntEnum, StrEnum
 
+from ._version import __version__
+
 __all__ = [
     "KEYRING_SERVICE_NAME", "KEYRING_COOKIES", "KEYRING_COOKIES_INDEX",
     "KEYRING_SETTINGS", "KEYRING_ROOM_INFO", "KEYRING_APP_SETTINGS",
@@ -64,7 +66,7 @@ LOCAL_SERVER_NAME = "StartLive|singleInstanceServer"
 LOGGER_NAME = "StartLiveLogger"
 USERNAME_DISPLAY_TEMPLATE = "{}（{}）"
 MAX_RECENT_TITLE = 5
-VERSION = "0.8.1"
+VERSION = __version__
 
 APP_KEY = "aae92bc66f3edfab"
 APP_SECRET = "af125a0d5279fd576c1b4418a3e8276d"

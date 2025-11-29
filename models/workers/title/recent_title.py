@@ -1,5 +1,4 @@
 # package import
-from os.path import exists
 
 from PySide6.QtCore import Slot
 
@@ -24,10 +23,10 @@ class LoadRecentTitleWorker(BaseWorker):
         _, _title_file = get_cache_path(
             CacheType.CONFIG,
             f"title{app_state.cookies_dict["DedeUserID"]}")
-        if not exists(_title_file):
+        if not _title_file.exists():
             return
         with open(_title_file, "r", encoding="utf-8") as f:
-            self.logger.info(f"Load recent title from {_title_file}")
+            self.logger.info(f"Load recent title from {str(_title_file)}")
             self.title = list(map(lambda x: x.strip(), f.readlines()))
 
     @Slot()

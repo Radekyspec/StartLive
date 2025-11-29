@@ -1,31 +1,28 @@
-from os import makedirs, remove
-from os.path import join, expanduser, abspath, exists
+from os import remove
+from pathlib import Path
 from platform import system
 
 from constant import CacheType
 
-_cache_dir: dict[CacheType, str] = {}
+_cache_dir: dict[CacheType, Path] = {}
 
 
-def cache_base_dir(kind: CacheType) -> str:
+def cache_base_dir(kind: CacheType) -> Path:
     if kind in _cache_dir:
-        return _cache_dir[kind]
+        return Path(_cache_dir[kind])
     if (_arch := system()) == "Windows":
         try:
-            _base_dir = abspath(__compiled__.containing_dir)
+            _base_dir = Path(__compiled__.containing_dir).resolve()
         except NameError:
-            _base_dir = abspath("")
-        _base_dir = join(_base_dir, kind)
+            _base_dir = Path("").resolve()
+        _base_dir = _base_dir / kind
     elif _arch == "Linux":
-        _base_dir = join(expanduser("~"), ".cache", "StartLive",
-                         kind)
+        _base_dir = Path.home() / ".cache" / "StartLive" / kind
     elif _arch == "Darwin":
         if kind == CacheType.CONFIG:
-            _base_dir = join(expanduser("~"), "Library",
-                             "Application Support", "StartLive")
+            _base_dir = Path.home() / "Library" / "Application Support" / "StartLive"
         elif kind == CacheType.LOGS:
-            _base_dir = join(expanduser("~"), "Library",
-                             "Logs", "StartLive")
+            _base_dir = Path.home() / "Library" / "Logs" / "StartLive"
         else:
             raise ValueError("Unsupported cache type")
     else:
@@ -35,15 +32,15 @@ def cache_base_dir(kind: CacheType) -> str:
 
 
 def get_cache_path(kind: CacheType, f_name: str, /, *,
-                   is_makedir: bool = True) -> tuple[str, str]:
+                   is_makedir: bool = True) -> tuple[Path, Path]:
     _base_dir = cache_base_dir(kind)
-    _const_path = join(_base_dir, f_name)
+    _const_path = _base_dir / f_name
     if is_makedir:
-        makedirs(_base_dir, exist_ok=True)
+        _base_dir.mkdir(parents=True, exist_ok=True)
     return _base_dir, _const_path
 
 
 def del_cache_user(uid: str):
     _, _title_f = get_cache_path(CacheType.CONFIG, f"title{uid}")
-    if exists(_title_f):
+    if _title_f.exists():
         remove(_title_f)
