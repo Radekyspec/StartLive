@@ -3,6 +3,7 @@ from contextlib import suppress
 from queue import Empty
 
 # package import
+from obsws_python.error import OBSSDKRequestError
 from PySide6.QtCore import Slot
 
 # local package import
@@ -25,7 +26,8 @@ class ObsDaemonWorker(LongLiveWorker):
         while app_state.obs_client is not None and self.is_running:
             with suppress(Empty):
                 req, body = app_state.obs_req_queue.get(timeout=.2)
-                app_state.obs_client.send(req, body)
+                with suppress(OBSSDKRequestError):
+                    app_state.obs_client.send(req, body)
 
     @classmethod
     def disconnect_obs(cls, state: ObsBtnState):
