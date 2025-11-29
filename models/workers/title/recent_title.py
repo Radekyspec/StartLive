@@ -27,7 +27,7 @@ class LoadRecentTitleWorker(BaseWorker):
             return
         with open(_title_file, "r", encoding="utf-8") as f:
             self.logger.info(f"Load recent title from {str(_title_file)}")
-            self.title = list(map(lambda x: x.strip(), f.readlines()))
+            self.title = list(map(str.strip, f.readlines()))
 
     @Slot()
     def on_finished(self, *args, **kwargs):

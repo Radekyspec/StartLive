@@ -19,12 +19,17 @@ jobs:
       - name: Check-out repository
         uses: actions/checkout@v4
 
+      - name: Set app version
+        shell: bash
+        run: |
+          echo "APP_VERSION=${VERSION}" >> "$GITHUB_ENV"
+
       - name: Set VERSION for push
         if: github.event_name == 'push'
         shell: bash
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
-          echo "VERSION=${VERSION}+${SHORT_SHA}" >> "$GITHUB_ENV"
+          echo "APP_VERSION=${VERSION}+${SHORT_SHA}" >> "$GITHUB_ENV"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -90,7 +95,7 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: StartLive-v${{ env.VERSION }}-${{ runner.os }}-standalone
+          name: StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-standalone
           path: |
             output/
           include-hidden-files: true
