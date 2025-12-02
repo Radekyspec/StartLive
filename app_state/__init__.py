@@ -105,7 +105,8 @@ cookie_indices = []
 
 # Area (category) selections for live stream configuration
 parent_area = ["请选择"]
-area_options = {}
+area_options: dict[str, List[str]] = {}
+area_reverse: dict[str, str] = {}
 area_codes = {}
 
 # OBS WebSocket client

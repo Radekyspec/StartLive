@@ -25,12 +25,14 @@ class FetchAreaWorker(BaseWorker):
         self.logger.info("Area/getList Response")
         response = response.json()
         for area_info in response["data"]["area_v1_info"]:
-            app_state.parent_area.append(area_info["name"])
-            app_state.area_options[area_info["name"]] = []
+            parent = area_info["name"]
+            app_state.parent_area.append(parent)
+            app_state.area_options[parent] = []
             for sub_area in area_info["list"]:
                 app_state.area_codes[sub_area["name"]] = sub_area["id"]
                 app_state.area_options[area_info["name"]].append(
                     sub_area["name"])
+                app_state.area_reverse[sub_area["name"]] = parent
         app_state.scan_status["area_updated"] = True
 
     @Slot()

@@ -46,9 +46,11 @@ class AreaUpdateWorker(BaseWorker):
     @Slot()
     def on_finished(self, *args, **kwargs):
         app_state.room_info[
-            "parent_area"] = self.parent.parent_combo.currentText()
+            "parent_area"] = app_state.area_reverse[self.area]
         app_state.room_info[
-            "area"] = self.parent.child_combo.currentText()
+            "area"] = self.area
+        self.parent.parent_combo.setCurrentText(app_state.room_info["parent_area"])
+        self.parent.child_combo.setCurrentText(app_state.room_info["area"])
         self._session.close()
 
     @Slot()
@@ -57,5 +59,7 @@ class AreaUpdateWorker(BaseWorker):
         self.parent.parent_combo.setCurrentText(
             app_state.room_info["parent_area"])
         self.parent.child_combo.setCurrentText(app_state.room_info["area"])
+        # roll back if an exception occurs
+        self.area = app_state.room_info["area"]
         self.parent.enable_child_combo_autosave(enabled)
         self.parent.modify_area_btn.setEnabled(True)

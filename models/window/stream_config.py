@@ -239,7 +239,7 @@ class StreamConfigPanel(QWidget):
             self.child_combo.addItems(app_state.area_options[text])
             self.child_combo.setEnabled(True)
             self.enable_child_combo_autosave(_enabled)
-            self._save_area()
+            self._save_area(self.child_combo.currentText())
         else:
             self.child_combo.clear()
             self.child_combo.setEnabled(False)
@@ -459,11 +459,10 @@ class StreamConfigPanel(QWidget):
             app_state.area_options[self.parent_combo.currentText()]
 
     @Slot()
-    def _save_area(self):
+    def _save_area(self, child_area: str):
         if self._valid_area() and self._child_combo_autosave:
             # self.save_area_btn.setEnabled(False)
-            area_updater = AreaUpdateWorker(self,
-                                            self.child_combo.currentText())
+            area_updater = AreaUpdateWorker(self, child_area)
             self.parent_window.add_thread(
                 area_updater,
                 on_finished=area_updater.on_finished,
