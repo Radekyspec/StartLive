@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QLabel, QSizePolicy,
 )
 
+from models.log import get_logger
 from models.widgets import CropLabel
 from models.workers import CoverUploadWorker
 
@@ -22,6 +23,7 @@ class CoverCropWidget(QWidget):
         self.setWindowTitle("直播封面选框")
         self.setFixedSize(660, 560)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self._logger = get_logger(self.__class__.__name__)
 
         self.label = CropLabel((16, 9), self)
 
@@ -59,6 +61,7 @@ class CoverCropWidget(QWidget):
             self, "选择图片", "",
             "Images (*.jfif;*.pjpeg;*.jpeg;*.pjp;*.jpg;*.png)"
         )
+        self._logger.info(f"load image: {path}")
         if not path:
             return
         self.label.setPixmap(toqpixmap(path))
@@ -74,12 +77,11 @@ class CoverCropWidget(QWidget):
             return
         self.btn_upload.setText("封面上传中...")
         self.btn_upload.setEnabled(False)
-        pixmap = pixmap.copy(rect)
-        if pixmap.size().width() > 704 or pixmap.size().height() > 396:
-            pixmap = pixmap.scaled(
-                704, 396, Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            )
+        pixmap = pixmap.copy(rect).scaled(
+            704, 396, Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        self._logger.info(f"image scale to 704x396")
         ba = QByteArray()
         buf = QBuffer(ba)
         buf.open(QIODevice.OpenModeFlag.WriteOnly)
