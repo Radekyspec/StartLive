@@ -40,10 +40,6 @@ jobs:
           cache-dependency-path: |
             **/requirements*.txt
 
-      - name: Install Dependencies
-        run: |
-          pip install -r requirements.txt git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
-
       - name: Generate _version.py
         run: |
           python tools/write_version.py
