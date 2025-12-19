@@ -55,6 +55,10 @@ jobs:
             **/requirements*.txt
         if: matrix.os == 'macos-latest'
 
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
       - name: Install ImageIO for Mac
         if: matrix.os != 'windows-latest'
         run: |
