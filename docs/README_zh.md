@@ -50,7 +50,7 @@ winget install Radekyspec.StartLive
   - 在 `Windows` 上通常为系统自带的 [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)
   - 在 `macOS` 上通常为系统自带的 [Keychain钥匙串](https://en.wikipedia.org/wiki/Keychain_%28software%29)
 
-### 安装依赖
+### 安装 & 运行
 
 * 创建虚拟环境
 
@@ -58,19 +58,18 @@ winget install Radekyspec.StartLive
 python -m venv venv
 ```
 
-* `Windows`: 可以直接双击运行 `install-requirements.bat`
+- **Windows**: 
 
-* `MacOS` / `Linux`:
+```shell
+.\venv\Script\pip.exe install -r .\requirements.txt
+.\venv\Script\python.exe .\StartLive.py
+```
+
+- **macOS / Linux**:
 
 ```shell
 ./venv/bin/pip install -r ./requirements.txt
-./venv/bin/pip install git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
-```
-
-### 运行app
-
-```shell
-python StartLive.py
+./venv/bin/python ./StartLive.py
 ```
 
 > 请注意，Bilibili目前没有对所有用户支持HEVC编码推流，如果推流失败可以检查一下编码。

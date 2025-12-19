@@ -7,3 +7,4 @@ obsws-python
 keyring~=25.6.0
 darkdetect~=0.8.0
 semver~=3.0.4
+PyQtDarkTheme-fork @ git+https://github.com/Radekyspec/PyQtDarkTheme.git@main

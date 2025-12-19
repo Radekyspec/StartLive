@@ -53,7 +53,7 @@ winget install Radekyspec.StartLive
   - On **Windows**: typically the built-in [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)  
   - On **macOS**: typically the system `Keychain`  
 
-### Install dependencies
+### Install & Run
 
 Create a virtual environment:
 
@@ -61,19 +61,18 @@ Create a virtual environment:
 python -m venv venv
 ```
 
-- **Windows**: simply double-click `install-requirements.bat`.
+- **Windows**: 
+
+```shell
+.\venv\Script\pip.exe install -r .\requirements.txt
+.\venv\Script\python.exe .\StartLive.py
+```
 
 - **macOS / Linux**:
 
 ```shell
 ./venv/bin/pip install -r ./requirements.txt
-./venv/bin/pip install git+https://github.com/Radekyspec/PyQtDarkTheme.git@main
-```
-
-### Run the app
-
-```shell
-python StartLive.py
+./venv/bin/python ./StartLive.py
 ```
 
 > Note: Bilibili does **not** enable **HEVC (High Efficiency Video Coding)** streaming for all users. If pushing the stream fails, please check your encoder/codec settings.
