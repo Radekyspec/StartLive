@@ -28,6 +28,14 @@
 winget install Radekyspec.StartLive
 ```
 
+### 通过 AUR (Arch Linux/Manjaro) 安装
+
+> 需要使用一个 AUR helper，比如 `paru`、`yay`、`pikaur` 等
+
+```shell
+paru -S startlive-git
+```
+
 ## 软件截图
 
 ![2bf8d9d51186e774903b6cd26831f355](https://github.com/user-attachments/assets/974b0dbb-fcd5-4b26-be76-42db728b8942)

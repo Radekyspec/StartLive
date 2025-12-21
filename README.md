@@ -31,6 +31,14 @@ Download link: **[Click here to download](https://github.com/Radekyspec/StartLiv
 winget install Radekyspec.StartLive
 ```
 
+### Install via AUR (Arch Linux/Manjaro)
+
+> Install `startlive-git` using an AUR helper (e.g. `paru`, `yay`, `pikaur`).
+
+```shell
+paru -S startlive-git
+```
+
 ## Screenshots
 
 ![2bf8d9d51186e774903b6cd26831f355](https://github.com/user-attachments/assets/974b0dbb-fcd5-4b26-be76-42db728b8942)
