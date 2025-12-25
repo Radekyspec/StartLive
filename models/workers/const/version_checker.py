@@ -23,7 +23,7 @@ class VersionCheckerWorker(BaseWorker):
     @run_wrapper(silent=True)
     def run(self, /) -> None:
         # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
-        url = "https://gh.vtbs.ai/https://api.github.com/repos/Radekyspec/StartLive/releases/latest"
+        url = "https://gh.bydfk.com/https://api.github.com/repos/Radekyspec/StartLive/releases/latest"
         self.logger.info(f"releases Request")
         response = self._session.get(url)
         response.encoding = "utf-8"

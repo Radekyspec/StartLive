@@ -28,7 +28,7 @@ if __name__ == '__main__':
             updater_path = install_path / "Update.exe"
             app_path = install_path / f"app-{VERSION}"
             if updater_path.exists() and app_path.is_dir():
-                Popen([updater_path, "--update=https://startlive.vtbs.ai/"])
+                Popen([updater_path, "--update=https://startlive.bydfk.com/"])
         except NameError:
             pass
     else:

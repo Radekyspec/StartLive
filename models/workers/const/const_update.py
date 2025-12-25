@@ -29,7 +29,7 @@ class ConstantUpdateWorker(BaseWorker):
     def run(self, /) -> None:
         # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
         self._load_from_file()
-        url = "https://gh.vtbs.ai/https://raw.githubusercontent.com/Radekyspec/StartLive/refs/heads/master/resources/version.json"
+        url = "https://gh.bydfk.com/https://raw.githubusercontent.com/Radekyspec/StartLive/refs/heads/master/resources/version.json"
         self.logger.info(f"version.json Request")
         response = self._session.get(url)
         response.encoding = "utf-8"
