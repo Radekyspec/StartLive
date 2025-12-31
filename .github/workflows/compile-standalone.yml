@@ -13,7 +13,7 @@ jobs:
     env:
       UPX_VERSION: "5.0.2"
       UPX_DIR: "${{ github.workspace }}/tools/upx"
-      VERSION: "0.8.3"
+      VERSION: "0.8.4"
 
     steps:
       - name: Check-out repository
