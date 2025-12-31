@@ -399,6 +399,8 @@ class MainWindow(SingleInstanceWindow):
             del_cache_user(app_state.cookies_dict["DedeUserID"])
             QMessageBox.information(self, "账号退出", "账号退出成功")
             self.setup_ui(is_new=is_new)
+        self.logger.info(
+            f"Cookie {app_state.cookies_dict['DedeUserID']} deleted.")
 
     @Slot()
     def _on_delete_settings(self):
@@ -484,11 +486,14 @@ class MainWindow(SingleInstanceWindow):
     def load_credentials(self):
         app_state.scan_status["cred_loaded"] = True
         if app_state.scan_status["scanned"]:
+            self.logger.info("load existing credential")
             self._post_scan_setup()
         elif app_state.scan_status["is_new"]:
             # Needs update credential
+            self.logger.info("load new credential")
             self._fetch_qr()
         elif app_state.scan_status["expired"]:
+            self.logger.info("credential expired")
             self.menu_bar.delete_cookies()
             self._fetch_qr()
         else:

@@ -99,15 +99,20 @@ class StartLiveMenuBar(QMenuBar):
 
     @Slot()
     def delete_cookies(self):
+        self.logger.info(
+            f"scanned={app_state.scan_status.scanned}, "
+            f"expired={app_state.scan_status.expired}")
         if not app_state.scan_status["scanned"] and \
                 not app_state.scan_status["expired"]:
             return
         expired = app_state.scan_status["expired"]
         cookie_index = CredentialManagerWorker.get_cookie_indices()
+        self.logger.info(f"delete cookie index: {cookie_index}")
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME,
                             cookie_index[self._current_cookie_idx])
         cookie_index.remove(cookie_index[self._current_cookie_idx])
+        self.logger.info(f"new cookie index: {cookie_index}")
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
                      dumps(cookie_index))
         self._current_cookie_idx = max(0, self._current_cookie_idx - 1)
