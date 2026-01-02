@@ -7,9 +7,9 @@ from requests.cookies import cookiejar_from_dict
 
 # local package import
 import app_state
-import constant
 from app_state import dumps
 from constant import *
+from constant import HeadersType
 from exceptions import CredentialExpiredError, CredentialDuplicatedError
 from models.log import get_logger
 from models.states import LoginState
@@ -21,7 +21,7 @@ from sign import livehime_sign
 
 class CredentialManagerWorker(BaseWorker):
     def __init__(self, cookie_index: int, is_new: bool = False):
-        super().__init__(name="凭据管理")
+        super().__init__(name="凭据管理", headers_type=HeadersType.WEB)
         self.cookie_index = cookie_index
         self.is_new = is_new
         self.logger = get_logger(self.__class__.__name__)
@@ -124,7 +124,6 @@ class CredentialManagerWorker(BaseWorker):
         saved_cookies = loads(saved_cookies)
         cookiejar_from_dict(saved_cookies,
                             cookiejar=self._session.cookies)
-        self._session.headers.update(constant.HEADERS_WEB)
         nav_url = "https://api.bilibili.com/x/web-interface/nav"
         self.logger.info(f"nav Request")
         response = self._session.get(

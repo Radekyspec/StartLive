@@ -9,7 +9,7 @@ __all__ = [
     "MAX_RECENT_TITLE", "VERSION", "DARK_COVER_CSS", "DARK_CSS", "LIGHT_COVER_CSS",
     "LIGHT_CSS",
     "ProxyMode", "PreferProto", "CoverStatus",
-    "WidgetIndex", "CacheType", "BackgroundMode"
+    "WidgetIndex", "CacheType", "BackgroundMode", "HeadersType"
 ]
 
 
@@ -54,6 +54,12 @@ class BackgroundMode(IntEnum):
     STRETCH = 1  # 等比拉伸
     FIT = 2  # 等比填充
     COVER = 3  # 等比适应
+
+
+@unique
+class HeadersType(IntEnum):
+    WEB = 0
+    APP = 1
 
 
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"

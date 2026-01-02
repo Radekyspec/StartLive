@@ -11,6 +11,7 @@ from requests.cookies import cookiejar_from_dict
 
 import constant
 from constant import *
+from constant import HeadersType
 from sign import gen_buvid
 from .app_state_base import StateBase
 
@@ -120,9 +121,12 @@ obs_connecting = False
 cookies_dict = {}
 
 
-def create_session() -> Session:
+def create_session(h_type: HeadersType) -> Session:
     session = Session()
-    session.headers.update(constant.HEADERS_APP)
+    if h_type == HeadersType.WEB:
+        session.headers.update(constant.HEADERS_WEB)
+    elif h_type == HeadersType.APP:
+        session.headers.update(constant.HEADERS_APP)
     cookiejar_from_dict(cookies_dict,
                         cookiejar=session.cookies)
     session.cookies.set("appkey", constant.APP_KEY, domain="bilibili.com",

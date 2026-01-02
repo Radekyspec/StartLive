@@ -5,6 +5,7 @@ from PySide6.QtCore import QRunnable, QObject, Signal
 from requests import Session
 
 from app_state import create_session
+from constant import HeadersType
 
 
 class BaseWorker(QRunnable):
@@ -18,7 +19,8 @@ class BaseWorker(QRunnable):
     exception: Optional[Exception]
     signals: Signals
 
-    def __init__(self, name: str, *, with_session: bool = True):
+    def __init__(self, name: str, *, with_session: bool = True,
+                 headers_type: HeadersType = HeadersType.APP):
         super().__init__()
         self.name = name
         self.finished = False
@@ -26,7 +28,7 @@ class BaseWorker(QRunnable):
         self.signals = self.Signals()
         self.setAutoDelete(True)
         if with_session:
-            self._session = create_session()
+            self._session = create_session(headers_type)
         else:
             self._session = None
 

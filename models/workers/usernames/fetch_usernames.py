@@ -16,11 +16,9 @@ from sign import livehime_sign
 
 class FetchUsernamesWorker(BaseWorker):
     def __init__(self, skip_user: str):
-        super().__init__(name="用户名更新")
+        super().__init__(name="用户名更新", headers_type=HeadersType.WEB)
         self._current_user = skip_user
         self.logger = get_logger(self.__class__.__name__)
-        self._session.headers.clear()
-        self._session.headers.update(constant.HEADERS_WEB)
 
     @Slot()
     @run_wrapper

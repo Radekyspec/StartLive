@@ -7,7 +7,7 @@ from PySide6.QtCore import Slot
 
 # local package import
 import app_state
-import constant
+from constant import HeadersType
 from exceptions import LoginError
 from models.log import get_logger
 from models.states import LoginState
@@ -20,12 +20,10 @@ from models.workers.usernames import FetchUsernamesWorker
 
 class FetchLoginWorker(LongLiveWorker):
     def __init__(self, state: LoginState):
-        super().__init__(name="登录")
+        super().__init__(name="登录", headers_type=HeadersType.WEB)
         self.state = state
         self.logger = get_logger(self.__class__.__name__)
         self.cookie_key = None
-        self._session.headers.clear()
-        self._session.headers.update(constant.HEADERS_WEB)
 
     @staticmethod
     def post_login(parent: "MainWindow", state: LoginState):

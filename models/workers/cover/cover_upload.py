@@ -6,7 +6,7 @@ from PySide6.QtCore import Slot
 
 # local package import
 import app_state
-import constant
+from constant import HeadersType
 from exceptions import CoverUploadError
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
@@ -15,11 +15,9 @@ from .cover_state_update import CoverStateUpdateWorker
 
 class CoverUploadWorker(BaseWorker):
     def __init__(self, data: bytes | bytearray | memoryview):
-        super().__init__(name="封面上传")
+        super().__init__(name="封面上传", headers_type=HeadersType.WEB)
         self.data = data
         self.logger = get_logger(self.__class__.__name__)
-        self._session.headers.clear()
-        self._session.headers.update(constant.HEADERS_WEB)
 
     @Slot()
     @run_wrapper
