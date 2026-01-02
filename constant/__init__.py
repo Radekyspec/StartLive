@@ -70,8 +70,8 @@ VERSION = __version__
 
 APP_KEY = "aae92bc66f3edfab"
 APP_SECRET = "af125a0d5279fd576c1b4418a3e8276d"
-LIVEHIME_BUILD = "10053"
-LIVEHIME_VERSION = "7.39.0.10053"
+LIVEHIME_BUILD = "10082"
+LIVEHIME_VERSION = "7.40.0.10082"
 HEADERS_WEB = {
     "Accept": "*/*",
     "Accept-Encoding": "gzip, deflate",
@@ -85,12 +85,12 @@ HEADERS_WEB = {
     "Sec-Fetch-Site": "same-site",
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Dest": "empty",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/10053"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/10082"
 }
 HEADERS_APP = {
     "Accept-Encoding": "gzip,deflate",
     "Connection": "keep-alive",
-    "User-Agent": "LiveHime/7.39.0.10053 os/Windows pc_app/livehime build/10053 osVer/10.0_x86_64"
+    "User-Agent": "LiveHime/7.40.0.10082 os/Windows pc_app/livehime build/10082 osVer/10.0_x86_64"
 }
 START_LIVE_AUTH_CSRF = True
 STOP_LIVE_AUTH_CSRF = False
