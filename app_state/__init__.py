@@ -11,6 +11,7 @@ from requests.cookies import cookiejar_from_dict
 
 import constant
 from constant import *
+from sign import gen_buvid
 from .app_state_base import StateBase
 
 dumps = partial(dumps, ensure_ascii=False,
@@ -29,6 +30,7 @@ class AppSettings(StateBase):
     custom_bg_blur_radius: float = 10.0
     custom_bg_opacity: float = 50.0
     custom_bg_mode: BackgroundMode = BackgroundMode.COVER
+    app_buvid: str = gen_buvid()
 
 
 @dataclass(slots=True)
@@ -125,6 +127,9 @@ def create_session() -> Session:
                         cookiejar=session.cookies)
     session.cookies.set("appkey", constant.APP_KEY, domain="bilibili.com",
                         path="/")
+    session.headers.update({
+        "buvid": app_settings.app_buvid,
+    })
     custom_proxy = app_settings.get("custom_proxy_url", "")
     custom_proxy = {
         "http": custom_proxy,
