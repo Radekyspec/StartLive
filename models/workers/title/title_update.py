@@ -45,7 +45,7 @@ class TitleUpdateWorker(BaseWorker):
         app_state.room_info["recent_title"].insert(0, self.title)
         _, _title_file = get_cache_path(
             CacheType.CONFIG,
-            f"title{app_state.cookies_dict["DedeUserID"]}")
+            f"title{app_state.cookies_dict['DedeUserID']}")
         with open(_title_file, "w", encoding="utf-8") as f:
             f.write("\n".join(
                 app_state.room_info["recent_title"][:MAX_RECENT_TITLE]))
