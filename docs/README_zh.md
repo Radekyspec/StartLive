@@ -60,6 +60,12 @@ paru -S startlive-git
 
 ### 安装 & 运行
 
+> [!NOTE]
+> 只有 CPython 官方解释器和 pip
+> 包管理器（可在 [Python.org](https://www.python.org) 下载）经过测试且支持
+>
+> 如果在安装依赖时遇到问题，请先排查是否使用了正确的包管理器
+
 * 创建虚拟环境
 
 ```shell

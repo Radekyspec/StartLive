@@ -63,6 +63,13 @@ paru -S startlive-git
 
 ### Install & Run
 
+> [!NOTE]
+> Only CPython official python (available
+> on [Python.org](https://www.python.org)) and pip are tested and recommended.
+>
+> If you encounter issues when installing dependencies, make sure to use the
+> correct package manager first.
+
 Create a virtual environment:
 
 ```shell
