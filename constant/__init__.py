@@ -1,4 +1,5 @@
-from enum import unique, IntEnum, StrEnum
+from enum import unique, IntEnum
+from strenum import StrEnum
 
 from ._version import __version__
 
