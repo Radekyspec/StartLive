@@ -49,6 +49,7 @@ class AreaUpdateWorker(BaseWorker):
             "parent_area"] = app_state.area_reverse[self.area]
         app_state.room_info[
             "area"] = self.area
+        app_state.room_info["area_code"] = app_state.area_codes[self.area]
         self.parent.parent_combo.setCurrentText(app_state.room_info["parent_area"])
         self.parent.child_combo.setCurrentText(app_state.room_info["area"])
         self._session.close()

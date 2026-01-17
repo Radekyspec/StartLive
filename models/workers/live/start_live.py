@@ -91,7 +91,8 @@ class StartLiveWorker(BaseWorker):
                 logger.warning(f"startLive Response face auth: {response}")
                 app_state.stream_status.update({
                     "required_face": True,
-                    "face_url": response["data"]["qr"]
+                    "face_url": response["data"]["qr"],
+                    "face_message": response["message"]
                 })
                 return 60024
             case _:

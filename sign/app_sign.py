@@ -76,4 +76,5 @@ if __name__ == '__main__':
         j = {}
         for k in i:
             j[k] = p[k]
+        print(j)
         print(livehime_sign(j)["sign"])

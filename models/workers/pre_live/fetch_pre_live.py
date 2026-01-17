@@ -34,6 +34,7 @@ class FetchPreLiveWorker(BaseWorker):
                 "room_id": response["data"]["room_id"],
                 "parent_area": response["data"]["parent_name"],
                 "area": response["data"]["area_v2_name"],
+                "area_code": response["data"]["area_v2_id"]
             }
         )
         if response["data"]["live_status"] == 1:

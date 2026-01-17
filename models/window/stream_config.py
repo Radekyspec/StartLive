@@ -36,6 +36,7 @@ class StreamConfigPanel(QWidget):
         self.stream_state.addressUpdated.connect(self.fill_stream_info)
         self.stream_state.faceRequired.connect(
             self.parent_window.popup_face_widget)
+        self.stream_state.faceRequired.connect(self._report_face)
         self.obs_btn_state = ObsBtnState()
         self.obs_btn_state.obsConnected.connect(self._obs_btn_connected)
         self.obs_btn_state.obsDisconnected.connect(self._obs_btn_disconnected)
@@ -282,6 +283,17 @@ class StreamConfigPanel(QWidget):
         QApplication.clipboard().setText(self.key_input.text())
 
     @Slot()
+    def _report_face(self):
+        report_worker = ReportFaceRecognitionWorker(
+            app_state.room_info["parent_area"],
+            app_state.stream_status.face_message
+        )
+        self.parent_window.add_thread(
+            report_worker,
+            on_finished=report_worker.on_finished,
+        )
+
+    @Slot()
     def start_live(self):
         app_state.room_info["recent_areas"].clear()
         self._start_live()
@@ -306,6 +318,7 @@ class StreamConfigPanel(QWidget):
         area_code = app_state.area_codes[self.child_combo.currentText()]
         app_state.room_info["parent_area"] = self.parent_combo.currentText()
         app_state.room_info["area"] = self.child_combo.currentText()
+        app_state.room_info["area_code"] = area_code
         start_live_worker = StartLiveWorker(self, self.stream_state,
                                             mutex=self._mutex, cond=self._cond,
                                             area=area_code)

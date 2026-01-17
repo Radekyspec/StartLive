@@ -65,6 +65,7 @@ class StreamStatus(StateBase):
     required_face: bool = False
     identified_face: bool = False
     face_url: Optional[str] = None
+    face_message: Optional[str] = None
     stream_addr: Optional[str] = None
     stream_key: Optional[str] = None
 
@@ -79,6 +80,7 @@ class RoomInfo(StateBase):
     title: str = ""
     parent_area: str = ""
     area: str = ""
+    area_code: int = 0
     announcement: str = ""
     recent_areas: List[str] = field(default_factory=list)
     recent_title: List[str] = field(default_factory=list)
