@@ -8,7 +8,7 @@ from sign import livehime_sign, order_payload
 
 
 class ReportFaceRecognitionWorker(BaseWorker):
-    def __init__(self, area: str, message: str):
+    def __init__(self, area: int, message: str):
         super().__init__(name="人脸报告")
         self.area = area
         self.message = message
