@@ -657,6 +657,14 @@ class MainWindow(SingleInstanceWindow):
         self.add_thread(auth_worker,
                         on_finished=partial(auth_worker.on_finished,
                                             self.face_window))
+        report_worker = ReportFaceRecognitionWorker(
+            app_state.room_info["area_code"],
+            app_state.stream_status.face_message
+        )
+        self.add_thread(
+            report_worker,
+            on_finished=report_worker.on_finished,
+        )
         self.face_window.show()
 
     def _apply_global_qss(self) -> None:
