@@ -469,8 +469,9 @@ class MainWindow(SingleInstanceWindow):
             f"当前账号：{app_state.usernames[cookie_indices[self._current_cookie_idx]]}")
         self.tray_curr_user.setEnabled(True)
 
-    @Slot()
-    def _on_add_account(self):
+    @Slot(int)
+    def _on_add_account(self, cookie_index: int):
+        self._current_cookie_idx = cookie_index
         self.setup_ui(is_new=True)
 
     @Slot(str)

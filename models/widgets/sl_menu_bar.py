@@ -22,7 +22,7 @@ class StartLiveMenuBar(QMenuBar):
     bgDeleted = Signal()
     credDeleted = Signal(bool)
     accountSwitch = Signal(int)
-    accountAdded = Signal()
+    accountAdded = Signal(int)
     accountMenuPopulated = Signal(int)
 
     def __init__(self, parent=None, /):
@@ -193,4 +193,4 @@ class StartLiveMenuBar(QMenuBar):
             return
         self._current_cookie_idx = self._cookie_index_len
         CredentialManagerWorker.reset_default()
-        self.accountAdded.emit()
+        self.accountAdded.emit(self._current_cookie_idx)
