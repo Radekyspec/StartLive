@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from functools import partial
 from json import dumps, loads
+from platform import node
 from queue import Queue
 from typing import Optional, Any, List
 
@@ -129,10 +130,14 @@ def create_session(h_type: HeadersType) -> Session:
         session.headers.update(constant.HEADERS_WEB)
     elif h_type == HeadersType.APP:
         session.headers.update(constant.HEADERS_APP)
-    cookiejar_from_dict(cookies_dict,
-                        cookiejar=session.cookies)
     session.cookies.set("appkey", constant.APP_KEY, domain="bilibili.com",
                         path="/")
+    session.cookies.set("device_name", node(), domain="bilibili.com",
+                        path="/")
+    session.cookies.set("device_platform", "Windows Version: 10.0 x86_64",
+                        domain="bilibili.com", path="/")
+    cookiejar_from_dict(cookies_dict,
+                        cookiejar=session.cookies)
     session.headers.update({
         "buvid": app_settings.app_buvid,
     })

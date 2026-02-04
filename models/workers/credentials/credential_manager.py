@@ -46,7 +46,7 @@ class CredentialManagerWorker(BaseWorker):
         app_state.stream_status_default()
 
     @staticmethod
-    def add_cookie():
+    def add_cookie(allow_duplicate: bool = False) -> str:
         """
         Adds a new cookie credential to the credential manager.
 
@@ -64,9 +64,11 @@ class CredentialManagerWorker(BaseWorker):
         cookie_key = f"cookies|{uid}"
         CredentialManagerWorker.get_cookie_indices()
         if cookie_key in app_state.cookie_indices:
-            raise CredentialDuplicatedError(cookie_key)
-        app_state.cookie_indices.append(cookie_key)
-        app_state.usernames[cookie_key] = cookie_key
+            if not allow_duplicate:
+                raise CredentialDuplicatedError(cookie_key)
+        if cookie_key not in app_state.cookie_indices:
+            app_state.cookie_indices.append(cookie_key)
+            app_state.usernames[cookie_key] = cookie_key
         set_password(KEYRING_SERVICE_NAME, cookie_key,
                      dumps(app_state.cookies_dict))
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,

@@ -14,6 +14,7 @@ from models.states import LoginState
 from models.workers.announce import FetchAnnounceWorker
 from models.workers.area import FetchAreaWorker
 from models.workers.base import LongLiveWorker, run_wrapper
+from models.workers.login.buvid_ticket import TicketFetchWorker
 from models.workers.pre_live import FetchPreLiveWorker, FetchRoomStatusWorker
 from models.workers.usernames import FetchUsernamesWorker
 
@@ -28,6 +29,11 @@ class FetchLoginWorker(LongLiveWorker):
     @staticmethod
     def post_login(parent: "MainWindow", state: LoginState):
         if app_state.scan_status["scanned"]:
+            fetch_ticket = TicketFetchWorker()
+            parent.add_thread(
+                fetch_ticket,
+                on_finished=fetch_ticket.on_finished,
+            )
             fetch_status = FetchRoomStatusWorker()
             parent.add_thread(
                 fetch_status,

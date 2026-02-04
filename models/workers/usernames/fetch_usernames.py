@@ -7,7 +7,6 @@ from keyring import get_password
 
 # local package import
 import app_state
-import constant
 from constant import *
 from models.log import get_logger
 from models.workers.base import BaseWorker, run_wrapper
@@ -34,11 +33,7 @@ class FetchUsernamesWorker(BaseWorker):
             sleep(1)
             cookies = loads(cookies)
             self.logger.info(f"fetch username of {key} Request")
-            self._session.cookies.clear()
             self._session.cookies.update(cookies)
-            self._session.cookies.set("appkey", constant.APP_KEY,
-                                      domain="bilibili.com",
-                                      path="/")
             response = self._session.get(
                 url,
                 params=livehime_sign({},
