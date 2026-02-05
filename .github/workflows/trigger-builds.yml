@@ -1,0 +1,21 @@
+name: Trigger Builds
+
+on:
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Trigger compile-standalone
+        run: |
+          gh workflow run compile-standalone.yml --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger compile-universal
+        run: |
+          gh workflow run compile-universal.yml --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
