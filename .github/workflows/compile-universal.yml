@@ -17,11 +17,18 @@ jobs:
     env:
       UPX_VERSION: "5.0.2"
       UPX_DIR: "${{ github.workspace }}/tools/upx"
-      VERSION: "0.8.6"
 
     steps:
       - name: Check-out repository
         uses: actions/checkout@v4
+
+      - name: Read version from _version.py
+        shell: python
+        run: |
+          import os
+          from constant._version import __version__
+          with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+              env_file.write(f'VERSION={__version__}\n')
 
       - name: Set app version
         shell: bash

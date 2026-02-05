@@ -132,12 +132,12 @@ def create_session(h_type: HeadersType) -> Session:
         session.headers.update(constant.HEADERS_APP)
     session.cookies.set("appkey", constant.APP_KEY, domain="bilibili.com",
                         path="/")
-    session.cookies.set("device_name", node(), domain="bilibili.com",
-                        path="/")
+    session.cookies.set("device_name", node().encode('utf-8').decode('latin-1'),
+                        domain="bilibili.com", path="/")
     session.cookies.set("device_platform", "Windows Version: 10.0 x86_64",
                         domain="bilibili.com", path="/")
-    cookiejar_from_dict(cookies_dict,
-                        cookiejar=session.cookies)
+    session.cookies.set("buvid3", app_settings.app_buvid)
+    cookiejar_from_dict(cookies_dict, cookiejar=session.cookies, overwrite=True)
     session.headers.update({
         "buvid": app_settings.app_buvid,
     })

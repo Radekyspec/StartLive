@@ -32,6 +32,7 @@ class TicketFetchWorker(BaseWorker):
                 "https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket",
                 params=ticket_param)
             self.logger.info("buvid_ticket Response")
+            response.encoding = "utf-8"
             response = response.json()
             app_state.cookies_dict["bili_ticket"] = response["data"]["ticket"]
             app_state.cookies_dict["bili_ticket_expires"] = str(
@@ -46,6 +47,7 @@ class TicketFetchWorker(BaseWorker):
             response = self._session.get(
                 "https://api.bilibili.com/x/frontend/finger/spi")
             self.logger.info("buvid3 Response")
+            response.encoding = "utf-8"
             response = response.json()
             app_state.cookies_dict["buvid3"] = response["data"]["b_3"]
             app_state.cookies_dict["buvid4"] = quote(response["data"]["b_4"])
