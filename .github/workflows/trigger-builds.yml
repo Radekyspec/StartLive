@@ -6,16 +6,31 @@ on:
 jobs:
   trigger:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     
     steps:
       - name: Trigger compile-standalone
-        run: |
-          gh workflow run compile-standalone.yml --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'compile-standalone.yml',
+              ref: 'master'
+            })
 
       - name: Trigger compile-universal
-        run: |
-          gh workflow run compile-universal.yml --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'compile-universal.yml',
+              ref: 'master'
+            })
