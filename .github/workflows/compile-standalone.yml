@@ -22,6 +22,8 @@ jobs:
         shell: python
         run: |
           import os
+          import sys
+          sys.path.insert(0, '.')
           from constant._version import __version__
           with open(os.environ['GITHUB_ENV'], 'a') as env_file:
               env_file.write(f'VERSION={__version__}\n')
