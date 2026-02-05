@@ -124,8 +124,8 @@ class CredentialManagerWorker(BaseWorker):
             self.is_new = True
             return
         saved_cookies = loads(saved_cookies)
-        cookiejar_from_dict(saved_cookies,
-                            cookiejar=self._session.cookies)
+        cookiejar_from_dict(saved_cookies, cookiejar=self._session.cookies,
+                            overwrite=True)
         nav_url = "https://api.bilibili.com/x/web-interface/nav"
         self.logger.info(f"nav Request")
         response = self._session.get(

@@ -107,7 +107,7 @@ class StartLiveMenuBar(QMenuBar):
             return
         expired = app_state.scan_status["expired"]
         cookie_index = CredentialManagerWorker.get_cookie_indices()
-        self.logger.info(f"delete cookie index: {cookie_index}")
+        self.logger.info(f"origin cookie index: {cookie_index}")
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME,
                             cookie_index[self._current_cookie_idx])
