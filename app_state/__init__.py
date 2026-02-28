@@ -33,6 +33,7 @@ class AppSettings(StateBase):
     custom_bg_opacity: float = 50.0
     custom_bg_mode: BackgroundMode = BackgroundMode.COVER
     app_buvid: str = gen_buvid()
+    auto_start_live: bool = False
 
 
 @dataclass(slots=True)
