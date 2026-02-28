@@ -50,6 +50,7 @@ class MainWindow(SingleInstanceWindow):
     _thread_pool: QThreadPool
     _host: str
     _port: int
+    _logged_in: bool
     _cred_deleted: bool
     _no_const_update: bool
     _server_started: bool
@@ -182,6 +183,7 @@ class MainWindow(SingleInstanceWindow):
         self._init_http_server()
 
     def setup_ui(self, *, is_new: bool = False):
+        self._logged_in = False
         for worker in self._ll_workers:
             worker.stop()
         if app_state.obs_client is not None:
@@ -284,11 +286,14 @@ class MainWindow(SingleInstanceWindow):
             self._server_thread.signals.stopLive.connect(self.panel.stop_live)
             self._server_thread.signals.exception.connect(
                 self._http_error_handler)
+            return True
         else:
             self._server_thread = None
+        return False
 
     def _start_http_server(self):
-        if self._server_thread is not None and not self._server_started:
+        if (self._server_thread is not None and not self._server_started and
+                self._logged_in):
             self._server_thread.start()
             self._server_started = True
             self._rebuild_title()
@@ -603,6 +608,7 @@ class MainWindow(SingleInstanceWindow):
         self.panel.child_combo.setCurrentText(
             app_state.room_info.get("area", ""))
         self.panel.enable_child_combo_autosave(True)
+        self._logged_in = True
         self._start_http_server()
 
     @Slot()
