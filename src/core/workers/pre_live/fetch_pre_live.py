@@ -1,0 +1,109 @@
+from functools import partial
+
+# package import
+from PySide6.QtCore import Slot
+from src.constant import CoverStatus
+from src.models.log import get_logger
+from src.models.states import LoginState
+from src.sign import livehime_sign, order_payload
+
+# local package import
+from src import app_state
+from src.core.workers.base import BaseWorker, run_wrapper
+from src.core.workers.cover import CoverStateUpdateWorker
+from src.core.workers.live import StartLiveWorker
+from src.core.workers.title import LoadRecentTitleWorker
+
+
+class FetchPreLiveWorker(BaseWorker):
+    def __init__(self):
+        super().__init__(name="房间信息")
+        self.logger = get_logger(self.__class__.__name__)
+
+    def _fetch_room_info(self):
+        live_info_url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/GetInfo"
+        info_data = livehime_sign({"uId": app_state.cookies_dict["DedeUserID"]})
+        info_data = order_payload(info_data)
+        self.logger.info("live_info Request")
+        response = self._session.get(live_info_url, params=info_data)
+        response.encoding = "utf-8"
+        self.logger.info("live_info Response")
+        response = response.json()
+        app_state.room_info.update(
+            {
+                "room_id": response["data"]["room_id"],
+                "parent_area": response["data"]["parent_name"],
+                "area": response["data"]["area_v2_name"],
+                "area_code": response["data"]["area_v2_id"]
+            }
+        )
+        if response["data"]["live_status"] == 1:
+            app_state.stream_status["live_status"] = True
+            # [0.3.4] fix fetch upstream
+            # Here we choose to start live again because as observation of duplicate live
+            # The API only returns a message="重复开播" with streaming address
+            # Which seems like have no other side effect
+            # Subject to change if there is an unknown side effect
+            StartLiveWorker.start_live(self._session,
+                                       response["data"]["area_v2_id"])
+        app_state.scan_status["room_updated"] = True
+
+    @Slot()
+    @run_wrapper
+    def run(self, /) -> None:
+        url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/PreLive"
+        params = livehime_sign({
+            "area": "true",
+            "cover": "true",
+            "coverVertical": "true",
+            "liveDirectionType": 0,
+            "mobi_app": "pc_link",
+            "schedule": "true",
+            "title": "true",
+        })
+        self.logger.info("PreLive Request")
+        response = self._session.get(url, params=params)
+        response.encoding = "utf-8"
+        self.logger.info("PreLive Response")
+        response = response.json()
+        self.logger.info(f"PreLive Result: {response}")
+        app_state.room_info.update({
+            "cover_audit_reason": response["data"]["cover"]["auditReason"],
+            "cover_url": response["data"]["cover"]["url"],
+            "cover_status": response["data"]["cover"]["auditStatus"],
+            "title": response["data"]["title"],
+        })
+        self._fetch_room_info()
+
+    @Slot()
+    def on_finished(self, parent_window: "StreamConfigPanel",
+                    state: LoginState):
+        title_text = app_state.room_info["title"]
+        app_state.room_info["recent_title"].insert(0, title_text)
+        parent_window.title_input.currentTextChanged.connect(
+            lambda: parent_window.save_title_btn.setEnabled(True))
+        recent_title_loader = LoadRecentTitleWorker(parent_window)
+        parent_window.parent_window.add_thread(
+            recent_title_loader,
+            on_finished=recent_title_loader.on_finished,
+        )
+        if app_state.stream_status["live_status"]:
+            parent_window.addr_input.setText(
+                app_state.stream_status["stream_addr"])
+            parent_window.key_input.setText(
+                app_state.stream_status["stream_key"])
+            parent_window.start_btn.setEnabled(False)
+            parent_window.parent_window.tray_start_live_action.setEnabled(False)
+            parent_window.stop_btn.setEnabled(True)
+            parent_window.parent_window.tray_stop_live_action.setEnabled(True)
+        parent_window.cover_audit_state()
+        if app_state.room_info["cover_status"] == CoverStatus.AUDIT_IN_PROGRESS:
+            # add updating logic
+            cover_state_updater = CoverStateUpdateWorker()
+            parent_window.parent_window.add_thread(
+                cover_state_updater,
+                on_finished=partial(
+                    cover_state_updater.on_finished, parent_window),
+            )
+        state.roomUpdated.emit()
+        self._session.close()
