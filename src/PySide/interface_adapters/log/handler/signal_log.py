@@ -1,6 +1,6 @@
 from logging import Handler
 
-from src.models.states import LogState
+from src.PySide.states import LogState
 
 
 class QSignalLogHandler(Handler):

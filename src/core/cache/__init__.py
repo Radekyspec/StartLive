@@ -14,7 +14,7 @@ def cache_base_dir(kind: CacheType) -> Path:
         try:
             _base_dir = Path(__compiled__.containing_dir).resolve()
         except NameError:
-            _base_dir = Path("").resolve()
+            _base_dir = Path("").resolve().parent.parent
         _base_dir = _base_dir / kind
     elif _arch == "Linux":
         _base_dir = Path.home() / ".cache" / "StartLive" / kind

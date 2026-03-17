@@ -7,4 +7,5 @@ from .LoginError import LoginError
 from .RoomStatusError import RoomStatusError
 from .StartLiveError import StartLiveError
 from .StopLiveError import StopLiveError
+from .TaskCancelled import TaskCancelled
 from .TitleUpdateError import TitleUpdateError

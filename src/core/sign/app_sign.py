@@ -2,7 +2,7 @@ from hashlib import md5
 from time import time
 from urllib.parse import urlencode
 
-from src import constant
+from src.core import constant
 
 
 def livehime_sign(payload, *, access_key: bool = True, build: bool = True,
