@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Callable
 
 from requests import Session
 
@@ -10,91 +10,60 @@ class BaseWorker:
     _session: Optional[Session]
     name: str
 
-    def __init__(self, name: str, *, with_session: bool = True,
-                 headers_type: HeadersType = HeadersType.APP):
+    def __init__(self, *, name: str, /, with_session: bool = True,
+                 headers_type: HeadersType = HeadersType.APP,
+                 on_exception: Optional[Callable] = None,
+                 on_finished: Optional[Callable] = None):
         super().__init__()
         self.name = name
+        self._on_exception = on_exception
+        self._on_finished = on_finished
         if with_session:
             self._session = create_session(headers_type)
         else:
             self._session = None
 
-    def run(self, *args, **kwargs):
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         """
-        Executes the primary task or operation defined for this worker. This method is intended to be overridden
-        by subclasses to implement specific functionality. The base implementation raises a NotImplementedError
-        to enforce that derived classes provide their own implementation of this method.
+        Executes the main operation of the method. This implementation must be overridden
+        by subclasses to define specific logic. The function optionally accepts a
+        callback for reporting progress as well as additional arguments and keyword
+        arguments.
 
-        :param args: Positional arguments that may be required for the execution of the task.
-        :type args: Tuple
-        :param kwargs: Keyword arguments that may be required for the execution of the task.
-        :type kwargs: Dict
-        :return: None
-        :raises NotImplementedError: Always raised to indicate that this method must be overridden in a subclass.
+        :param report_progress: Callable function to report progress, if provided.
+        :param args: Additional positional arguments.
+        :param kwargs: Additional keyword arguments.
+        :return: No return value, as this method is not implemented and is expected
+            to be overridden.
         """
         raise NotImplementedError
 
-    # def on_exception(self, *args, **kwargs):
-    #     """
-    #     Handles an exception for the method or operation that has been implemented. It
-    #     serves as a placeholder that requires concrete behavior in derived classes or
-    #     implementations. This method must be overridden with proper exception handling
-    #     logic where applicable.
-    #
-    #     :param args: Positional arguments passed to the function.
-    #                  These arguments are user-defined and unspecified per the
-    #                  method signature.
-    #     :param kwargs: Keyword arguments passed to the function.
-    #                    These arguments are user-defined and unspecified as per
-    #                    the method signature.
-    #     :return: No return value; this method is expected to be redefined in a
-    #              subclass or specific implementation.
-    #     :raises NotImplementedError: Always raised to signal the requirement
-    #                                   for a concrete implementation.
-    #     """
-    #     raise NotImplementedError
-    #
-    # @staticmethod
-    # def run_wrapper(_func: Callable | None = None, /, silent: bool = False,
-    #                 *exc_types: Type[BaseException], ):
-    #     caught: tuple[Type[BaseException], ...] = (
-    #         exc_types if exc_types else (Exception,)
-    #     )
-    #
-    #     def decorator(func: Callable):
-    #         @wraps(func)
-    #         def wrapped(self, *args, **kwargs):
-    #             try:
-    #                 return func(self, *args, **kwargs)
-    #             except caught as e:
-    #                 if not silent:
-    #                     self.signals.exception.emit(e)
-    #             finally:
-    #                 self.signals.finished.emit()
-    #
-    #         return wrapped
-    #
-    #     if _func is None:
-    #         return decorator
-    #
-    #     return decorator(_func)
-    #
-    # def on_finished(self, *args, **kwargs):
-    #     """
-    #     Handles the finalization or cleanup processes after a specific event or task
-    #     has been completed. This method is expected to be overridden by derived
-    #     classes to provide the desired behavior for post-completion operations.
-    #
-    #     IMPORTANT: This method WILL BE CALLED regardless of whether the worker's execution succeeded or failed.
-    #     So any exception handling should be handled in the `on_exception` method,
-    #     and any result processing should be handled inside the `run` method.
-    #
-    #     :param args: Positional arguments that may be used during the finishing process.
-    #     :type args: Tuple
-    #     :param kwargs: Keyword arguments that may be used during the finishing process.
-    #     :type kwargs: Dict
-    #     :return: None
-    #     :raises NotImplementedError: Always raised to indicate the necessity of
-    #         overriding this method in a derived class.
-    #     """
-    #     raise NotImplementedError
+    def on_exception(self, *args, **kwargs):
+        """
+        Handles an exception by invoking a predefined callback, if set.
+
+        This method is designed to trigger a callback function provided in advance
+        whenever an exception occurs. It passes any provided arguments and keyword
+        arguments to the callback function.
+
+        :param args: Positional arguments to pass to the exception callback.
+        :type args: tuple
+        :param kwargs: Keyword arguments to pass to the exception callback.
+        :type kwargs: dict
+        :return: None
+        """
+        if self._on_exception is not None:
+            self._on_exception(*args, **kwargs)
+
+    def on_finished(self, *args, **kwargs):
+        """
+        Executes the `on_finished` callback if it is defined. This method checks whether
+        the `_on_finished` callable is not `None` and then invokes it with the provided
+        arguments and keyword arguments.
+
+        :param args: Positional arguments passed to the `on_finished` callback.
+        :param kwargs: Keyword arguments passed to the `on_finished` callback.
+        :return: None
+        """
+        if self._on_finished is not None:
+            self._on_finished(*args, **kwargs)

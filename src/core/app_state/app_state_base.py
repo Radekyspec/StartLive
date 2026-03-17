@@ -1,18 +1,17 @@
 from copy import deepcopy
 from dataclasses import dataclass, field, fields, MISSING
+from threading import Lock
 from typing import Any, Mapping, Iterator, Tuple
-
-from PySide6.QtCore import QMutex, QMutexLocker
 
 
 @dataclass(slots=True)
 class StateBase:
-    _lock: QMutex = field(default_factory=QMutex, init=False, repr=False)
+    _lock: Lock = field(default_factory=Lock, init=False, repr=False)
     _dirty: bool = False
 
     # obj["field"]
     def __getitem__(self, key: str) -> Any:
-        with QMutexLocker(self._lock):
+        with self._lock:
             if not hasattr(self, key):
                 raise KeyError(key)
             return getattr(self, key)
@@ -20,14 +19,14 @@ class StateBase:
     # obj["field"] = value
     def __setitem__(self, key: str, value: Any) -> None:
         self._dirty = True
-        with QMutexLocker(self._lock):
+        with self._lock:
             if not hasattr(self, key):
                 raise KeyError(key)
             setattr(self, key, value)
 
     # obj.get("field", default)
     def get(self, key: str, default: Any = None) -> Any:
-        with QMutexLocker(self._lock):
+        with self._lock:
             if not hasattr(self, key):
                 return default
             return getattr(self, key)
@@ -36,7 +35,7 @@ class StateBase:
     def update(self, mapping: Mapping[str, Any] | None = None,
                **kwargs: Any) -> None:
         self._dirty = True
-        with QMutexLocker(self._lock):
+        with self._lock:
             if mapping:
                 for k, v in mapping.items():
                     if hasattr(self, k):
@@ -46,7 +45,7 @@ class StateBase:
                     setattr(self, k, v)
 
     def as_dict(self) -> dict[str, Any]:
-        with QMutexLocker(self._lock):
+        with self._lock:
             return {
                 f.name: getattr(self, f.name)
                 for f in fields(self)
@@ -75,7 +74,7 @@ class StateBase:
     def reset(self) -> None:
         self._dirty = False
         defaults = type(self).default_dict()
-        with QMutexLocker(self._lock):
+        with self._lock:
             for name, value in defaults.items():
                 setattr(self, name, value)
 
@@ -96,11 +95,11 @@ class StateBase:
         return self.keys()
 
     def __contains__(self, key: str) -> bool:
-        with QMutexLocker(self._lock):
+        with self._lock:
             return hasattr(self, key)
 
     def __len__(self) -> int:
-        with QMutexLocker(self._lock):
+        with self._lock:
             return len([f for f in fields(self) if not f.name.startswith("_")])
 
     def __bool__(self) -> bool:

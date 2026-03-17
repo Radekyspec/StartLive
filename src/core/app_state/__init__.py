@@ -10,10 +10,10 @@ from obsws_python import ReqClient
 from requests import Session
 from requests.cookies import cookiejar_from_dict
 
-from src.core import constant
-from src.core.constant import *
-from src.core.sign import gen_buvid
 from .app_state_base import StateBase
+from .. import constant
+from ..constant import *
+from ..sign import gen_buvid
 
 dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))

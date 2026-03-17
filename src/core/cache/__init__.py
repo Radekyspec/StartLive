@@ -2,7 +2,7 @@ from os import remove
 from pathlib import Path
 from platform import system
 
-from src.core.constant import CacheType
+from ..constant import CacheType
 
 _cache_dir: dict[CacheType, Path] = {}
 

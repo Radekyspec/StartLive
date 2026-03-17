@@ -1,5 +1,5 @@
-import hashlib
-import hmac
+from hashlib import sha256
+from hmac import new
 
 
 def ticket_hmac_sha256(timestamp: int) -> str:
@@ -8,7 +8,7 @@ def ticket_hmac_sha256(timestamp: int) -> str:
     message = f"ts{timestamp}".encode('utf-8')
 
     # 创建HMAC对象，使用SHA256哈希算法
-    hmac_obj = hmac.new(key, message, hashlib.sha256)
+    hmac_obj = new(key, message, sha256)
 
     # 计算哈希值
     hash_value = hmac_obj.digest()

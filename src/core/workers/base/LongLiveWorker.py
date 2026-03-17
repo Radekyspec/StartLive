@@ -1,6 +1,6 @@
-from src.core.constant import HeadersType
 from .BaseWorker import BaseWorker
 from .CancellationToken import CancellationToken
+from ...constant import HeadersType
 
 
 class LongLiveWorker(BaseWorker):

@@ -1,7 +1,7 @@
 from threading import Event, Lock
 from typing import Callable
 
-from src.core.exceptions import TaskCancelled
+from ...exceptions import TaskCancelled
 
 
 class CancellationToken:

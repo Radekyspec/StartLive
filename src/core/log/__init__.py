@@ -4,9 +4,9 @@ from logging import getLogger
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
-from src.core.cache import get_cache_path
-from src.core.constant import LOGGER_NAME, CacheType
 from .formatter import ThreadClassFormatter
+from ..cache import get_cache_path
+from ..constant import LOGGER_NAME, CacheType
 
 
 def get_log_path(*, is_makedir: bool = True) -> tuple[Path, Path]:
