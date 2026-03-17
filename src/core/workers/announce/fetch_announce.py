@@ -1,21 +1,18 @@
 # module import
-from PySide6.QtCore import Slot
-from src.models.log import get_logger
-from src.sign import livehime_sign
+from typing import Callable
 
-# local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
+from ..base import BaseWorker
+from ... import app_state
+from ...log import get_logger
+from ...sign import livehime_sign
 
 
 class FetchAnnounceWorker(BaseWorker):
-    def __init__(self):
-        super().__init__(name="主播公告获取")
+    def __init__(self, *args, **kwargs):
+        super().__init__(name="主播公告获取", *args, **kwargs)
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/AnnounceInfo"
         self.logger.info(f"Announcement info Request")
         params = livehime_sign({})
@@ -29,10 +26,4 @@ class FetchAnnounceWorker(BaseWorker):
             "content", ""
         )
         app_state.scan_status["announce_updated"] = True
-
-    @Slot()
-    def on_finished(self, panel: "StreamConfigPanel"):
-        panel.announce_input.setText(app_state.room_info["announcement"])
-        panel.announce_input.textEdited.connect(
-            lambda: panel.save_announce_btn.setEnabled(True))
         self._session.close()

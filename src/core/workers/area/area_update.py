@@ -1,26 +1,20 @@
 # module import
+from typing import Callable
 
-# package import
-from PySide6.QtCore import Slot
-from src.exceptions import AreaUpdateError
-from src.models.log import get_logger
-from src.sign import livehime_sign
-
-# local package import
-from src import app_state, constant
-from src.core.workers.base import BaseWorker, run_wrapper
+from ... import app_state, constant
+from ...exceptions import AreaUpdateError
+from ...log import get_logger
+from ...sign import livehime_sign
+from ...workers.base import BaseWorker
 
 
 class AreaUpdateWorker(BaseWorker):
-    def __init__(self, parent: "StreamConfigPanel", /, area: str):
-        super().__init__(name="分区更新")
-        self.parent = parent
+    def __init__(self, area: str, *args, **kwargs):
+        super().__init__(name="分区更新", *args, **kwargs)
         self.area = area
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         url = "https://api.live.bilibili.com/xlive/app-blink/v2/room/AnchorChangeRoomArea"
         area_data = {
             "area_id": app_state.area_codes[self.area],
@@ -41,26 +35,5 @@ class AreaUpdateWorker(BaseWorker):
         self.logger.info(f"AnchorChangeRoomArea Result: {response}")
         if response["code"] != 0:
             raise AreaUpdateError(response["message"])
-
-    @Slot()
-    def on_finished(self, *args, **kwargs):
-        app_state.room_info[
-            "parent_area"] = app_state.area_reverse[self.area]
-        app_state.room_info[
-            "area"] = self.area
-        app_state.room_info["area_code"] = app_state.area_codes[self.area]
-        self.parent.parent_combo.setCurrentText(
-            app_state.room_info["parent_area"])
-        self.parent.child_combo.setCurrentText(app_state.room_info["area"])
         self._session.close()
-
-    @Slot()
-    def on_exception(self, *args, **kwargs):
-        enabled = self.parent.enable_child_combo_autosave(False)
-        self.parent.parent_combo.setCurrentText(
-            app_state.room_info["parent_area"])
-        self.parent.child_combo.setCurrentText(app_state.room_info["area"])
-        # roll back if an exception occurs
-        self.area = app_state.room_info["area"]
-        self.parent.enable_child_combo_autosave(enabled)
-        self.parent.modify_area_btn.setEnabled(True)
+        return self.area

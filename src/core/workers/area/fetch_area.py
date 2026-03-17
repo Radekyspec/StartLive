@@ -1,23 +1,19 @@
 # module import
-from PySide6.QtCore import Slot
-from src.models.log import get_logger
-from src.models.states import LoginState
-from src.sign import livehime_sign
+from typing import Callable
 
 # local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
+from ... import app_state
+from ...log import get_logger
+from ...sign import livehime_sign
+from ...workers.base import BaseWorker
 
 
 class FetchAreaWorker(BaseWorker):
-    def __init__(self, state: LoginState):
-        super().__init__(name="分区获取")
-        self.state = state
+    def __init__(self, *args, **kwargs):
+        super().__init__(name="分区获取", *args, **kwargs)
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/GetAreaListForLive"
         self.logger.info(f"Area/getList Request")
         response = self._session.get(url, params=livehime_sign({}))
@@ -34,8 +30,4 @@ class FetchAreaWorker(BaseWorker):
                     sub_area["name"])
                 app_state.area_reverse[sub_area["name"]] = parent
         app_state.scan_status["area_updated"] = True
-
-    @Slot()
-    def on_finished(self):
-        self.state.areaUpdated.emit()
         self._session.close()

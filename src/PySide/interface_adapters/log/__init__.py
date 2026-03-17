@@ -1,7 +1,7 @@
 from logging import Logger
 
 from src.core.constant import LOGGER_NAME
-from src.core.log import ThreadClassFormatter
+from src.core.log import ThreadClassFormatter, get_logger as get_core_logger
 from src.core.log import init_logger as init_core_logger
 from .handler import QSignalLogHandler
 
@@ -15,3 +15,6 @@ def init_logger(name: str = LOGGER_NAME) -> tuple[Logger, QSignalLogHandler]:
     gui_handler.setFormatter(tc_formatter)
     logger.addHandler(gui_handler)
     return logger, gui_handler
+
+
+get_logger = get_core_logger

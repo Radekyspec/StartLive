@@ -1,22 +1,18 @@
 # module import
-from PySide6.QtCore import Slot
-from src.models.log import get_logger
-from src.sign import livehime_sign
+from typing import Callable
 
-# local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
+from ..base import BaseWorker
+from ... import app_state
+from ...log import get_logger
+from ...sign import livehime_sign
 
 
 class FetchRecentAreaWorker(BaseWorker):
-    def __init__(self, parent: "AreaPickerPanel", /):
-        super().__init__(name="历史分区获取")
-        self.parent = parent
+    def __init__(self, *args, **kwargs):
+        super().__init__(name="历史分区获取", *args, **kwargs)
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         url = "https://api.live.bilibili.com/room/v1/Area/getMyChooseArea"
         self.logger.info("getMyChooseArea Request")
         response = self._session.get(url, params=livehime_sign({
@@ -30,8 +26,4 @@ class FetchRecentAreaWorker(BaseWorker):
         for area_data in response["data"]:
             app_state.room_info["recent_areas"].append(
                 (area_data["parent_name"], area_data["name"]))
-
-    @Slot()
-    def on_finished(self, *args, **kwargs):
-        self.parent.historyUpdated.emit(app_state.room_info["recent_areas"])
         self._session.close()

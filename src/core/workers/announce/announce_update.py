@@ -1,25 +1,20 @@
 # module import
+from typing import Callable
 
-# package import
-from PySide6.QtCore import Slot
-from src.exceptions import AnnounceUpdateError
-from src.models.log import get_logger
-from src.sign import livehime_sign, order_payload
-
-# local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
+from ..base import BaseWorker
+from ... import app_state
+from ...exceptions import AnnounceUpdateError
+from ...log import get_logger
+from ...sign import livehime_sign, order_payload
 
 
 class AnnounceUpdateWorker(BaseWorker):
-    def __init__(self, content: str):
-        super().__init__(name="主播公告更新")
+    def __init__(self, content: str, *args, **kwargs):
+        super().__init__(name="主播公告更新", *args, **kwargs)
         self.content = content
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/AnnounceCommit"
         announce_data = livehime_sign({})
         announce_data.update(
@@ -42,12 +37,4 @@ class AnnounceUpdateWorker(BaseWorker):
         if response["code"] != 0:
             raise AnnounceUpdateError(response["message"])
         app_state.room_info["announcement"] = self.content
-
-    @staticmethod
-    @Slot()
-    def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
-        parent_window.save_announce_btn.setEnabled(True)
-
-    @Slot()
-    def on_finished(self):
         self._session.close()
