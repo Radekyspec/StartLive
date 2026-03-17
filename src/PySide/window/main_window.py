@@ -22,22 +22,20 @@ from PySide6.QtWidgets import (QApplication,
                                )
 from darkdetect import isLight
 from keyring import set_password
-from models.classes import ClickableLabel, SingleInstanceWindow
-from models.log import init_logger, get_logger
 from qdarktheme import setup_theme
 from qrcode.main import QRCode
-from src.app_state import dumps
-from src.constant import *
-from src.models.cache import del_cache_user
-from src.models.states import LoginState
-from src.models.widgets import *
-from src.models.window import *
-from src.models.window.settings_page import SettingsPage
-from src.models.window.stream_config import StreamConfigPanel
-from web_server import HttpServerWorker
 
-# local package import
-from src import app_state
+from src.PySide.classes import SingleInstanceWindow, ClickableLabel
+from src.PySide.interface_adapters import init_logger
+from src.PySide.states import LoginState
+from src.PySide.web_server import HttpServerWorker
+from src.PySide.widgets import *
+from src.PySide.window import *
+from src.core import app_state
+from src.core.app_state import dumps
+from src.core.cache import del_cache_user
+from src.core.constant import *
+from src.core.log import get_logger
 
 
 # Main GUI window

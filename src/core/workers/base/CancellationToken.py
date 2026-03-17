@@ -10,6 +10,9 @@ class CancellationToken:
         self._callbacks: list[Callable[[], None]] = []
         self._lock = Lock()
 
+    def __bool__(self) -> bool:
+        return self._event.is_set()
+
     def cancel(self) -> None:
         if self._event.is_set():
             return
@@ -21,9 +24,6 @@ class CancellationToken:
                 cb()
             except Exception:
                 pass
-
-    def is_cancelled(self) -> bool:
-        return self._event.is_set()
 
     def wait(self, timeout: float | None = None) -> bool:
         return self._event.wait(timeout)

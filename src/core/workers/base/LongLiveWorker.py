@@ -23,7 +23,7 @@ class LongLiveWorker(BaseWorker):
         """
         self.cancel_token.cancel()
 
-    def bind_cancel_callback(self, cb) -> None:
+    def add_cancel_callback(self, cb) -> None:
         """
         Binds a callback function to the cancel token.
 
