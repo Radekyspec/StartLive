@@ -99,6 +99,12 @@ class StartLiveMenuBar(QMenuBar):
 
     @Slot()
     def delete_cookies(self):
+        # Goes here when manually delete cookies or when cookies are expired.
+        # If cookies are expired, we allow user to delete the expired cookies
+        # and reset the scanning status to allow retrying scan without
+        # restarting the app. If the user manually deletes cookies,
+        # we also allow deleting cookies and reset the scanning status
+        # in case the user wants to switch an account after deleting cookies.
         self.logger.info(
             f"scanned={app_state.scan_status.scanned}, "
             f"expired={app_state.scan_status.expired}")
@@ -115,7 +121,8 @@ class StartLiveMenuBar(QMenuBar):
         self.logger.info(f"new cookie index: {cookie_index}")
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
                      dumps(cookie_index))
-        self._current_cookie_idx = max(0, self._current_cookie_idx - 1)
+        if not expired:
+            self._current_cookie_idx = max(0, self._current_cookie_idx - 1)
         self._populate_account_menu()
         CredentialManagerWorker.reset_default()
         self.cookieDeleted.emit(self._current_cookie_idx,
