@@ -88,6 +88,21 @@ class RoomInfo(StateBase):
     recent_title: List[str] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class CookieState(StateBase):
+    current_cookie_idx: int = 0
+
+    @property
+    def cookie_index_len(self) -> int:
+        return len(cookie_indices)
+
+    def idx_equals_len(self) -> bool:
+        return self.cookie_index_len == self.current_cookie_idx
+
+    def incr_to_upper(self) -> None:
+        self.current_cookie_idx = self.cookie_index_len
+
+
 # Queue to communicate with OBS in a separate thread
 obs_req_queue = Queue()
 
@@ -109,7 +124,7 @@ obs_settings = ObsSettings()
 usernames = {}
 # A cache of cookie indices
 cookie_indices = []
-
+cookie_state = CookieState()
 # Area (category) selections for live stream configuration
 parent_area = ["请选择"]
 area_options: dict[str, List[str]] = {}

@@ -16,21 +16,17 @@ from models.workers import CredentialManagerWorker
 
 
 class StartLiveMenuBar(QMenuBar):
-    cookieDeleted = Signal(int, bool, bool)
+    cookieDeleted = Signal(bool, bool)
     obsSettingsDeleted = Signal()
     appSettingsDeleted = Signal()
     bgDeleted = Signal()
     credDeleted = Signal(bool)
-    accountSwitch = Signal(int)
-    accountAdded = Signal(int)
-    accountMenuPopulated = Signal(int)
+    accountSwitch = Signal()
+    accountAdded = Signal()
 
     def __init__(self, parent=None, /):
         super().__init__(parent)
         self.logger = get_logger(self.__class__.__name__)
-        self._current_cookie_idx = 0
-        self._cookie_index_len = len(
-            CredentialManagerWorker.get_cookie_indices())
         self._tools_menu = QMenu("文件", self)
         _open_log_folder_action = QAction("显示日志文件", self)
         _open_log_folder_action.triggered.connect(self._open_log_folder)
@@ -75,21 +71,20 @@ class StartLiveMenuBar(QMenuBar):
             self.account_group.removeAction(act)
             act.deleteLater()
         cookie_indices = app_state.cookie_indices
-        self._cookie_index_len = len(cookie_indices)
-        self.logger.info(f"cookie index length: {self._cookie_index_len}")
+        self.logger.info(
+            f"cookie index length: {app_state.cookie_state.cookie_index_len}. ")
         for idx, cookie_index in enumerate(cookie_indices):
             act = QAction(app_state.usernames.get(cookie_index, cookie_index),
                           self, checkable=True)
             act.setData(idx)
             self.account_group.addAction(act)
             self.account_menu.addAction(act)
-            if idx == self._current_cookie_idx:
+            if idx == app_state.cookie_state.current_cookie_idx:
                 act.setChecked(True)
         self.account_menu.addSeparator()
         add_new_account = QAction("添加新账号", self)
         add_new_account.triggered.connect(self._add_new_account)
         self.account_menu.addAction(add_new_account)
-        self.accountMenuPopulated.emit(self._cookie_index_len)
 
     @staticmethod
     @Slot()
@@ -116,17 +111,21 @@ class StartLiveMenuBar(QMenuBar):
         self.logger.info(f"origin cookie index: {cookie_index}")
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME,
-                            cookie_index[self._current_cookie_idx])
-        cookie_index.remove(cookie_index[self._current_cookie_idx])
+                            cookie_index[
+                                app_state.cookie_state.current_cookie_idx])
+        cookie_index.remove(
+            cookie_index[app_state.cookie_state.current_cookie_idx])
         self.logger.info(f"new cookie index: {cookie_index}")
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
                      dumps(cookie_index))
         if not expired:
-            self._current_cookie_idx = max(0, self._current_cookie_idx - 1)
+            # delete cookies manually
+            app_state.cookie_state.current_cookie_idx = max(0,
+                                                            app_state.cookie_state.current_cookie_idx - 1)
         self._populate_account_menu()
         CredentialManagerWorker.reset_default()
-        self.cookieDeleted.emit(self._current_cookie_idx,
-                                self._cookie_index_len == 0, expired)
+        self.cookieDeleted.emit(app_state.cookie_state.cookie_index_len == 0,
+                                expired)
 
     @Slot()
     def _delete_settings(self):
@@ -164,12 +163,12 @@ class StartLiveMenuBar(QMenuBar):
     def _switch_account(self, action: QAction):
         idx = action.data()
         self.logger.info(f"select account index: {idx}")
-        if idx == self._cookie_index_len or not self._ready_switch_account():
+        if idx == app_state.cookie_state.cookie_index_len or not self._ready_switch_account():
             return
-        elif idx != self._current_cookie_idx:
-            self._current_cookie_idx = idx
+        elif idx != app_state.cookie_state.current_cookie_idx:
+            app_state.cookie_state.current_cookie_idx = idx
             CredentialManagerWorker.reset_default()
-            self.accountSwitch.emit(self._current_cookie_idx)
+            self.accountSwitch.emit()
 
     def _ready_switch_account(self):
         """
@@ -184,7 +183,7 @@ class StartLiveMenuBar(QMenuBar):
         :return: A boolean indicating if the system is ready to switch accounts.
         :rtype: bool
         """
-        return self._current_cookie_idx == self._cookie_index_len or all(
+        return app_state.cookie_state.idx_equals_len() or all(
             [app_state.scan_status["scanned"],
              app_state.scan_status["area_updated"],
              app_state.scan_status["room_updated"],
@@ -195,9 +194,9 @@ class StartLiveMenuBar(QMenuBar):
             "scanned"])
 
     def _add_new_account(self):
-        if self._cookie_index_len == 0 or \
-                self._current_cookie_idx == self._cookie_index_len:
+        if app_state.cookie_state.cookie_index_len == 0 or \
+                app_state.cookie_state.idx_equals_len():
             return
-        self._current_cookie_idx = self._cookie_index_len
+        app_state.cookie_state.incr_to_upper()
         CredentialManagerWorker.reset_default()
-        self.accountAdded.emit(self._current_cookie_idx)
+        self.accountAdded.emit()
