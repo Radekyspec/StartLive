@@ -1,2 +1,3 @@
 from .cover_state_presenter import CoverStateUpdatePresenter
+from .cover_upload_presenter import CoverUploadPresenter
 from .fetch_cover_presenter import FetchCoverPresenter
