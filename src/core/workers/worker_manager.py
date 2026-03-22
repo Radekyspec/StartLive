@@ -107,7 +107,12 @@ class WorkerManager:
                 except Exception:
                     print_exc()
             else:
-                worker.on_finished(result)
+                if result is None:
+                    worker.on_finished()
+                elif isinstance(result, tuple):
+                    worker.on_finished(*result)
+                else:
+                    worker.on_finished(result)
 
         self._dispatcher.post(finalize)
         self.logger.info(
