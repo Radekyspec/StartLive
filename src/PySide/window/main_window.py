@@ -91,9 +91,6 @@ class MainWindow(SingleInstanceWindow):
         self._new_version_str = None
 
         self._thread_pool = QThreadPool()
-        self._current_cookie_idx = 0
-        self._cookie_index_len = len(
-            CredentialManagerWorker.get_cookie_indices())
         self._managed_workers = []
         # Long live workers
         self._ll_workers = []
@@ -164,7 +161,6 @@ class MainWindow(SingleInstanceWindow):
         self.menu_bar.credDeleted.connect(self._on_delete_cred)
         self.menu_bar.accountSwitch.connect(self._on_switch_account)
         self.menu_bar.accountAdded.connect(self._on_add_account)
-        self.menu_bar.accountMenuPopulated.connect(self._on_populate_menu)
         self.menu_bar.bgDeleted.connect(self._settings_page.reset_bg)
         self.setMenuBar(self.menu_bar)
         self.logger.info("Menu bar initialized.")
@@ -266,7 +262,7 @@ class MainWindow(SingleInstanceWindow):
 
         # Start fetching QR and begin polling thread
         self.credential_worker = CredentialManagerWorker(
-            self._current_cookie_idx, is_new)
+            app_state.cookie_state.current_cookie_idx, is_new)
         self.login_worker = None
         self.add_thread(self.credential_worker,
                         on_finished=partial(self.credential_worker.on_finished,
@@ -393,9 +389,7 @@ class MainWindow(SingleInstanceWindow):
                                             self._settings_page.delay_edit))
 
     @Slot(int, bool, bool)
-    def _on_delete_cookies(self, _current_cookie_idx: int, is_new: bool,
-                           expired: bool):
-        self._current_cookie_idx = _current_cookie_idx
+    def _on_delete_cookies(self, is_new: bool, expired: bool):
         if not expired:
             del_cache_user(app_state.cookies_dict["DedeUserID"])
             QMessageBox.information(self, "账号退出", "账号退出成功")
@@ -426,12 +420,12 @@ class MainWindow(SingleInstanceWindow):
             worker.stop()
         QApplication.quit()
 
-    @Slot(int)
-    def _on_switch_account(self, _current_cookie_idx: int):
-        self._current_cookie_idx = _current_cookie_idx
+    @Slot()
+    def _on_switch_account(self):
         self.setup_ui()
 
-    def _ready_switch_account(self):
+    @staticmethod
+    def _ready_switch_account():
         """
         Determines whether the system is ready to switch the account based on the current
         cookie index or the scanning status configuration.
@@ -444,7 +438,7 @@ class MainWindow(SingleInstanceWindow):
         :return: A boolean indicating if the system is ready to switch accounts.
         :rtype: bool
         """
-        return self._current_cookie_idx == self._cookie_index_len or all(
+        return app_state.cookie_state.idx_equals_len() or all(
             [app_state.scan_status["scanned"],
              app_state.scan_status["area_updated"],
              app_state.scan_status["room_updated"],
@@ -454,25 +448,19 @@ class MainWindow(SingleInstanceWindow):
         app_state.scan_status["expired"] and not app_state.scan_status[
             "scanned"])
 
-    @Slot(int)
-    def _on_populate_menu(self, _cookie_index_len: int):
-        self._cookie_index_len = _cookie_index_len
-
     @Slot()
     def _populate_tray_menu(self):
         cookie_indices = app_state.cookie_indices
-        self._cookie_index_len = len(cookie_indices)
-        if self._current_cookie_idx == self._cookie_index_len:
+        if app_state.cookie_state.idx_equals_len():
             self.tray_curr_user.setText("当前账号未登录")
             self.tray_curr_user.setEnabled(False)
             return
         self.tray_curr_user.setText(
-            f"当前账号：{app_state.usernames[cookie_indices[self._current_cookie_idx]]}")
+            f"当前账号：{app_state.usernames[cookie_indices[app_state.cookie_state.current_cookie_idx]]}")
         self.tray_curr_user.setEnabled(True)
 
-    @Slot(int)
-    def _on_add_account(self, cookie_index: int):
-        self._current_cookie_idx = cookie_index
+    @Slot()
+    def _on_add_account(self):
         self.setup_ui(is_new=True)
 
     @Slot(str)
