@@ -25,5 +25,4 @@ class AreaUpdatePresenter(Presenter):
         self._view.enable_child_combo_autosave(enabled)
         self._view.modify_area_btn.setEnabled(True)
 
-    def prepare_progress_view(self, *args, **kwargs):
-        pass
+    def prepare_progress_view(self, *args, **kwargs): ...

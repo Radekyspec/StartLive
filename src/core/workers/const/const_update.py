@@ -13,8 +13,8 @@ from src.core.workers.base import BaseWorker
 
 
 class ConstantUpdateWorker(BaseWorker):
-    def __init__(self):
-        super().__init__(name="配置更新")
+    def __init__(self, *args, **kwargs):
+        super().__init__(name="配置更新", *args, **kwargs)
         self.logger = get_logger(self.__class__.__name__)
         self._base_dir, self._const_path = get_cache_path(CacheType.CONFIG,
                                                           "version.json")

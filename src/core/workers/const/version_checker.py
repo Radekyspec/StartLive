@@ -11,8 +11,8 @@ from src.core.workers.base import BaseWorker
 
 
 class VersionCheckerWorker(BaseWorker):
-    def __init__(self):
-        super().__init__(name="版本检查")
+    def __init__(self, *args, **kwargs):
+        super().__init__(name="版本检查", *args, **kwargs)
         self.logger = get_logger(self.__class__.__name__)
         self._session.cookies.clear()
         self._latest_version = None

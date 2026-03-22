@@ -9,8 +9,7 @@ class AnnounceUpdatePresenter(Presenter):
     def prepare_fail_view(self):
         self._view.save_announce_btn.setEnabled(True)
 
-    def prepare_success_view(self):
-        pass
+    def prepare_success_view(self): ...
 
     def prepare_progress_view(self):
         pass

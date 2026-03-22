@@ -61,7 +61,7 @@ class WorkerManager:
     def _run_worker(self, worker: BaseWorker | LongLiveWorker,
                     on_progress: Callable | None) -> Any:
         if isinstance(worker, LongLiveWorker):
-            worker.cancel_token.raise_if_cancelled()
+            worker.raise_if_cancelled()
 
         def report_progress() -> None:
             if on_progress is None:

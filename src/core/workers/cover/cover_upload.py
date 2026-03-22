@@ -1,27 +1,23 @@
 # module import
-from functools import partial
-
-# package import
-from PySide6.QtCore import Slot
-from src.constant import HeadersType
-from src.exceptions import CoverUploadError
-from src.models.log import get_logger
+from typing import Callable
 
 # local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
-from .cover_state_update import CoverStateUpdateWorker
+from src.core import app_state
+# package import
+from src.core.constant import HeadersType
+from src.core.exceptions import CoverUploadError
+from src.core.log import get_logger
+from src.core.workers.base import BaseWorker
 
 
 class CoverUploadWorker(BaseWorker):
-    def __init__(self, data: bytes | bytearray | memoryview):
-        super().__init__(name="封面上传", headers_type=HeadersType.WEB)
+    def __init__(self, data: bytes | bytearray | memoryview, *args, **kwargs):
+        super().__init__(name="封面上传", headers_type=HeadersType.WEB, *args,
+                         **kwargs)
         self.data = data
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         url = "https://api.bilibili.com/x/upload/web/image"
         self.logger.info("CoverUpload Request")
         params = {
@@ -69,22 +65,4 @@ class CoverUploadWorker(BaseWorker):
             "cover_status": response["data"]["audit_info"][
                 "audit_title_status"],
         })
-
-    @Slot()
-    def on_finished(self, parent_window: "StreamConfigPanel"):
-        parent_window.cover_audit_state()
-        cover_state_updater = CoverStateUpdateWorker()
-        parent_window.parent_window.add_thread(
-            cover_state_updater,
-            on_finished=partial(
-                cover_state_updater.on_finished, parent_window),
-        )
         self._session.close()
-        if parent_window.cover_crop_widget is not None:
-            parent_window.cover_crop_widget.close()
-
-    @staticmethod
-    @Slot()
-    def on_exception(parent_window: "CoverCropWidget", *args, **kwargs):
-        parent_window.btn_upload.setText("保存封面")
-        parent_window.btn_upload.setEnabled(True)

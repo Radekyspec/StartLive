@@ -1,24 +1,21 @@
 # module import
 from time import sleep
-
-# package import
-from PySide6.QtCore import Slot
-from src.models.log import get_logger
-from src.sign import livehime_sign
+from typing import Callable
 
 # local package import
-from src import app_state
-from src.core.workers.base import run_wrapper, LongLiveWorker
+from src.core import app_state
+# package import
+from src.core.log import get_logger
+from src.core.sign import livehime_sign
+from src.core.workers.base import LongLiveWorker
 
 
 class CoverStateUpdateWorker(LongLiveWorker):
-    def __init__(self):
-        super().__init__(name="封面审核更新")
+    def __init__(self, *args, **kwargs):
+        super().__init__(name="封面审核更新", *args, **kwargs)
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         while self.is_running and app_state.room_info["cover_status"] == 0:
             url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/PreLive"
             params = livehime_sign({
@@ -43,8 +40,4 @@ class CoverStateUpdateWorker(LongLiveWorker):
                 "title": response["data"]["title"],
             })
             sleep(3)
-
-    @Slot()
-    def on_finished(self, parent_window: "StreamConfigPanel"):
-        parent_window.cover_audit_state()
         self._session.close()

@@ -16,5 +16,4 @@ class ConstantUpdatePresenter(Presenter):
         app_state.scan_status["const_updated"] = True
         self._state.constUpdated.emit()
 
-    def prepare_progress_view(self, progress: int):
-        pass
+    def prepare_progress_view(self, progress: int): ...

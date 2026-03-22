@@ -11,8 +11,6 @@ class VersionCheckerPresenter(Presenter):
         if version is not None:
             self._state.versionChecked.emit(version)
 
-    def prepare_fail_view(self, *args, **kwargs):
-        pass
+    def prepare_fail_view(self, *args, **kwargs): ...
 
-    def prepare_progress_view(self, *args, **kwargs):
-        pass
+    def prepare_progress_view(self, *args, **kwargs): ...

@@ -13,5 +13,4 @@ class FetchRecentAreaPresenter(Presenter):
     def prepare_fail_view(self):
         self._view.historyUpdated.emit([])
 
-    def prepare_progress_view(self):
-        pass
+    def prepare_progress_view(self): ...

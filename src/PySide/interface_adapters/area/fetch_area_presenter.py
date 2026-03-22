@@ -13,5 +13,4 @@ class FetchAreaPresenter(Presenter):
     def prepare_fail_view(self):
         self.state.areaUpdated.emit()
 
-    def prepare_progress_view(self):
-        pass
+    def prepare_progress_view(self): ...
