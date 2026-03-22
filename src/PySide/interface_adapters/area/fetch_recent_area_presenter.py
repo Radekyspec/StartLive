@@ -4,6 +4,7 @@ from src.core.workers.base import Presenter
 
 class FetchRecentAreaPresenter(Presenter):
     def __init__(self, view):
+        super().__init__()
         self._view = view
 
     def prepare_success_view(self):
@@ -11,3 +12,6 @@ class FetchRecentAreaPresenter(Presenter):
 
     def prepare_fail_view(self):
         self._view.historyUpdated.emit([])
+
+    def prepare_progress_view(self):
+        pass

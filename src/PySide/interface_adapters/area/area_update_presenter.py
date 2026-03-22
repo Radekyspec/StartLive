@@ -4,6 +4,7 @@ from src.core.workers.base import Presenter
 
 class AreaUpdatePresenter(Presenter):
     def __init__(self, view) -> None:
+        super().__init__()
         self._view = view
 
     def prepare_success_view(self, area: str):
@@ -23,3 +24,6 @@ class AreaUpdatePresenter(Presenter):
         self._view.child_combo.setCurrentText(app_state.room_info["area"])
         self._view.enable_child_combo_autosave(enabled)
         self._view.modify_area_btn.setEnabled(True)
+
+    def prepare_progress_view(self, *args, **kwargs):
+        pass

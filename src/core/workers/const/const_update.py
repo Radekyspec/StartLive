@@ -1,31 +1,26 @@
 # module import
 from json import loads
-
-# package import
-from PySide6.QtCore import Slot
-from src.app_state import dumps
-from src.constant import CacheType
-from src.models.cache import get_cache_path
-from src.models.log import get_logger
-from src.models.states import LoginState
+from typing import Callable
 
 # local package import
-from src import app_state, constant
-from src.core.workers.base import BaseWorker, run_wrapper
+from src.core import app_state, constant
+# package import
+from src.core.app_state import dumps
+from src.core.cache import get_cache_path
+from src.core.constant import CacheType
+from src.core.log import get_logger
+from src.core.workers.base import BaseWorker
 
 
 class ConstantUpdateWorker(BaseWorker):
-    def __init__(self, state: LoginState):
+    def __init__(self):
         super().__init__(name="配置更新")
-        self._state = state
         self.logger = get_logger(self.__class__.__name__)
         self._base_dir, self._const_path = get_cache_path(CacheType.CONFIG,
                                                           "version.json")
         self._session.cookies.clear()
 
-    @Slot()
-    @run_wrapper(silent=True)
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
         self._load_from_file()
         url = "https://gh.bydfk.com/https://raw.githubusercontent.com/Radekyspec/StartLive/refs/heads/master/resources/version.json"
@@ -37,6 +32,7 @@ class ConstantUpdateWorker(BaseWorker):
         self.logger.info(f"version.json Result: {response}")
         self._update_const(response)
         self._save_to_file(response)
+        self._session.close()
 
     def _load_from_file(self):
         if not self._const_path.exists():
@@ -63,4 +59,3 @@ class ConstantUpdateWorker(BaseWorker):
     def on_finished(self):
         app_state.scan_status["const_updated"] = True
         self._state.constUpdated.emit()
-        self._session.close()
