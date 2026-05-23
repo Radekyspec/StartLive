@@ -1,14 +1,12 @@
 # module import
-from contextlib import suppress
 from time import sleep
-
-# package import
-from PySide6.QtCore import Slot
-from src.models.log import get_logger
+from typing import Callable
 
 # local package import
-from src import app_state
-from src.core.workers.base import LongLiveWorker, run_wrapper
+from src.core import app_state
+# package import
+from src.core.log import get_logger
+from src.core.workers.base import LongLiveWorker
 
 
 class FaceAuthWorker(LongLiveWorker):
@@ -16,9 +14,7 @@ class FaceAuthWorker(LongLiveWorker):
         super().__init__(name="人脸认证")
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs) -> None:
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/IsUserIdentifiedByFaceAuth"
         verify_data = {
             "room_id": app_state.room_info["room_id"],
@@ -38,9 +34,4 @@ class FaceAuthWorker(LongLiveWorker):
             if response["data"] and response["data"]["is_identified"]:
                 verified = True
             sleep(1)
-
-    @Slot()
-    def on_finished(self, qr_window: "FaceQRWidget"):
-        with suppress(RuntimeError):
-            qr_window.deleteLater()
         self._session.close()

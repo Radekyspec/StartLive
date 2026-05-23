@@ -4,6 +4,7 @@ from requests import Session
 
 from src.core.app_state import create_session
 from src.core.constant import HeadersType
+from . import Presenter
 
 
 class BaseWorker:
@@ -12,12 +13,10 @@ class BaseWorker:
 
     def __init__(self, *, name: str, /, with_session: bool = True,
                  headers_type: HeadersType = HeadersType.APP,
-                 on_exception: Optional[Callable] = None,
-                 on_finished: Optional[Callable] = None):
+                 presenter: Presenter | None = None):
         super().__init__()
         self.name = name
-        self._on_exception = on_exception
-        self._on_finished = on_finished
+        self._presenter = presenter
         if with_session:
             self._session = create_session(headers_type)
         else:
@@ -40,30 +39,32 @@ class BaseWorker:
 
     def on_exception(self, *args, **kwargs):
         """
-        Handles an exception by invoking a predefined callback, if set.
+        Handles exceptions by invoking a presenter if it is available.
 
-        This method is designed to trigger a callback function provided in advance
-        whenever an exception occurs. It passes any provided arguments and keyword
-        arguments to the callback function.
+        This method is used to handle exceptions and delegate the failure handling
+        to a presenter, if configured.
 
-        :param args: Positional arguments to pass to the exception callback.
-        :type args: tuple
-        :param kwargs: Keyword arguments to pass to the exception callback.
+        :param args: Positional arguments passed to the presenter.
+        :type args: list
+        :param kwargs: Keyword arguments passed to the presenter.
         :type kwargs: dict
-        :return: None
         """
-        if self._on_exception is not None:
-            self._on_exception(*args, **kwargs)
+        if self._presenter is not None:
+            self._presenter.prepare_fail_view(*args, **kwargs)
 
     def on_finished(self, *args, **kwargs):
         """
-        Executes the `on_finished` callback if it is defined. This method checks whether
-        the `_on_finished` callable is not `None` and then invokes it with the provided
-        arguments and keyword arguments.
+        Called when the operation has finished. This method is responsible for triggering
+        any necessary final actions by invoking the appropriate presenter methods, if
+        available.
 
-        :param args: Positional arguments passed to the `on_finished` callback.
-        :param kwargs: Keyword arguments passed to the `on_finished` callback.
-        :return: None
+        The presenter, if present, prepares the success view by processing the provided
+        arguments, allowing for actions to be performed after the operation's completion.
+
+        :param args: Positional arguments that will be passed to the presenter.
+        :type args: tuple
+        :param kwargs: Keyword arguments that will be passed to the presenter.
+        :type kwargs: dict
         """
-        if self._on_finished is not None:
-            self._on_finished(*args, **kwargs)
+        if self._presenter is not None:
+            self._presenter.prepare_success_view(*args, **kwargs)

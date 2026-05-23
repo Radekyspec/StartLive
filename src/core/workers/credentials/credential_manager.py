@@ -1,21 +1,20 @@
 from json import loads
+from typing import Callable
 
-from PySide6.QtCore import Slot
 # package import
 from keyring import get_password, set_password, delete_password
 from requests.cookies import cookiejar_from_dict
-from src.app_state import dumps
-from src.constant import *
-from src.constant import HeadersType
-from src.exceptions import CredentialExpiredError, CredentialDuplicatedError
-from src.models.log import get_logger
-from src.models.states import LoginState
-from src.sign import livehime_sign
 
 # local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
-from src.core.workers.usernames import FetchUsernamesWorker
+from src.core import app_state
+from src.core.app_state import dumps
+from src.core.constant import *
+from src.core.constant import HeadersType
+from src.core.exceptions import CredentialExpiredError, \
+    CredentialDuplicatedError
+from src.core.log import get_logger
+from src.core.sign import livehime_sign
+from src.core.workers.base import BaseWorker
 
 
 class CredentialManagerWorker(BaseWorker):
@@ -74,9 +73,7 @@ class CredentialManagerWorker(BaseWorker):
                      dumps(app_state.cookie_indices))
         return cookie_key
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs) -> None:
         if app_state.obs_settings:
             self.logger.info(
                 f"use existing obs settings: {app_state.obs_settings.internal}")
@@ -150,29 +147,4 @@ class CredentialManagerWorker(BaseWorker):
         app_state.cookies_dict.clear()
         app_state.cookies_dict.update(saved_cookies)
         app_state.scan_status["scanned"] = True
-
-    @Slot()
-    def on_finished(self, parent_window: "MainWindow", state: LoginState):
-        from src.core.workers.login import FetchLoginWorker
-
-        FetchLoginWorker.post_login(parent_window, state)
-        if not self.is_new:
-            fetch_usernames = FetchUsernamesWorker(
-                app_state.cookie_indices[self.cookie_index])
-            parent_window.add_thread(
-                fetch_usernames,
-                on_finished=fetch_usernames.on_finished,
-            )
-        else:
-            app_state.scan_status["is_new"] = True
-        state.credentialLoaded.emit()
-        panel = parent_window.panel
-        panel.host_input.setText(
-            app_state.obs_settings.get("ip_addr", "localhost"))
-        panel.port_input.setText(app_state.obs_settings.get("port", "4455"))
-        panel.pass_input.setText(app_state.obs_settings.get("password", ""))
-        panel.obs_auto_live_checkbox.setChecked(
-            app_state.obs_settings.get("auto_live", False))
-        panel.obs_auto_connect_checkbox.setChecked(
-            app_state.obs_settings.get("auto_connect", False))
         self._session.close()

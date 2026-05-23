@@ -1,10 +1,10 @@
-from PySide6.QtCore import Slot
-from src.models.log import get_logger
-from src.sign import livehime_sign, order_payload
+from typing import Callable
 
 # local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
+from src.core import app_state
+from src.core.log import get_logger
+from src.core.sign import livehime_sign, order_payload
+from src.core.workers.base import BaseWorker
 
 
 class ReportFaceRecognitionWorker(BaseWorker):
@@ -14,9 +14,7 @@ class ReportFaceRecognitionWorker(BaseWorker):
         self.message = message
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs) -> None:
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/ReportFaceRecognition"
         self.logger.info("ReportFaceRecognition Request")
         report_data = livehime_sign({})
@@ -34,7 +32,4 @@ class ReportFaceRecognitionWorker(BaseWorker):
         self.logger.info(response.text)
         if (response := response.json())["code"] != 0:
             raise ValueError(response["message"])
-
-    @Slot()
-    def on_finished(self):
         self._session.close()

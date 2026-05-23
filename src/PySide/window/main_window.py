@@ -27,6 +27,7 @@ from qrcode.main import QRCode
 
 from src.PySide.classes import SingleInstanceWindow, ClickableLabel
 from src.PySide.interface_adapters import init_logger
+from src.PySide.interface_adapters.credentials import CredentialManagerPresenter
 from src.PySide.states import LoginState
 from src.PySide.web_server import HttpServerWorker
 from src.PySide.widgets import *
@@ -264,9 +265,10 @@ class MainWindow(SingleInstanceWindow):
         self.credential_worker = CredentialManagerWorker(
             app_state.cookie_state.current_cookie_idx, is_new)
         self.login_worker = None
+        self._credential_presenter = CredentialManagerPresenter(
+            self, self._login_state, self.credential_worker)
         self.add_thread(self.credential_worker,
-                        on_finished=partial(self.credential_worker.on_finished,
-                                            self, self._login_state))
+                        on_finished=self._credential_presenter.prepare_success_view)
 
         self.face_window: Optional[FaceQRWidget] = None
 
