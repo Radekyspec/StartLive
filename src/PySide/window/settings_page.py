@@ -5,12 +5,13 @@ from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QLineEdit, QButtonGroup, QPushButton, QFontDialog, QSlider
 )
-from src.app_state import bg_settings_default
-from src.constant import ProxyMode, PreferProto
-from src.models.widgets import SettingsWidget
-from src.models.workers import StreamTimeShiftUpdateWorker
 
-from src import app_state
+from src.PySide.interface_adapters.live_delay import TimeShiftUpdatePresenter
+from src.PySide.widgets import SettingsWidget
+from src.core import app_state
+from src.core.app_state import bg_settings_default
+from src.core.constant import ProxyMode, PreferProto
+from src.core.workers.live_delay import StreamTimeShiftUpdateWorker
 
 
 class SettingsPage(SettingsWidget):
@@ -136,7 +137,8 @@ class SettingsPage(SettingsWidget):
         delay_value = self.delay_edit.text()
         if not delay_value:
             delay_value = 0
-        update_delay = StreamTimeShiftUpdateWorker(delay_value)
+        update_delay = StreamTimeShiftUpdateWorker(
+            TimeShiftUpdatePresenter(self.delay_save_btn), delay_value)
         self._parent_window.add_thread(
             update_delay,
             on_finished=update_delay.on_finished,

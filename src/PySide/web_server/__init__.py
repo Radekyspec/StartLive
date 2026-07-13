@@ -2,8 +2,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from traceback import format_exception
 
 from PySide6.QtCore import QThread
-from src.models.log import get_logger
-from src.models.states import HttpSignalEmitter
+
+from src.PySide.log import get_logger
+from src.PySide.states import HttpSignalEmitter
 
 
 class HttpServerWorker(QThread):

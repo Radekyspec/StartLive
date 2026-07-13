@@ -4,9 +4,9 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QRadioButton, QButtonGroup, QCheckBox,
     QPushButton, QFrame, QFileDialog, QFontDialog, QApplication, QSlider
 )
-from src.models.classes import FocusPlaceholderLineEdit
 
-from src import app_state
+from src.PySide.classes import FocusPlaceholderLineEdit
+from src.core import app_state
 
 
 class SettingsWidget(QWidget):
@@ -282,7 +282,7 @@ class SettingsWidget(QWidget):
         return font_edit, font_btn
 
     def add_slider_item(self, label: str, *, min_value: int, max_value: int,
-                        default: float, suffix: str = "") -> QSlider:
+                        default: int, suffix: str = "") -> QSlider:
         """
         通用滑条项：Label + Slider + 当前数值标签。
         返回 QSlider，方便绑定 valueChanged。

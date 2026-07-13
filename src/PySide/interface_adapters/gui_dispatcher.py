@@ -2,10 +2,8 @@ from functools import partial
 
 from PySide6.QtCore import QObject, Signal, Slot, Qt
 
-from src.core.workers import Dispatcher
 
-
-class GUIDispatcher(QObject, Dispatcher):
+class GUIDispatcher(QObject):
     _alive: bool
     _invoke = Signal(object)  # Signal(callable)
 

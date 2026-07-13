@@ -20,7 +20,7 @@ class CoverUploadPresenter(Presenter):
         if self._view.cover_crop_widget is not None:
             self._view.cover_crop_widget.close()
 
-    def prepare_fail_view(self):
+    def prepare_fail_view(self, exception: Exception):
         self._view.cover_crop_widget.btn_upload.setText("保存封面")
         self._view.cover_crop_widget.btn_upload.setEnabled(True)
 

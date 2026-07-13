@@ -21,13 +21,12 @@ class ObsConnectorPresenter(Presenter):
             self._state.obsConnected.emit()
             self.logger.info("OBS connected")
             self._view.obs_auto_live_checkbox.setEnabled(True)
-            obs_daemon = ObsDaemonWorker()
-            self._view.parent_window.add_thread(
-                obs_daemon,
-                on_finished=partial(obs_daemon.on_finished, self._state)
-            )
+            from src.PySide.interface_adapters.obs_ws import ObsDaemonPresenter
 
-    def prepare_fail_view(self):
+            self._view.parent_window.add_thread(
+                ObsDaemonWorker(ObsDaemonPresenter()))
+
+    def prepare_fail_view(self, exception: Exception):
         self.logger.error(f"OBS connect failed.")
         self._view.obs_auto_live_checkbox.setEnabled(False)
         with self._cond:

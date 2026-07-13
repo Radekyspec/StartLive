@@ -6,7 +6,7 @@ class AnnounceUpdatePresenter(Presenter):
         super().__init__()
         self._view = view
 
-    def prepare_fail_view(self):
+    def prepare_fail_view(self, exception: Exception):
         self._view.save_announce_btn.setEnabled(True)
 
     def prepare_success_view(self, *args, **kwargs): ...

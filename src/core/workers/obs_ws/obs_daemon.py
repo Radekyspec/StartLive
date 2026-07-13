@@ -1,28 +1,26 @@
 # module import
 from contextlib import suppress
 from queue import Empty
+from typing import Callable
 
-from PySide6.QtCore import Slot
 # package import
 from obsws_python.error import OBSSDKRequestError
-from src.models.states import ObsBtnState
 
-from models.log import get_logger
 # local package import
-from src import app_state
-from src.core.workers.base import LongLiveWorker, run_wrapper
+from src.core import app_state
+from src.core.log import get_logger
+from src.core.workers.base import LongLiveWorker, Presenter
 
 
 # package import
 
 
 class ObsDaemonWorker(LongLiveWorker):
-    def __init__(self):
-        super().__init__(name="OBS交互", with_session=False)
+    def __init__(self, presenter: Presenter, /):
+        super().__init__(name="OBS交互", with_session=False,
+                         presenter=presenter)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /):
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         while app_state.obs_client is not None and self.is_running:
             with suppress(Empty):
                 req, body = app_state.obs_req_queue.get(timeout=.2)
@@ -36,11 +34,6 @@ class ObsDaemonWorker(LongLiveWorker):
         app_state.obs_op = True
         if app_state.obs_client is not None:
             app_state.obs_client.disconnect()
+            app_state.obs_client = None
         logger.info("OBS disconnected")
-        app_state.obs_client = None
         app_state.obs_op = False
-
-    @Slot()
-    def on_finished(self, state: ObsBtnState):
-        if app_state.obs_client is not None:
-            self.disconnect_obs(state)

@@ -1,11 +1,9 @@
-from abc import ABC, abstractmethod
+from typing import Protocol
 
 
-class Dispatcher(ABC):
-    @abstractmethod
+class Dispatcher(Protocol):
     def close(self) -> None:
-        pass
+        ...
 
-    @abstractmethod
     def post(self, fn, /, *args, **kwargs) -> None:
-        pass
+        ...

@@ -2,12 +2,13 @@ from threading import Condition
 
 from PySide6.QtWidgets import QMessageBox
 
+from src.PySide.states import StreamState
 from src.core import app_state
 from src.core.workers.base import Presenter
 
 
 class StartLivePresenter(Presenter):
-    def __init__(self, view: "StreamConfigPanel", state, /,
+    def __init__(self, view: "StreamConfigPanel", state: StreamState, /,
                  cond: Condition) -> None:
         super().__init__()
         self._view = view
@@ -40,7 +41,7 @@ class StartLivePresenter(Presenter):
                 self._state.faceRequired.emit(
                     app_state.stream_status["face_url"])
 
-    def prepare_failed_view(self):
+    def prepare_fail_view(self, exception: Exception):
         self._view.start_btn.setEnabled(True)
         self._view.parent_window.tray_start_live_action.setEnabled(True)
         self._view.stop_btn.setEnabled(False)

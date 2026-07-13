@@ -6,9 +6,9 @@ from PySide6.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QGridLayout, QScrollArea, QFrame, QButtonGroup, QSizePolicy
 )
-from src.models.widgets import RecentAreaBar
 
-from src import app_state
+from src.PySide.widgets import RecentAreaBar
+from src.core import app_state
 
 
 class AreaPickerPanel(QDialog):

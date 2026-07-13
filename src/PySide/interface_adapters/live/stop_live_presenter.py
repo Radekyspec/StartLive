@@ -8,7 +8,7 @@ class StopLivePresenter(Presenter):
 
     def prepare_success_view(self, *args, **kwargs): ...
 
-    def prepare_fail_view(self):
+    def prepare_fail_view(self, exception: Exception):
         self._view.start_btn.setEnabled(False)
         self._view.parent_window.tray_start_live_action.setEnabled(
             False)

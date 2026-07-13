@@ -8,9 +8,10 @@ from PySide6.QtWidgets import (
     QWidget, QPushButton, QFileDialog,
     QGridLayout, QLabel, QSizePolicy,
 )
-from models.log import get_logger
-from src.models.widgets import CropLabel
-from src.models.workers import CoverUploadWorker
+
+from src.PySide.log import get_logger
+from src.PySide.widgets import CropLabel
+from src.core.workers.cover import CoverUploadWorker
 
 
 class CoverCropWidget(QWidget):

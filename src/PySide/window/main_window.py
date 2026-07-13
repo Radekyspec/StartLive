@@ -1,12 +1,10 @@
 # module import
-from functools import partial
 from pathlib import Path
-from traceback import format_exception
-from typing import Optional, Callable
+from typing import Optional
 
 # package import
 from PIL import ImageQt
-from PySide6.QtCore import (QEvent, QTimer, QThreadPool, Slot)
+from PySide6.QtCore import (QEvent, QTimer, Slot)
 from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import QAction, QIcon, QActionGroup
 from PySide6.QtGui import QPixmap, QImage, QPainter
@@ -26,25 +24,42 @@ from qdarktheme import setup_theme
 from qrcode.main import QRCode
 
 from src.PySide.classes import SingleInstanceWindow, ClickableLabel
-from src.PySide.interface_adapters import init_logger
+from src.PySide.interface_adapters import GUIDispatcher
+from src.PySide.interface_adapters.const import ConstantUpdatePresenter, \
+    VersionCheckerPresenter
 from src.PySide.interface_adapters.credentials import CredentialManagerPresenter
+from src.PySide.interface_adapters.face_auth import FaceAuthPresenter
+from src.PySide.interface_adapters.gui_presenter import GUIPresenter
+from src.PySide.interface_adapters.live_delay import FetchTimeShiftPresenter
+from src.PySide.interface_adapters.login import FetchQRPresenter, \
+    FetchLoginPresenter
+from src.PySide.log import get_logger, init_logger
 from src.PySide.states import LoginState
 from src.PySide.web_server import HttpServerWorker
-from src.PySide.widgets import *
-from src.PySide.window import *
+from src.PySide.widgets import StartLiveMenuBar, LogViewer, SideBar
 from src.core import app_state
 from src.core.app_state import dumps
 from src.core.cache import del_cache_user
 from src.core.constant import *
-from src.core.log import get_logger
+from src.core.workers import WorkerManager
+from src.core.workers.base import LongLiveWorker, BaseWorker
+from src.core.workers.const import ConstantUpdateWorker, VersionCheckerWorker
+from src.core.workers.credentials import CredentialManagerWorker
+from src.core.workers.face_auth import FaceAuthWorker, \
+    ReportFaceRecognitionWorker
+from src.core.workers.live_delay import FetchStreamTimeShiftWorker
+from src.core.workers.login import FetchLoginWorker, FetchQRWorker
+from src.core.workers.obs_ws import ObsDaemonWorker
+from .face_qr import FaceQRWidget
+from .settings_page import SettingsPage
+from .stream_config import StreamConfigPanel
 
 
 # Main GUI window
 class MainWindow(SingleInstanceWindow):
-    _managed_workers: list[BaseWorker | LongLiveWorker]
-    _worker_typeset: set[str]
-    _ll_workers: list[LongLiveWorker]
-    _thread_pool: QThreadPool
+    _gui_dispatcher: GUIDispatcher
+    _gui_presenter: GUIPresenter
+    _thread_manager: WorkerManager
     _host: str
     _port: int
     _logged_in: bool
@@ -90,12 +105,11 @@ class MainWindow(SingleInstanceWindow):
         self._base_title = f"StartLive 开播器 {VERSION}"
         self._server_started = False
         self._new_version_str = None
-
-        self._thread_pool = QThreadPool()
-        self._managed_workers = []
+        self._gui_dispatcher = GUIDispatcher()
+        self._gui_presenter = GUIPresenter(self)
+        self._thread_manager = WorkerManager(self._gui_dispatcher)
         # Long live workers
         self._ll_workers = []
-        self._worker_typeset = set()
         self.logger.info("Thread Pool initialized.")
         self.setWindowTitle(self._base_title)
         self._color_scheme = None
@@ -177,11 +191,10 @@ class MainWindow(SingleInstanceWindow):
 
     def setup_ui(self, *, is_new: bool = False):
         self._logged_in = False
-        for worker in self._ll_workers:
-            worker.stop()
         if app_state.obs_client is not None:
-            ObsDaemonWorker.disconnect_obs(self.panel.obs_btn_state)
+            ObsDaemonWorker.disconnect_obs()
             self.panel.obs_btn_state.obsDisconnected.emit()
+        self._thread_manager.restart(wait=True)
         if self.panel is not None:
             self.tray_start_live_action.triggered.disconnect(
                 self.panel.start_live)
@@ -211,12 +224,10 @@ class MainWindow(SingleInstanceWindow):
             self.logger.info("Constant update disabled.")
             app_state.scan_status["const_updated"] = True
         elif not app_state.scan_status["const_updated"]:
-            const_updater = ConstantUpdateWorker(self._login_state)
-            self.add_thread(const_updater,
-                            on_finished=const_updater.on_finished)
-            version_check = VersionCheckerWorker(self._login_state)
-            self.add_thread(version_check,
-                            on_finished=version_check.on_finished)
+            self.add_thread(ConstantUpdateWorker(
+                ConstantUpdatePresenter(self._login_state)))
+            self.add_thread(VersionCheckerWorker(
+                VersionCheckerPresenter(self._login_state)))
         # Styling and alignment
         for label in [self.login_label, self.status_label]:
             label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -264,12 +275,10 @@ class MainWindow(SingleInstanceWindow):
 
         # Start fetching QR and begin polling thread
         self.credential_worker = CredentialManagerWorker(
+            CredentialManagerPresenter(self, self._login_state),
             app_state.cookie_state.current_cookie_idx, is_new)
         self.login_worker = None
-        self._credential_presenter = CredentialManagerPresenter(
-            self, self._login_state, self.credential_worker)
-        self.add_thread(self.credential_worker,
-                        on_finished=self._credential_presenter.prepare_success_view)
+        self.add_thread(self.credential_worker)
 
         self.face_window: Optional[FaceQRWidget] = None
 
@@ -386,10 +395,8 @@ class MainWindow(SingleInstanceWindow):
         if not self._ready_switch_account():
             return
         self._settings_page.delay_edit.setText("")
-        fetch_delay = FetchStreamTimeShiftWorker()
-        self.add_thread(fetch_delay,
-                        on_finished=partial(fetch_delay.on_finished,
-                                            self._settings_page.delay_edit))
+        self.add_thread(FetchStreamTimeShiftWorker(
+            FetchTimeShiftPresenter(self._settings_page.delay_edit)))
 
     @Slot(int, bool, bool)
     def _on_delete_cookies(self, is_new: bool, expired: bool):
@@ -504,13 +511,12 @@ class MainWindow(SingleInstanceWindow):
                 "qr_key": None, "qr_url": None,
                 "wait_for_confirm": False
             })
-        qr_login_worker = FetchQRWorker()
-        self.add_thread(qr_login_worker,
-                        on_finished=partial(qr_login_worker.on_finished, self))
-        self.login_worker = FetchLoginWorker(self._login_state)
-        self.add_thread(self.login_worker,
-                        on_finished=partial(self.login_worker.on_finished,
-                                            self))
+        self.add_thread(FetchQRWorker(FetchQRPresenter(self)))
+        _login_presenter = FetchLoginPresenter(self, self._login_state)
+        self.add_thread(
+            FetchLoginWorker(FetchLoginPresenter(self, self._login_state)),
+            on_progress=True
+        )
         self.login_label.setText("请使用手机扫码登录：")
         self.status_label.setText("等待扫码中...")
         self.status_label.setStyleSheet("color: blue; font-size: 16pt;")
@@ -521,44 +527,10 @@ class MainWindow(SingleInstanceWindow):
         self.update_qr_image("")
         self._fetch_qr(True)
 
-    def add_thread(self, worker: BaseWorker | LongLiveWorker, *,
-                   on_finished: Callable | None = None,
-                   on_exception: Callable | None = None):
-        if worker.__class__.__name__ in self._worker_typeset:
-            # Only one same-typed worker should run concurrently
-            self.logger.warning(f"Attempting to add {worker.__class__.__name__}"
-                                f" but one already exists.")
-            return
-        if on_finished is not None:
-            worker.signals.finished.connect(on_finished)
-        worker.signals.finished.connect(partial(self._remove_worker, worker))
-        if on_exception is not None:
-            worker.signals.exception.connect(on_exception)
-        worker.signals.exception.connect(
-            partial(self._worker_exception, worker))
-        self.logger.info(f"{worker.__class__.__name__} added to thread pool")
-        self._managed_workers.append(worker)
-        self._worker_typeset.add(worker.__class__.__name__)
-        if isinstance(worker, LongLiveWorker):
-            self._ll_workers.append(worker)
-        self._thread_pool.start(worker)
-
-    @Slot()
-    def _remove_worker(self, dead_worker: BaseWorker | LongLiveWorker):
-        self.logger.info(
-            f"{dead_worker.__class__.__name__} removed from thread pool")
-        self._managed_workers.remove(dead_worker)
-        self._worker_typeset.remove(dead_worker.__class__.__name__)
-        if dead_worker in self._ll_workers:
-            self._ll_workers.remove(dead_worker)
-
-    @Slot()
-    def _worker_exception(self, worker: BaseWorker | LongLiveWorker,
-                          e: Exception):
-        self.logger.error(
-            format_exception(type(e), e, e.__traceback__))
-        QMessageBox.critical(self, f"{worker.name}线程错误",
-                             repr(e))
+    def add_thread(self, worker: BaseWorker | LongLiveWorker, /,
+                   on_progress: bool = False):
+        worker.add_presenter(self._gui_presenter)
+        self._thread_manager.submit(worker, on_progress=on_progress)
 
     @staticmethod
     # Helper: Generate QR code image from URL
@@ -645,20 +617,13 @@ class MainWindow(SingleInstanceWindow):
         self.tray_stop_live_action.setEnabled(False)
         self.panel.parent_combo.setEnabled(True)
         self.panel.child_combo.setEnabled(True)
-        auth_worker = FaceAuthWorker()
+        auth_worker = FaceAuthWorker(FaceAuthPresenter(self))
         self.face_window = FaceQRWidget(auth_worker)
         self.face_window.face_qr.setPixmap(self._qpixmap_from_str(face_url))
-        self.add_thread(auth_worker,
-                        on_finished=partial(auth_worker.on_finished,
-                                            self.face_window))
-        report_worker = ReportFaceRecognitionWorker(
-            app_state.room_info["area_code"],
-            app_state.stream_status.face_message
-        )
+        self.add_thread(auth_worker)
         self.add_thread(
-            report_worker,
-            on_finished=report_worker.on_finished,
-        )
+            ReportFaceRecognitionWorker(app_state.room_info["area_code"],
+                                        app_state.stream_status.face_message))
         self.face_window.show()
 
     def _apply_global_qss(self) -> None:

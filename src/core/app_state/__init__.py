@@ -28,8 +28,8 @@ class AppSettings(StateBase):
     custom_font: str = ""
     prefer_proto: PreferProto = PreferProto.RTMP
     custom_bg: str = ""
-    custom_bg_blur_radius: float = 10.0
-    custom_bg_opacity: float = 50.0
+    custom_bg_blur_radius: int = 10
+    custom_bg_opacity: int = 50
     custom_bg_mode: BackgroundMode = BackgroundMode.COVER
     app_buvid: str = gen_buvid()
     auto_start_live: bool = False
@@ -185,8 +185,8 @@ def app_settings_default() -> None:
 
 def bg_settings_default() -> None:
     app_settings["custom_bg"] = ""
-    app_settings["custom_bg_blur_radius"] = 10.0
-    app_settings["custom_bg_opacity"] = 10.0
+    app_settings["custom_bg_blur_radius"] = 10
+    app_settings["custom_bg_opacity"] = 50
     app_settings["custom_bg_mode"] = BackgroundMode.COVER
 
 

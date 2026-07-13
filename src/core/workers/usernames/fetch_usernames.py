@@ -1,16 +1,16 @@
 # module import
 from json import loads
 from time import sleep
+from typing import Callable
 
-from PySide6.QtCore import Slot
 from keyring import get_password
-from src.constant import *
-from src.models.log import get_logger
-from src.sign import livehime_sign
 
 # local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
+from src.core import app_state
+from src.core.constant import *
+from src.core.log import get_logger
+from src.core.sign import livehime_sign
+from src.core.workers.base import BaseWorker
 
 
 class FetchUsernamesWorker(BaseWorker):
@@ -19,9 +19,7 @@ class FetchUsernamesWorker(BaseWorker):
         self._current_user = skip_user
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         if not app_state.scan_status["scanned"]:
             return
         url = "https://api.bilibili.com/x/web-interface/nav"
@@ -50,7 +48,3 @@ class FetchUsernamesWorker(BaseWorker):
                 response["data"]["mid"]
             )
             self.logger.info(f"fetch username of {key} Completed")
-
-    @Slot()
-    def on_finished(self):
-        self._session.close()

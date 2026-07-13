@@ -6,13 +6,13 @@ from PySide6.QtGui import QAction, QActionGroup, QDesktopServices
 from PySide6.QtWidgets import QMenuBar, QMenu
 from keyring import delete_password, set_password
 from keyring.errors import PasswordDeleteError
-from src.app_state import dumps
-from src.constant import *
-from src.models.cache import cache_base_dir
-from src.models.log import get_log_path, get_logger
-from src.models.workers import CredentialManagerWorker
 
-from src import app_state
+from src.PySide.log import get_logger, get_log_path
+from src.core import app_state
+from src.core.app_state import dumps
+from src.core.cache import cache_base_dir
+from src.core.constant import *
+from src.core.workers.credentials import CredentialManagerWorker
 
 
 class StartLiveMenuBar(QMenuBar):

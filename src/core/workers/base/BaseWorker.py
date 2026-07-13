@@ -4,6 +4,7 @@ from requests import Session
 
 from src.core.app_state import create_session
 from src.core.constant import HeadersType
+from src.core.exceptions.WorkerException import WorkerException
 from . import Presenter
 
 
@@ -11,12 +12,17 @@ class BaseWorker:
     _session: Optional[Session]
     name: str
 
-    def __init__(self, *, name: str, /, with_session: bool = True,
+    def __init__(self, /, name: str, *, with_session: bool = True,
                  headers_type: HeadersType = HeadersType.APP,
-                 presenter: Presenter | None = None):
+                 presenter: Presenter | list[Presenter] | None = None):
         super().__init__()
         self.name = name
-        self._presenter = presenter
+        if isinstance(presenter, list):
+            self._presenters = presenter[:]
+        elif presenter is not None:
+            self._presenters = [presenter]
+        else:
+            self._presenters = []
         if with_session:
             self._session = create_session(headers_type)
         else:
@@ -44,20 +50,22 @@ class BaseWorker:
         """
         raise NotImplementedError
 
-    def on_exception(self, *args, **kwargs):
+    def add_presenter(self, presenter: Presenter) -> None:
+        self._presenters.append(presenter)
+
+    def on_exception(self, exception: Exception, /):
         """
         Handles exceptions by invoking a presenter if it is available.
 
         This method is used to handle exceptions and delegate the failure handling
         to a presenter, if configured.
 
-        :param args: Positional arguments passed to the presenter.
-        :type args: list
-        :param kwargs: Keyword arguments passed to the presenter.
-        :type kwargs: dict
+        :param exception: The exception that was raised during the operation.
+        :type exception: Exception
         """
-        if self._presenter is not None:
-            self._presenter.prepare_fail_view(*args, **kwargs)
+        if self._presenters:
+            wrapped_exception = WorkerException(self.name, exception)
+            [p.prepare_fail_view(wrapped_exception) for p in self._presenters]
 
     def on_finished(self, *args, **kwargs):
         """
@@ -73,9 +81,9 @@ class BaseWorker:
         :param kwargs: Keyword arguments that will be passed to the presenter.
         :type kwargs: dict
         """
-        if self._presenter is not None:
-            self._presenter.prepare_success_view(*args, **kwargs)
+        if self._presenters:
+            [p.prepare_success_view(*args, **kwargs) for p in self._presenters]
 
     def on_progress(self, *args, **kwargs):
-        if self._presenter is not None:
-            self._presenter.prepare_progress_view(*args, **kwargs)
+        if self._presenters:
+            [p.prepare_progress_view(*args, **kwargs) for p in self._presenters]

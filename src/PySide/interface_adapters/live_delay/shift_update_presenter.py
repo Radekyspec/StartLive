@@ -10,7 +10,7 @@ class TimeShiftUpdatePresenter(Presenter):
 
     def prepare_success_view(self, *args, **kwargs): ...
 
-    def prepare_fail_view(self):
+    def prepare_fail_view(self, exception: Exception):
         self._view.setEnabled(True)
 
     def prepare_progress_view(self, *args, **kwargs): ...

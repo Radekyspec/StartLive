@@ -63,13 +63,12 @@ class CredentialManagerWorker(BaseWorker):
         uid = app_state.cookies_dict["DedeUserID"]
         cookie_key = f"cookies|{uid}"
         CredentialManagerWorker.get_cookie_indices()
-        orig_idx = -1
         if cookie_key in app_state.cookie_indices:
             if not allow_duplicate:
                 raise CredentialDuplicatedError(cookie_key)
-            orig_idx = app_state.cookie_indices.index(cookie_key)
-        app_state.cookie_indices.insert(orig_idx, cookie_key)
-        app_state.usernames[cookie_key] = cookie_key
+        else:
+            app_state.cookie_indices.append(cookie_key)
+            app_state.usernames[cookie_key] = cookie_key
         set_password(KEYRING_SERVICE_NAME, cookie_key,
                      dumps(app_state.cookies_dict))
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,

@@ -6,7 +6,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from src.models.workers import FaceAuthWorker
+from src.core.workers.face_auth import FaceAuthWorker
 
 
 class FaceQRWidget(QWidget):

@@ -1,7 +1,7 @@
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QMainWindow, QMessageBox
 
-from src.constant import LOCAL_SERVER_NAME
+from src.core.constant import LOCAL_SERVER_NAME
 
 
 class SingleInstanceWindow(QMainWindow):

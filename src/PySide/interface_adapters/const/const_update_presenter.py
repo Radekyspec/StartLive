@@ -12,7 +12,7 @@ class ConstantUpdatePresenter(Presenter):
         app_state.scan_status["const_updated"] = True
         self._state.constUpdated.emit()
 
-    def prepare_fail_view(self):
+    def prepare_fail_view(self, exception: Exception):
         app_state.scan_status["const_updated"] = True
         self._state.constUpdated.emit()
 

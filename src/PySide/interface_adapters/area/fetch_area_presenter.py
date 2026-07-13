@@ -10,7 +10,7 @@ class FetchAreaPresenter(Presenter):
     def prepare_success_view(self):
         self.state.areaUpdated.emit()
 
-    def prepare_fail_view(self):
+    def prepare_fail_view(self, exception: Exception):
         self.state.areaUpdated.emit()
 
     def prepare_progress_view(self, *args, **kwargs): ...

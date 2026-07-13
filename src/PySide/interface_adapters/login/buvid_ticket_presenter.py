@@ -3,10 +3,10 @@ from src.core.workers.credentials.credential_manager import \
     CredentialManagerWorker
 
 
-class BuvidTicketPresenter(Presenter):
+class TicketFetchPresenter(Presenter):
     def prepare_success_view(self):
         CredentialManagerWorker.add_cookie(True)
 
-    def prepare_fail_view(self): ...
+    def prepare_fail_view(self, exception: Exception): ...
 
     def prepare_progress_view(self, *args, **kwargs): ...

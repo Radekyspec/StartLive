@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor, Future, CancelledError
 from os import cpu_count
-from typing import Any, Callable
+from typing import Any
 
 from .base import BaseWorker, LongLiveWorker
 from .dispatcher import Dispatcher
@@ -26,30 +26,30 @@ class WorkerManager:
         self.logger = get_logger(self.__class__.__name__)
 
     def submit(self, worker: BaseWorker, /,
-               on_progress: Callable | None = None) -> Future:
-        if (worker_name := worker.__class__.__name__) in self._worker_typeset:
-            self.logger.warning(f"Attempting to add {worker_name}"
+               on_progress: bool = False) -> Future:
+        if (worker_type := worker.__class__.__name__) in self._worker_typeset:
+            self.logger.warning(f"Attempting to add {worker_type}"
                                 f" but one already exists.")
             return Future()  # return a placeholder future
 
         future = self._executor.submit(self._run_worker, worker,
                                        on_progress=on_progress)
-        self.logger.info(f"{worker_name} added to thread pool")
-        self._worker_typeset.add(worker_name)
+        self.logger.info(f"{worker_type} added to thread pool")
+        self._worker_typeset.add(worker_type)
 
         self._jobs[future] = worker
         future.add_done_callback(self._handle_done)
         return future
 
     def _run_worker(self, worker: BaseWorker | LongLiveWorker, /,
-                    on_progress: Callable | None) -> Any:
+                    on_progress: bool) -> Any:
         if isinstance(worker, LongLiveWorker):
             worker.raise_if_cancelled()
 
         def report_progress(*args, **kwargs) -> None:
-            if on_progress is None:
+            if not on_progress:
                 return
-            self._dispatcher.post(on_progress, *args, **kwargs)
+            self._dispatcher.post(worker.on_progress, *args, **kwargs)
 
         return worker.start(report_progress=report_progress)
 
@@ -67,7 +67,7 @@ class WorkerManager:
             return
 
         worker_name = worker.name
-        self._worker_typeset.remove(worker_name)
+        self._worker_typeset.remove(worker.__class__.__name__)
 
         def finalize() -> None:
             # future canceled before start
@@ -76,12 +76,15 @@ class WorkerManager:
 
             try:
                 result = future.result()
+                print(f"{worker_name} finished with result: {result!r}")
+                self.logger.info(
+                    f"{worker_name} finished with result: {result!r}")
             except (TaskCancelled, CancelledError):
                 pass
-            except Exception:
+            except Exception as e:
                 self.logger.exception(f"{worker_name} failed")
                 try:
-                    worker.on_exception()
+                    worker.on_exception(e)
                 except Exception:
                     self.logger.exception(f"{worker_name} on_exception failed:")
             else:
@@ -96,9 +99,13 @@ class WorkerManager:
         self.logger.info(
             f"{worker_name} removed from thread pool")
 
-    def shutdown(self, cancel_running: bool = True) -> None:
+    def shutdown(self, cancel_running: bool = True, wait: bool = False) -> None:
         if cancel_running:
             for job_future in list(self._jobs.keys()):
                 self.cancel(job_future)
 
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        self._executor.shutdown(wait=wait, cancel_futures=True)
+
+    def restart(self, cancel_running: bool = True, wait: bool = False) -> None:
+        self.shutdown(cancel_running, wait)
+        self.__init__(self._dispatcher)

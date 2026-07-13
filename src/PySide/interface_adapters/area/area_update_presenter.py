@@ -3,7 +3,7 @@ from src.core.workers.base import Presenter
 
 
 class AreaUpdatePresenter(Presenter):
-    def __init__(self, view) -> None:
+    def __init__(self, view: "StreamConfigPanel") -> None:
         super().__init__()
         self._view = view
 
@@ -17,7 +17,7 @@ class AreaUpdatePresenter(Presenter):
             app_state.room_info["parent_area"])
         self._view.child_combo.setCurrentText(app_state.room_info["area"])
 
-    def prepare_fail_view(self):
+    def prepare_fail_view(self, exception: Exception):
         enabled = self._view.enable_child_combo_autosave(False)
         self._view.parent_combo.setCurrentText(
             app_state.room_info["parent_area"])

@@ -1,33 +1,30 @@
 # package import
-from PySide6.QtCore import Slot
-from src.constant import CacheType, MAX_RECENT_TITLE
-from src.exceptions import TitleUpdateError
-from src.models.cache import get_cache_path
-from src.sign import livehime_sign
+from typing import Callable
 
-from models.log import get_logger
 # local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
+from src.core import app_state
+from src.core.cache import get_cache_path
+from src.core.constant import CacheType, MAX_RECENT_TITLE
+from src.core.exceptions import TitleUpdateError
+from src.core.log import get_logger
+from src.core.sign import livehime_sign
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class TitleUpdateWorker(BaseWorker):
-    def __init__(self, parent: "StreamConfigPanel", /, title):
-        super().__init__(name="标题更新")
-        self.parent = parent
-        self.title = title
+    def __init__(self, presenter: Presenter, /, title):
+        super().__init__(name="标题更新", presenter=presenter)
+        self._title = title
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/UpdatePreLiveInfo"
         title_data = {
             "csrf": app_state.cookies_dict["bili_jct"],
             "csrf_token": app_state.cookies_dict["bili_jct"],
             "mobi_app": "pc_link",
             "room_id": app_state.room_info["room_id"],
-            "title": self.title,
+            "title": self._title,
         }
         self.logger.info(f"updateV2 Request")
         response = self._session.post(url, params=livehime_sign({}),
@@ -39,23 +36,13 @@ class TitleUpdateWorker(BaseWorker):
         if response["code"] != 0:
             raise TitleUpdateError(response["message"])
         new_title = response["data"]["audit_info"]["audit_title"]
-        app_state.room_info["title"] = new_title if new_title else self.title
-        if self.title in app_state.room_info["recent_title"]:
-            app_state.room_info["recent_title"].remove(self.title)
-        app_state.room_info["recent_title"].insert(0, self.title)
+        app_state.room_info["title"] = new_title if new_title else self._title
+        if self._title in app_state.room_info["recent_title"]:
+            app_state.room_info["recent_title"].remove(self._title)
+        app_state.room_info["recent_title"].insert(0, self._title)
         _, _title_file = get_cache_path(
             CacheType.CONFIG,
             f"title{app_state.cookies_dict["DedeUserID"]}")
         with open(_title_file, "w", encoding="utf-8") as f:
             f.write("\n".join(
                 app_state.room_info["recent_title"][:MAX_RECENT_TITLE]))
-
-    @Slot()
-    def on_exception(self, *args, **kwargs):
-        self.parent.save_title_btn.setEnabled(True)
-
-    @Slot()
-    def on_finished(self, *args, **kwargs):
-        self._session.close()
-        self.parent.title_input.clear()
-        self.parent.title_input.addItems(app_state.room_info["recent_title"])

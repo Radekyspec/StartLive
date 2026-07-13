@@ -1,25 +1,39 @@
 # -*- coding: utf-8 -*-
 from contextlib import suppress
 # module import
-from functools import partial
 from ipaddress import ip_address, IPv6Address
+from threading import Condition
 
 # package import
-from PySide6.QtCore import (Qt, Slot, QMutex, QWaitCondition)
+from PySide6.QtCore import (Qt, Slot)
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
                                QLabel, QLineEdit, QPushButton,
                                QVBoxLayout, QWidget,
                                QApplication, QFrame)
-from src.constant import CoverStatus
-from src.models.states import ObsBtnState, StreamState
-from src.models.window import AreaPickerPanel, CoverCropWidget
 
-from models.classes import FocusAwareLineEdit, \
+from src.PySide.classes import FocusAwareLineEdit, \
     CompletionComboBox
+from src.PySide.interface_adapters.announce import AnnounceUpdatePresenter
+from src.PySide.interface_adapters.area import FetchRecentAreaPresenter, \
+    AreaUpdatePresenter
+from src.PySide.interface_adapters.cover import FetchCoverPresenter
+from src.PySide.interface_adapters.live import StartLivePresenter, \
+    StopLivePresenter
+from src.PySide.interface_adapters.obs_ws import ObsConnectorPresenter
+from src.PySide.interface_adapters.title import TitleUpdatePresenter
+from src.PySide.states import ObsBtnState, StreamState
+from src.PySide.window import AreaPickerPanel, CoverCropWidget
 # local package import
-from src import app_state
+from src.core import app_state
+from src.core.constant import CoverStatus
+from src.core.workers.announce import AnnounceUpdateWorker
+from src.core.workers.area import FetchRecentAreaWorker, AreaUpdateWorker
+from src.core.workers.cover import FetchCoverWorker
+from src.core.workers.live import StartLiveWorker, StopLiveWorker
+from src.core.workers.obs_ws import ObsDaemonWorker, ObsConnectorWorker
+from src.core.workers.title import TitleUpdateWorker
 
 
 class StreamConfigPanel(QWidget):
@@ -28,8 +42,7 @@ class StreamConfigPanel(QWidget):
         super().__init__(parent_window, *args, **kwargs)
         self.parent_window = parent_window
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-        self._mutex = QMutex()
-        self._cond = QWaitCondition()
+        self._cond = Condition()
 
         self.stream_state = StreamState()
         self.stream_state.addressUpdated.connect(self.fill_stream_info)
@@ -249,11 +262,8 @@ class StreamConfigPanel(QWidget):
         dlg = AreaPickerPanel(self,
                               recent_pairs=app_state.room_info["recent_areas"])
         if not app_state.room_info["recent_areas"]:
-            update_recent = FetchRecentAreaWorker(dlg)
             self.parent_window.add_thread(
-                update_recent,
-                on_finished=update_recent.on_finished,
-            )
+                FetchRecentAreaWorker(FetchRecentAreaPresenter(dlg)))
         # 可选：设置默认选中
         if self._valid_area():
             dlg.set_initial_selection(self.parent_combo.currentText(),
@@ -306,14 +316,9 @@ class StreamConfigPanel(QWidget):
         app_state.room_info["parent_area"] = self.parent_combo.currentText()
         app_state.room_info["area"] = self.child_combo.currentText()
         app_state.room_info["area_code"] = area_code
-        start_live_worker = StartLiveWorker(self, self.stream_state,
-                                            mutex=self._mutex, cond=self._cond,
-                                            area=area_code)
-        self.parent_window.add_thread(
-            start_live_worker,
-            on_finished=start_live_worker.on_finished,
-            on_exception=start_live_worker.on_exception,
-        )
+        self.parent_window.add_thread(StartLiveWorker(
+            StartLivePresenter(self, self.stream_state, cond=self._cond),
+            area=area_code))
 
     def _stop_live(self):
         if not self.stop_btn.isEnabled():
@@ -331,12 +336,7 @@ class StreamConfigPanel(QWidget):
         if app_state.obs_client is not None:
             if self.obs_auto_live_checkbox.isChecked():
                 app_state.obs_req_queue.put(("StopStream", {}))
-        stop_live_worker = StopLiveWorker()
-        self.parent_window.add_thread(
-            stop_live_worker,
-            on_finished=stop_live_worker.on_finished,
-            on_exception=partial(stop_live_worker.on_exception, self)
-        )
+        self.parent_window.add_thread(StopLiveWorker(StopLivePresenter(self)))
 
     def fill_stream_info(self, addr: str, key: str):
         if app_state.obs_connecting:
@@ -369,18 +369,16 @@ class StreamConfigPanel(QWidget):
                     obs_host = f"[{obs_host}]"
             except ValueError:
                 pass
-            connector = ObsConnectorWorker(self, self.obs_btn_state,
-                                           self._mutex, self._cond,
-                                           host=obs_host,
-                                           port=self.port_input.text(),
-                                           password=self.pass_input.text())
-            self.parent_window.add_thread(
-                connector,
-                on_finished=connector.on_finished,
-                on_exception=connector.on_exception,
+            connector = ObsConnectorWorker(
+                ObsConnectorPresenter(self, self.obs_btn_state, self._cond),
+                host=obs_host,
+                port=self.port_input.text(),
+                password=self.pass_input.text(),
+                cond=self._cond
             )
+            self.parent_window.add_thread(connector, on_progress=True)
         elif app_state.obs_client is not None and not app_state.obs_op:
-            ObsDaemonWorker.disconnect_obs(self.obs_btn_state)
+            ObsDaemonWorker.disconnect_obs()
             self.obs_btn_state.obsDisconnected.emit()
             self.obs_auto_live_checkbox.setEnabled(False)
 
@@ -412,12 +410,9 @@ class StreamConfigPanel(QWidget):
     @Slot()
     def _save_title(self):
         self.save_title_btn.setEnabled(False)
-        title_updater = TitleUpdateWorker(self, self.title_input.currentText())
         self.parent_window.add_thread(
-            title_updater,
-            on_finished=title_updater.on_finished,
-            on_exception=title_updater.on_exception
-        )
+            TitleUpdateWorker(TitleUpdatePresenter(self),
+                              self.title_input.currentText()))
 
     @Slot()
     def _edit_cover(self):
@@ -426,11 +421,8 @@ class StreamConfigPanel(QWidget):
         self.cover_edit_btn.setEnabled(False)
         self.cover_crop_widget = CoverCropWidget(self)
         self.cover_crop_widget.destroyed.connect(self._on_cover_exit)
-        fetch_cover_worker = FetchCoverWorker(self.cover_crop_widget)
         self.parent_window.add_thread(
-            fetch_cover_worker,
-            on_finished=fetch_cover_worker.on_finished,
-        )
+            FetchCoverWorker(FetchCoverPresenter(self.cover_crop_widget)))
         self.cover_crop_widget.show()
 
     @Slot()
@@ -445,12 +437,9 @@ class StreamConfigPanel(QWidget):
     @Slot()
     def _save_announce(self):
         self.save_announce_btn.setEnabled(False)
-        announce_updater = AnnounceUpdateWorker(self.announce_input.text())
         self.parent_window.add_thread(
-            announce_updater,
-            on_exception=partial(announce_updater.on_exception, self),
-            on_finished=announce_updater.on_finished
-        )
+            AnnounceUpdateWorker(AnnounceUpdatePresenter(self),
+                                 self.announce_input.text()))
 
     def _valid_area(self):
         parent_choose = self.parent_combo.currentText()
@@ -463,9 +452,5 @@ class StreamConfigPanel(QWidget):
     def _save_area(self, child_area: str):
         if self._valid_area() and self._child_combo_autosave:
             # self.save_area_btn.setEnabled(False)
-            area_updater = AreaUpdateWorker(self, child_area)
             self.parent_window.add_thread(
-                area_updater,
-                on_finished=area_updater.on_finished,
-                on_exception=area_updater.on_exception,
-            )
+                AreaUpdateWorker(AreaUpdatePresenter(self), child_area))

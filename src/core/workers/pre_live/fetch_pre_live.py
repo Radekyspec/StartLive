@@ -1,23 +1,17 @@
-from functools import partial
-
-# package import
-from PySide6.QtCore import Slot
-from src.constant import CoverStatus
-from src.models.log import get_logger
-from src.models.states import LoginState
-from src.sign import livehime_sign, order_payload
+from typing import Callable
 
 # local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
-from src.core.workers.cover import CoverStateUpdateWorker
+from src.core import app_state
+# package import
+from src.core.log import get_logger
+from src.core.sign import livehime_sign, order_payload
+from src.core.workers.base import BaseWorker, Presenter
 from src.core.workers.live import StartLiveWorker
-from src.core.workers.title import LoadRecentTitleWorker
 
 
 class FetchPreLiveWorker(BaseWorker):
-    def __init__(self):
-        super().__init__(name="房间信息")
+    def __init__(self, presenter: Presenter, /):
+        super().__init__(name="PreLive信息", presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
 
     def _fetch_room_info(self):
@@ -48,9 +42,7 @@ class FetchPreLiveWorker(BaseWorker):
                                        response["data"]["area_v2_id"])
         app_state.scan_status["room_updated"] = True
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/PreLive"
         params = livehime_sign({
             "area": "true",
@@ -74,36 +66,3 @@ class FetchPreLiveWorker(BaseWorker):
             "title": response["data"]["title"],
         })
         self._fetch_room_info()
-
-    @Slot()
-    def on_finished(self, parent_window: "StreamConfigPanel",
-                    state: LoginState):
-        title_text = app_state.room_info["title"]
-        app_state.room_info["recent_title"].insert(0, title_text)
-        parent_window.title_input.currentTextChanged.connect(
-            lambda: parent_window.save_title_btn.setEnabled(True))
-        recent_title_loader = LoadRecentTitleWorker(parent_window)
-        parent_window.parent_window.add_thread(
-            recent_title_loader,
-            on_finished=recent_title_loader.on_finished,
-        )
-        if app_state.stream_status["live_status"]:
-            parent_window.addr_input.setText(
-                app_state.stream_status["stream_addr"])
-            parent_window.key_input.setText(
-                app_state.stream_status["stream_key"])
-            parent_window.start_btn.setEnabled(False)
-            parent_window.parent_window.tray_start_live_action.setEnabled(False)
-            parent_window.stop_btn.setEnabled(True)
-            parent_window.parent_window.tray_stop_live_action.setEnabled(True)
-        parent_window.cover_audit_state()
-        if app_state.room_info["cover_status"] == CoverStatus.AUDIT_IN_PROGRESS:
-            # add updating logic
-            cover_state_updater = CoverStateUpdateWorker()
-            parent_window.parent_window.add_thread(
-                cover_state_updater,
-                on_finished=partial(
-                    cover_state_updater.on_finished, parent_window),
-            )
-        state.roomUpdated.emit()
-        self._session.close()

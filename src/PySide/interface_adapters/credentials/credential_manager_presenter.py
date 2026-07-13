@@ -17,8 +17,7 @@ class CredentialManagerPresenter(Presenter):
                 app_state.cookie_indices[cookie_index]
             )
             self._view.add_thread(
-                fetch_usernames,
-                on_finished=fetch_usernames.on_finished,
+                fetch_usernames
             )
         self._state.credentialLoaded.emit()
         panel = self._view.panel
@@ -31,8 +30,6 @@ class CredentialManagerPresenter(Presenter):
         panel.obs_auto_connect_checkbox.setChecked(
             app_state.obs_settings.get("auto_connect", False))
 
-    def prepare_fail_view(self, *args, **kwargs):
-        ...
+    def prepare_fail_view(self, exception: Exception): ...
 
-    def prepare_progress_view(self, *args, **kwargs):
-        ...
+    def prepare_progress_view(self, *args, **kwargs): ...

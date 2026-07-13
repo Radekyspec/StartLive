@@ -1,2 +1,3 @@
 from .area_update_presenter import AreaUpdatePresenter
 from .fetch_area_presenter import FetchAreaPresenter
+from .fetch_recent_area_presenter import FetchRecentAreaPresenter
