@@ -1,6 +1,7 @@
 # module import
 from typing import Callable
 
+from ..base import Presenter
 # local package import
 from ... import app_state
 from ...log import get_logger
@@ -9,11 +10,12 @@ from ...workers.base import BaseWorker
 
 
 class FetchAreaWorker(BaseWorker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(name="分区获取", *args, **kwargs)
+    def __init__(self, presenter: Presenter):
+        super().__init__(name="分区获取", presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/GetAreaListForLive"
         self.logger.info(f"Area/getList Request")
         response = self._session.get(url, params=livehime_sign({}))
@@ -30,4 +32,3 @@ class FetchAreaWorker(BaseWorker):
                     sub_area["name"])
                 app_state.area_reverse[sub_area["name"]] = parent
         app_state.scan_status["area_updated"] = True
-        self._session.close()

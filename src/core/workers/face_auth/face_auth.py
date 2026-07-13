@@ -6,15 +6,16 @@ from typing import Callable
 from src.core import app_state
 # package import
 from src.core.log import get_logger
-from src.core.workers.base import LongLiveWorker
+from src.core.workers.base import LongLiveWorker, Presenter
 
 
 class FaceAuthWorker(LongLiveWorker):
-    def __init__(self, ):
-        super().__init__(name="人脸认证")
+    def __init__(self, presenter: Presenter):
+        super().__init__(name="人脸认证", presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs) -> None:
+
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/IsUserIdentifiedByFaceAuth"
         verify_data = {
             "room_id": app_state.room_info["room_id"],
@@ -34,4 +35,3 @@ class FaceAuthWorker(LongLiveWorker):
             if response["data"] and response["data"]["is_identified"]:
                 verified = True
             sleep(1)
-        self._session.close()

@@ -3,11 +3,11 @@ from contextlib import suppress
 from queue import Empty
 
 from PySide6.QtCore import Slot
-from models.log import get_logger
 # package import
 from obsws_python.error import OBSSDKRequestError
 from src.models.states import ObsBtnState
 
+from models.log import get_logger
 # local package import
 from src import app_state
 from src.core.workers.base import LongLiveWorker, run_wrapper
@@ -30,14 +30,13 @@ class ObsDaemonWorker(LongLiveWorker):
                     app_state.obs_client.send(req, body)
 
     @classmethod
-    def disconnect_obs(cls, state: ObsBtnState):
+    def disconnect_obs(cls):
         logger = get_logger(cls.__name__)
         logger.info("OBS disconnecting")
         app_state.obs_op = True
         if app_state.obs_client is not None:
             app_state.obs_client.disconnect()
         logger.info("OBS disconnected")
-        state.obsDisconnected.emit()
         app_state.obs_client = None
         app_state.obs_op = False
 

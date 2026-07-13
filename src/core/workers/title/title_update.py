@@ -1,11 +1,11 @@
 # package import
 from PySide6.QtCore import Slot
-from models.log import get_logger
 from src.constant import CacheType, MAX_RECENT_TITLE
 from src.exceptions import TitleUpdateError
 from src.models.cache import get_cache_path
 from src.sign import livehime_sign
 
+from models.log import get_logger
 # local package import
 from src import app_state
 from src.core.workers.base import BaseWorker, run_wrapper

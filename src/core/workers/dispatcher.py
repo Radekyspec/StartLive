@@ -1,6 +1,11 @@
-class Dispatcher:
-    def close(self) -> None:
-        raise NotImplementedError
+from abc import ABC, abstractmethod
 
-    def post(self, fn) -> None:
-        raise NotImplementedError
+
+class Dispatcher(ABC):
+    @abstractmethod
+    def close(self) -> None:
+        pass
+
+    @abstractmethod
+    def post(self, fn, /, *args, **kwargs) -> None:
+        pass

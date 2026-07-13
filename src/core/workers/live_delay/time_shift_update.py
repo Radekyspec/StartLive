@@ -1,23 +1,20 @@
 # module import
-from PySide6.QtCore import Slot
-from PySide6.QtWidgets import QPushButton
-from models.log import get_logger
-from src.sign import livehime_sign
+from typing import Callable
 
 # local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
+from src.core import app_state
+from src.core.log import get_logger
+from src.core.sign import livehime_sign
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class StreamTimeShiftUpdateWorker(BaseWorker):
-    def __init__(self, delay: str):
-        super().__init__(name="推流延迟更新")
+    def __init__(self, presenter: Presenter, /, delay: str):
+        super().__init__(name="推流延迟更新", presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
         self._delay = delay
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/upStreamConfig/SetAnchorSelfStreamTimeShift"
         self.logger.info(f"SetAnchorSelfStreamTimeShift Request")
         response = self._session.post(url, data=livehime_sign({
@@ -31,11 +28,3 @@ class StreamTimeShiftUpdateWorker(BaseWorker):
         response = response.json()
         if response["code"] != 0:
             raise ValueError(response["message"])
-
-    @Slot()
-    def on_finished(self):
-        self._session.close()
-
-    @Slot()
-    def on_exception(self, save_btn: QPushButton, /, *args, **kwargs):
-        save_btn.setEnabled(True)

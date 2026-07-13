@@ -3,7 +3,7 @@ from src.core.workers.base import Presenter
 
 
 class FetchAnnouncePresenter(Presenter):
-    def __init__(self, view) -> None:
+    def __init__(self, view: "StreamConfigPanel") -> None:
         super().__init__()
         self._view = view
 

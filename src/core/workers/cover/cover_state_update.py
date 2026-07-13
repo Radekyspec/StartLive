@@ -7,12 +7,12 @@ from src.core import app_state
 # package import
 from src.core.log import get_logger
 from src.core.sign import livehime_sign
-from src.core.workers.base import LongLiveWorker
+from src.core.workers.base import LongLiveWorker, Presenter
 
 
 class CoverStateUpdateWorker(LongLiveWorker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(name="封面审核更新", *args, **kwargs)
+    def __init__(self, presenter: Presenter):
+        super().__init__(name="封面审核更新", presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
@@ -40,4 +40,3 @@ class CoverStateUpdateWorker(LongLiveWorker):
                 "title": response["data"]["title"],
             })
             sleep(3)
-        self._session.close()

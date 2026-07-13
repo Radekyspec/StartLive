@@ -1,7 +1,7 @@
 # module import
 from typing import Callable
 
-from ..base import BaseWorker
+from ..base import BaseWorker, Presenter
 from ... import app_state
 from ...exceptions import AnnounceUpdateError
 from ...log import get_logger
@@ -9,8 +9,8 @@ from ...sign import livehime_sign, order_payload
 
 
 class AnnounceUpdateWorker(BaseWorker):
-    def __init__(self, content: str, *args, **kwargs):
-        super().__init__(name="主播公告更新", *args, **kwargs)
+    def __init__(self, presenter: Presenter, /, content: str):
+        super().__init__(name="主播公告更新", presenter=presenter)
         self.content = content
         self.logger = get_logger(self.__class__.__name__)
 
@@ -37,4 +37,3 @@ class AnnounceUpdateWorker(BaseWorker):
         if response["code"] != 0:
             raise AnnounceUpdateError(response["message"])
         app_state.room_info["announcement"] = self.content
-        self._session.close()

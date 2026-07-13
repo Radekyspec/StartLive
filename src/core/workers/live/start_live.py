@@ -1,45 +1,22 @@
+from typing import Callable
 from warnings import warn
 
-# package import
-from PySide6.QtCore import Slot, QMutex, QWaitCondition, QMutexLocker
-from PySide6.QtWidgets import QMessageBox
-from src.constant import PreferProto
-from src.exceptions import StartLiveError
-from src.models.log import get_logger
-from src.models.states import StreamState
-from src.sign import livehime_sign, order_payload
-
-# local package import
-from src import app_state, constant
-from src.core.workers.base import BaseWorker, run_wrapper
+from src.core import app_state, constant
+from src.core.constant import PreferProto
+from src.core.exceptions import StartLiveError
+from src.core.log import get_logger
+from src.core.sign import livehime_sign, order_payload
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class StartLiveWorker(BaseWorker):
-    def __init__(self, parent: "StreamConfigPanel", state: StreamState, /,
-                 mutex: QMutex, cond: QWaitCondition, *, area):
-        super().__init__(name="开播任务")
-        self.parent = parent
-        self.state = state
+    def __init__(self, presenter: Presenter, /, area):
+        super().__init__(name="开播任务", presenter=presenter)
         self.area = area
-        self._mutex = mutex
-        self._cond = cond
-        self._live_result = 0
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
-        self._live_result = self.start_live(self._session, self.area)
-        match self._live_result:
-            case 0 | 1:
-                with QMutexLocker(self._mutex):
-                    while app_state.obs_connecting:
-                        self._cond.wait(self._mutex)
-                self.state.addressUpdated.emit(
-                    app_state.stream_status["stream_addr"],
-                    app_state.stream_status["stream_key"])
-            case 60024:
-                self.state.faceRequired.emit(
-                    app_state.stream_status["face_url"])
+    def run(self, report_progress: Callable | None, *args, **kwargs):
+
+        return self.start_live(self._session, self.area)
 
     @classmethod
     def start_live(cls, session, area) -> int | None:
@@ -153,25 +130,3 @@ class StartLiveWorker(BaseWorker):
         response = response.json()
         return response["data"]["addr"]["addr"], response["data"]["addr"][
             "code"]
-
-    @Slot()
-    def on_exception(self, *args, **kwargs):
-        self.parent.start_btn.setEnabled(True)
-        self.parent.parent_window.tray_start_live_action.setEnabled(True)
-        self.parent.stop_btn.setEnabled(False)
-        self.parent.parent_window.tray_stop_live_action.setEnabled(False)
-        # parent_window.parent_combo.setEnabled(True)
-        # parent_window.child_combo.setEnabled(True)
-        self.parent.modify_area_btn.setEnabled(True)
-
-    @Slot()
-    def on_finished(self, *args, **kwargs):
-        self._session.close()
-        match self._live_result:
-            case 1:
-                QMessageBox.warning(self.parent, "无可用SRT流",
-                                    "没有检测到可用的SRT服务器，已切换到RTMP协议")
-            case -1:
-                QMessageBox.warning(self.parent, "无可用SRT流",
-                                    "没有检测到可用的SRT服务器，已停止直播")
-                self.parent.stop_btn.click()

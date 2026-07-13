@@ -1,14 +1,16 @@
+from PySide6.QtWidgets import QPushButton
+
 from src.core.workers.base import Presenter
 
 
-class AnnounceUpdatePresenter(Presenter):
-    def __init__(self, view: "StreamConfigPanel") -> None:
+class TimeShiftUpdatePresenter(Presenter):
+    def __init__(self, view: QPushButton):
         super().__init__()
         self._view = view
 
-    def prepare_fail_view(self):
-        self._view.save_announce_btn.setEnabled(True)
-
     def prepare_success_view(self, *args, **kwargs): ...
+
+    def prepare_fail_view(self):
+        self._view.setEnabled(True)
 
     def prepare_progress_view(self, *args, **kwargs): ...

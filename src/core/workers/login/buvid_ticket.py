@@ -1,24 +1,23 @@
 from time import time
+from typing import Callable
 from urllib.parse import quote
 
-from PySide6.QtCore import Slot
-from src.constant import *
-from src.models.log import get_logger
-from src.sign import ticket_hmac_sha256
-
 # local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
+from src.core import app_state
+from src.core.constant import *
+from src.core.log import get_logger
+from src.core.sign import ticket_hmac_sha256
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class TicketFetchWorker(BaseWorker):
-    def __init__(self):
-        super().__init__(name="ticket获取", headers_type=HeadersType.WEB)
+    def __init__(self, presenter: Presenter):
+        super().__init__(name="ticket获取", headers_type=HeadersType.WEB,
+                         presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /):
+    def run(self, report_progress: Callable | None, *args, **kwargs):
+
         if int(app_state.cookies_dict.get("bili_ticket_expires", 0)) < int(
                 time()):
             self.logger.info("buvid_ticket Request")
@@ -34,7 +33,8 @@ class TicketFetchWorker(BaseWorker):
             self.logger.info("buvid_ticket Response")
             response.encoding = "utf-8"
             response = response.json()
-            app_state.cookies_dict["bili_ticket"] = response["data"]["ticket"]
+            app_state.cookies_dict["bili_ticket"] = response["data"][
+                "ticket"]
             app_state.cookies_dict["bili_ticket_expires"] = str(
                 response["data"][
                     "created_at"] + \
@@ -50,12 +50,5 @@ class TicketFetchWorker(BaseWorker):
             response.encoding = "utf-8"
             response = response.json()
             app_state.cookies_dict["buvid3"] = response["data"]["b_3"]
-            app_state.cookies_dict["buvid4"] = quote(response["data"]["b_4"])
-
-    @Slot()
-    def on_finished(self):
-        from src.core.workers.credentials.credential_manager import \
-            CredentialManagerWorker
-
-        CredentialManagerWorker.add_cookie(True)
-        self._session.close()
+            app_state.cookies_dict["buvid4"] = quote(
+                response["data"]["b_4"])

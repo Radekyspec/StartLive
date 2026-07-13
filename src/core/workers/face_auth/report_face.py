@@ -4,12 +4,12 @@ from typing import Callable
 from src.core import app_state
 from src.core.log import get_logger
 from src.core.sign import livehime_sign, order_payload
-from src.core.workers.base import BaseWorker
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class ReportFaceRecognitionWorker(BaseWorker):
-    def __init__(self, area: int, message: str):
-        super().__init__(name="人脸报告")
+    def __init__(self, presenter: Presenter, /, area: int, message: str):
+        super().__init__(name="人脸报告", presenter=presenter)
         self.area = area
         self.message = message
         self.logger = get_logger(self.__class__.__name__)
@@ -32,4 +32,3 @@ class ReportFaceRecognitionWorker(BaseWorker):
         self.logger.info(response.text)
         if (response := response.json())["code"] != 0:
             raise ValueError(response["message"])
-        self._session.close()

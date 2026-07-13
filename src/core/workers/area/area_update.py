@@ -1,6 +1,7 @@
 # module import
 from typing import Callable
 
+from ..base import Presenter
 from ... import app_state, constant
 from ...exceptions import AreaUpdateError
 from ...log import get_logger
@@ -9,8 +10,8 @@ from ...workers.base import BaseWorker
 
 
 class AreaUpdateWorker(BaseWorker):
-    def __init__(self, area: str, *args, **kwargs):
-        super().__init__(name="分区更新", *args, **kwargs)
+    def __init__(self, presenter: Presenter, /, area: str):
+        super().__init__(name="分区更新", presenter=presenter)
         self.area = area
         self.logger = get_logger(self.__class__.__name__)
 
@@ -35,5 +36,4 @@ class AreaUpdateWorker(BaseWorker):
         self.logger.info(f"AnchorChangeRoomArea Result: {response}")
         if response["code"] != 0:
             raise AreaUpdateError(response["message"])
-        self._session.close()
         return self.area

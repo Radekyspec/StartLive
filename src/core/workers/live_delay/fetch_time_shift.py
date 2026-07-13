@@ -1,26 +1,19 @@
 # module import
-from PySide6.QtCore import Slot
-from PySide6.QtGui import QIntValidator
-from PySide6.QtWidgets import QLineEdit
-from models.log import get_logger
-from src.sign import livehime_sign
+from typing import Callable
 
 # local package import
-from src import app_state
-from src.core.workers.base import BaseWorker, run_wrapper
+from src.core import app_state
+from src.core.log import get_logger
+from src.core.sign import livehime_sign
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class FetchStreamTimeShiftWorker(BaseWorker):
-    def __init__(self):
-        super().__init__(name="推流延迟获取")
+    def __init__(self, presenter: Presenter):
+        super().__init__(name="推流延迟获取", presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
-        self._min_time_shift = 10
-        self._max_time_shift = 300
-        self._time_shift = 0
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/upStreamConfig/GetAnchorSelfStreamTimeShift"
         self.logger.info(f"AnchorSelfStreamTimeShift Request")
         response = self._session.get(url, params=livehime_sign({
@@ -33,14 +26,5 @@ class FetchStreamTimeShiftWorker(BaseWorker):
         response = response.json()
         if response["code"] != 0:
             raise ValueError(response["message"])
-        self._time_shift = response["data"]["time_shift"]
-        self._min_time_shift = response["data"]["min_time_shift"]
-        self._max_time_shift = response["data"]["max_time_shift"]
-
-    @Slot()
-    def on_finished(self, delay_edit: QLineEdit, /, *args, **kwargs):
-        delay_edit.setValidator(
-            QIntValidator(self._min_time_shift, self._max_time_shift,
-                          delay_edit))
-        delay_edit.setText(str(self._time_shift))
-        self._session.close()
+        return response["data"]["time_shift"], response["data"][
+            "min_time_shift"], response["data"]["max_time_shift"]

@@ -1,28 +1,25 @@
+from src.PySide.interface_adapters.login import FetchLoginPresenter
 from src.core import app_state
 from src.core.workers.base import Presenter
-from src.core.workers.login import FetchLoginWorker
 from src.core.workers.usernames import FetchUsernamesWorker
 
 
 class CredentialManagerPresenter(Presenter):
-    def __init__(self, parent_window, state, worker) -> None:
+    def __init__(self, view: "MainWindow", state) -> None:
         super().__init__()
-        self._view = parent_window
+        self._view = view
         self._state = state
-        self._worker = worker
 
-    def prepare_success_view(self):
-        FetchLoginWorker.post_login(self._view, self._state)
-        if not self._worker.is_new:
+    def prepare_success_view(self, cookie_index: int):
+        FetchLoginPresenter.post_login(self._view, self._state)
+        if not app_state.scan_status["is_new"]:
             fetch_usernames = FetchUsernamesWorker(
-                app_state.cookie_indices[self._worker.cookie_index]
+                app_state.cookie_indices[cookie_index]
             )
             self._view.add_thread(
                 fetch_usernames,
                 on_finished=fetch_usernames.on_finished,
             )
-        else:
-            app_state.scan_status["is_new"] = True
         self._state.credentialLoaded.emit()
         panel = self._view.panel
         panel.host_input.setText(

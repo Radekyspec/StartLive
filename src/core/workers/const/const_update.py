@@ -3,18 +3,18 @@ from json import loads
 from typing import Callable
 
 # local package import
-from src.core import app_state, constant
+from src.core import constant
 # package import
 from src.core.app_state import dumps
 from src.core.cache import get_cache_path
 from src.core.constant import CacheType
 from src.core.log import get_logger
-from src.core.workers.base import BaseWorker
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class ConstantUpdateWorker(BaseWorker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(name="配置更新", *args, **kwargs)
+    def __init__(self, presenter: Presenter):
+        super().__init__(name="配置更新", presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
         self._base_dir, self._const_path = get_cache_path(CacheType.CONFIG,
                                                           "version.json")
@@ -32,7 +32,6 @@ class ConstantUpdateWorker(BaseWorker):
         self.logger.info(f"version.json Result: {response}")
         self._update_const(response)
         self._save_to_file(response)
-        self._session.close()
 
     def _load_from_file(self):
         if not self._const_path.exists():
@@ -54,8 +53,3 @@ class ConstantUpdateWorker(BaseWorker):
         constant.HEADERS_APP = response["ha"]
         constant.START_LIVE_AUTH_CSRF = response["start_ac"]
         constant.STOP_LIVE_AUTH_CSRF = response["stop_ac"]
-
-    @Slot()
-    def on_finished(self):
-        app_state.scan_status["const_updated"] = True
-        self._state.constUpdated.emit()

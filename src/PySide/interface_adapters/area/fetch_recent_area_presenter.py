@@ -3,7 +3,7 @@ from src.core.workers.base import Presenter
 
 
 class FetchRecentAreaPresenter(Presenter):
-    def __init__(self, view):
+    def __init__(self, view: "AreaPickerPanel"):
         super().__init__()
         self._view = view
 
@@ -13,4 +13,4 @@ class FetchRecentAreaPresenter(Presenter):
     def prepare_fail_view(self):
         self._view.historyUpdated.emit([])
 
-    def prepare_progress_view(self): ...
+    def prepare_progress_view(self, *args, **kwargs): ...

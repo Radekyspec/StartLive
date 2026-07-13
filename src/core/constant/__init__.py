@@ -6,10 +6,11 @@ __all__ = [
     "KEYRING_SERVICE_NAME", "KEYRING_COOKIES", "KEYRING_COOKIES_INDEX",
     "KEYRING_SETTINGS", "KEYRING_ROOM_INFO", "KEYRING_APP_SETTINGS",
     "LOCAL_SERVER_NAME", "LOGGER_NAME", "USERNAME_DISPLAY_TEMPLATE",
-    "MAX_RECENT_TITLE", "VERSION", "DARK_COVER_CSS", "DARK_CSS", "LIGHT_COVER_CSS",
+    "MAX_RECENT_TITLE", "VERSION", "DARK_COVER_CSS", "DARK_CSS",
+    "LIGHT_COVER_CSS",
     "LIGHT_CSS",
     "ProxyMode", "PreferProto", "CoverStatus",
-    "WidgetIndex", "CacheType", "BackgroundMode", "HeadersType"
+    "WidgetIndex", "CacheType", "BackgroundMode", "HeadersType", "LoginResult"
 ]
 
 
@@ -60,6 +61,14 @@ class BackgroundMode(IntEnum):
 class HeadersType(IntEnum):
     WEB = 0
     APP = 1
+
+
+@unique
+class LoginResult(IntEnum):
+    CANCELLED = -1
+    SUCCESS = 0
+    QR_EXPIRED = 86038
+    QR_NOT_CONFIRMED = 86090
 
 
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"

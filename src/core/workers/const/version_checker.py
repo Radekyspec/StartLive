@@ -7,12 +7,12 @@ from semver import compare
 # local package import
 from src.core.constant import VERSION
 from src.core.log import get_logger
-from src.core.workers.base import BaseWorker
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class VersionCheckerWorker(BaseWorker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(name="版本检查", *args, **kwargs)
+    def __init__(self, presenter: Presenter):
+        super().__init__(name="版本检查", presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
         self._session.cookies.clear()
         self._latest_version = None
@@ -29,5 +29,4 @@ class VersionCheckerWorker(BaseWorker):
         if compare(VERSION, latest_tag) < 0:
             self._latest_version = latest_tag
             self.logger.info(f"New version available: {latest_tag}")
-        self._session.close()
         return self._latest_version

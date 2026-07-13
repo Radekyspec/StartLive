@@ -181,6 +181,7 @@ class MainWindow(SingleInstanceWindow):
             worker.stop()
         if app_state.obs_client is not None:
             ObsDaemonWorker.disconnect_obs(self.panel.obs_btn_state)
+            self.panel.obs_btn_state.obsDisconnected.emit()
         if self.panel is not None:
             self.tray_start_live_action.triggered.disconnect(
                 self.panel.start_live)

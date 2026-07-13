@@ -1,15 +1,15 @@
-from .BaseWorker import BaseWorker
-from .CancellationToken import CancellationToken
-from ...constant import HeadersType
+from src.core.constant import HeadersType
+from src.core.workers.base import BaseWorker, CancellationToken, Presenter
 
 
 class LongLiveWorker(BaseWorker):
     _cancel_token: CancellationToken
 
     def __init__(self, name: str, with_session: bool = True,
-                 headers_type: HeadersType = HeadersType.APP, *args, **kwargs):
+                 headers_type: HeadersType = HeadersType.APP,
+                 presenter: Presenter | None = None):
         super().__init__(name=name, with_session=with_session,
-                         headers_type=headers_type, *args, **kwargs)
+                         headers_type=headers_type, presenter=presenter)
         self._cancel_token = CancellationToken()
 
     def stop(self) -> None:

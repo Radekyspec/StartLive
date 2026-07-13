@@ -1,65 +1,25 @@
 # module import
-from functools import partial
 from time import sleep
-
-# package import
-from PySide6.QtCore import Slot
-from src.constant import HeadersType
-from src.exceptions import LoginError
-from src.models.log import get_logger
-from src.models.states import LoginState
-from src.models.workers import FetchPreLiveWorker, FetchRoomStatusWorker
-from src.models.workers import TicketFetchWorker
+from typing import Callable
 
 # local package import
-from src import app_state
-from src.core.workers.announce import FetchAnnounceWorker
-from src.core.workers.area import FetchAreaWorker
-from src.core.workers.base import LongLiveWorker, run_wrapper
-from src.core.workers.usernames import FetchUsernamesWorker
+from src.core import app_state
+# package import
+from src.core.constant import HeadersType, LoginResult
+from src.core.exceptions import LoginError
+from src.core.log import get_logger
+from src.core.workers.base import LongLiveWorker, Presenter
+from src.core.workers.credentials import CredentialManagerWorker
 
 
 class FetchLoginWorker(LongLiveWorker):
-    def __init__(self, state: LoginState):
-        super().__init__(name="登录", headers_type=HeadersType.WEB)
-        self.state = state
+    def __init__(self, presenter: Presenter):
+        super().__init__(name="登录", headers_type=HeadersType.WEB,
+                         presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
-        self.cookie_key = None
 
-    @staticmethod
-    def post_login(parent: "MainWindow", state: LoginState):
-        if app_state.scan_status["scanned"]:
-            fetch_ticket = TicketFetchWorker()
-            parent.add_thread(
-                fetch_ticket,
-                on_finished=fetch_ticket.on_finished,
-            )
-            fetch_status = FetchRoomStatusWorker()
-            parent.add_thread(
-                fetch_status,
-                on_finished=fetch_status.on_finished
-            )
-            fetch_prelive = FetchPreLiveWorker()
-            parent.add_thread(
-                fetch_prelive,
-                on_finished=partial(fetch_prelive.on_finished,
-                                    parent.panel, state)
-            )
-            fetch_announce = FetchAnnounceWorker()
-            parent.add_thread(
-                fetch_announce,
-                on_finished=partial(fetch_announce.on_finished,
-                                    parent.panel)
-            )
-            area_worker = FetchAreaWorker(state)
-            parent.add_thread(
-                area_worker,
-                on_finished=area_worker.on_finished
-            )
+    def run(self, report_progress: Callable | None, *args, **kwargs):
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
         check_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
         while app_state.scan_status["qr_key"] is None and self.is_running:
             sleep(0.1)
@@ -82,37 +42,23 @@ class FetchLoginWorker(LongLiveWorker):
                 case 86038:  # QR expired
                     self.logger.info(f"QR poll Result: {result}")
                     app_state.scan_status["timeout"] = True
-                    self.state.qrExpired.emit()
-                    break
+                    return LoginResult.QR_EXPIRED
                 case 86090:  # Scanned but not confirmed
                     self.logger.info(f"QR poll Result: {result}")
                     app_state.scan_status["wait_for_confirm"] = True
-                    self.state.qrNotConfirmed.emit()
+                    report_progress(LoginResult.QR_NOT_CONFIRMED)
                     sleep(1)
                     continue
                 case 0:  # Login successful
                     app_state.cookies_dict.clear()
-                    app_state.cookies_dict.update(response.cookies.get_dict())
+                    app_state.cookies_dict.update(
+                        response.cookies.get_dict())
                     # config.cookies_dict["refresh_token"] = result["data"][
                     #     "refresh_token"]
-                    from src.core.workers.credentials.credential_manager import \
-                        CredentialManagerWorker
-                    self.cookie_key = CredentialManagerWorker.add_cookie()
+
+                    CredentialManagerWorker.add_cookie()
                     app_state.scan_status["scanned"] = True
-                    self.state.qrScanned.emit()
-                    break
+                    return LoginResult.SUCCESS
                 case _:
                     raise LoginError(result["message"])
-
-    @Slot()
-    def on_finished(self, parent_window: "MainWindow"):
-        if not self.is_running:
-            return
-        FetchLoginWorker.post_login(parent_window, self.state)
-        if self.cookie_key is not None:
-            fetch_usernames = FetchUsernamesWorker("")
-            parent_window.add_thread(
-                fetch_usernames,
-                on_finished=fetch_usernames.on_finished
-            )
-        self._session.close()
+        return LoginResult.CANCELLED

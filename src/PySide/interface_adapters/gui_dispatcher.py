@@ -1,3 +1,5 @@
+from functools import partial
+
 from PySide6.QtCore import QObject, Signal, Slot, Qt
 
 from src.core.workers import Dispatcher
@@ -17,10 +19,11 @@ class GUIDispatcher(QObject, Dispatcher):
 
     def close(self) -> None:
         self._alive = False
+        self._invoke.disconnect(self._run_in_gui)
 
-    def post(self, fn) -> None:
+    def post(self, fn, *args, **kwargs) -> None:
         if self._alive:
-            self._invoke.emit(fn)
+            self._invoke.emit(partial(fn, *args, **kwargs))
 
     @Slot(object)
     def _run_in_gui(self, fn) -> None:

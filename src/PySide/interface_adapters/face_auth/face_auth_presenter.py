@@ -4,9 +4,13 @@ from src.core.workers.base import Presenter
 
 
 class FaceAuthPresenter(Presenter):
-    def prepare_success_view(self, qr_window):
+    def __init__(self, view: "FaceQRWidget"):
+        super().__init__()
+        self._view = view
+
+    def prepare_success_view(self):
         with suppress(RuntimeError):
-            qr_window.deleteLater()
+            self._view.deleteLater()
 
     def prepare_fail_view(self, *args, **kwargs): ...
 

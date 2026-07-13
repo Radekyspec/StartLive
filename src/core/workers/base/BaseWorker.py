@@ -22,6 +22,13 @@ class BaseWorker:
         else:
             self._session = None
 
+    def start(self, report_progress: Callable | None, *args, **kwargs):
+        try:
+            return self.run(report_progress, *args, **kwargs)
+        finally:
+            if self._session is not None:
+                self._session.close()
+
     def run(self, report_progress: Callable | None, *args, **kwargs):
         """
         Executes the main operation of the method. This implementation must be overridden
@@ -68,3 +75,7 @@ class BaseWorker:
         """
         if self._presenter is not None:
             self._presenter.prepare_success_view(*args, **kwargs)
+
+    def on_progress(self, *args, **kwargs):
+        if self._presenter is not None:
+            self._presenter.prepare_progress_view(*args, **kwargs)

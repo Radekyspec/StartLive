@@ -14,12 +14,14 @@ from src.core.exceptions import CredentialExpiredError, \
     CredentialDuplicatedError
 from src.core.log import get_logger
 from src.core.sign import livehime_sign
-from src.core.workers.base import BaseWorker
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class CredentialManagerWorker(BaseWorker):
-    def __init__(self, cookie_index: int, is_new: bool = False):
-        super().__init__(name="凭据管理", headers_type=HeadersType.WEB)
+    def __init__(self, presenter: Presenter, /, cookie_index: int,
+                 is_new: bool = False):
+        super().__init__(name="凭据管理", headers_type=HeadersType.WEB,
+                         presenter=presenter)
         self.cookie_index = cookie_index
         self.is_new = is_new
         self.logger = get_logger(self.__class__.__name__)
@@ -61,19 +63,21 @@ class CredentialManagerWorker(BaseWorker):
         uid = app_state.cookies_dict["DedeUserID"]
         cookie_key = f"cookies|{uid}"
         CredentialManagerWorker.get_cookie_indices()
+        orig_idx = -1
         if cookie_key in app_state.cookie_indices:
             if not allow_duplicate:
                 raise CredentialDuplicatedError(cookie_key)
-        if cookie_key not in app_state.cookie_indices:
-            app_state.cookie_indices.append(cookie_key)
-            app_state.usernames[cookie_key] = cookie_key
+            orig_idx = app_state.cookie_indices.index(cookie_key)
+        app_state.cookie_indices.insert(orig_idx, cookie_key)
+        app_state.usernames[cookie_key] = cookie_key
         set_password(KEYRING_SERVICE_NAME, cookie_key,
                      dumps(app_state.cookies_dict))
         set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
                      dumps(app_state.cookie_indices))
         return cookie_key
 
-    def run(self, report_progress: Callable | None, *args, **kwargs) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
+
         if app_state.obs_settings:
             self.logger.info(
                 f"use existing obs settings: {app_state.obs_settings.internal}")
@@ -84,15 +88,17 @@ class CredentialManagerWorker(BaseWorker):
         else:
             app_state.obs_settings_default()
             self.logger.info(f"obs_default_settings loaded")
-        if get_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO) is not None:
+        if get_password(KEYRING_SERVICE_NAME,
+                        KEYRING_ROOM_INFO) is not None:
             delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
         app_state.room_info_default()
         self.logger.info(f"room_default_settings loaded")
 
         if self.is_new:
+            app_state.scan_status["is_new"] = True
             self.logger.info(f"new credentials created, exiting")
             app_state.cookies_dict.clear()
-            return
+            return self.cookie_index
 
         # Old version cookie storage, change to index
         if (saved_cookies := get_password(KEYRING_SERVICE_NAME,
@@ -109,7 +115,8 @@ class CredentialManagerWorker(BaseWorker):
             self.logger.info(f"cookies index created")
 
         self.get_cookie_indices()
-        self.logger.info(f"cookies index loaded: {app_state.cookie_indices}")
+        self.logger.info(
+            f"cookies index loaded: {app_state.cookie_indices}")
         app_state.usernames.clear()
         app_state.usernames.update({i: i for i in app_state.cookie_indices})
         if not app_state.cookie_indices or (
@@ -117,8 +124,8 @@ class CredentialManagerWorker(BaseWorker):
                     KEYRING_SERVICE_NAME,
                     app_state.cookie_indices[
                         self.cookie_index])) is None:
-            self.is_new = True
-            return
+            app_state.scan_status["is_new"] = True
+            return self.cookie_index
         saved_cookies = loads(saved_cookies)
         cookiejar_from_dict(saved_cookies, cookiejar=self._session.cookies,
                             overwrite=True)
@@ -147,4 +154,4 @@ class CredentialManagerWorker(BaseWorker):
         app_state.cookies_dict.clear()
         app_state.cookies_dict.update(saved_cookies)
         app_state.scan_status["scanned"] = True
-        self._session.close()
+        return self.cookie_index

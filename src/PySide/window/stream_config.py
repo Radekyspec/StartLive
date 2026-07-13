@@ -12,12 +12,12 @@ from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QLabel, QLineEdit, QPushButton,
                                QVBoxLayout, QWidget,
                                QApplication, QFrame)
-from models.classes import FocusAwareLineEdit, \
-    CompletionComboBox
 from src.constant import CoverStatus
 from src.models.states import ObsBtnState, StreamState
 from src.models.window import AreaPickerPanel, CoverCropWidget
 
+from models.classes import FocusAwareLineEdit, \
+    CompletionComboBox
 # local package import
 from src import app_state
 
@@ -381,6 +381,7 @@ class StreamConfigPanel(QWidget):
             )
         elif app_state.obs_client is not None and not app_state.obs_op:
             ObsDaemonWorker.disconnect_obs(self.obs_btn_state)
+            self.obs_btn_state.obsDisconnected.emit()
             self.obs_auto_live_checkbox.setEnabled(False)
 
     @Slot()

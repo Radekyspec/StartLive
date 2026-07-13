@@ -7,17 +7,19 @@ from src.core import app_state
 from src.core.constant import HeadersType
 from src.core.exceptions import CoverUploadError
 from src.core.log import get_logger
-from src.core.workers.base import BaseWorker
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class CoverUploadWorker(BaseWorker):
-    def __init__(self, data: bytes | bytearray | memoryview, *args, **kwargs):
-        super().__init__(name="封面上传", headers_type=HeadersType.WEB, *args,
-                         **kwargs)
+    def __init__(self, presenter: Presenter, /,
+                 data: bytes | bytearray | memoryview):
+        super().__init__(name="封面上传", headers_type=HeadersType.WEB,
+                         presenter=presenter)
         self.data = data
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+
         url = "https://api.bilibili.com/x/upload/web/image"
         self.logger.info("CoverUpload Request")
         params = {
@@ -65,4 +67,3 @@ class CoverUploadWorker(BaseWorker):
             "cover_status": response["data"]["audit_info"][
                 "audit_title_status"],
         })
-        self._session.close()

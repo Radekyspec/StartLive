@@ -1,22 +1,21 @@
 # package import
-from PySide6.QtCore import Slot
-from src.exceptions import StopLiveError
-from src.models.log import get_logger
-from src.sign import livehime_sign, order_payload
+from typing import Callable
 
 # local package import
-from src import app_state, constant
-from src.core.workers.base import BaseWorker, run_wrapper
+from src.core import app_state, constant
+from src.core.exceptions import StopLiveError
+from src.core.log import get_logger
+from src.core.sign import livehime_sign, order_payload
+from src.core.workers.base import BaseWorker, Presenter
 
 
 class StopLiveWorker(BaseWorker):
-    def __init__(self):
-        super().__init__(name="停播任务")
+    def __init__(self, presenter: Presenter):
+        super().__init__(name="停播任务", presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
 
-    @Slot()
-    @run_wrapper
-    def run(self, /) -> None:
+    def run(self, report_progress: Callable | None, *args, **kwargs):
+
         url = "https://api.live.bilibili.com/room/v1/Room/stopLive"
         # [0.3.5]: Watch here because in livehime ver 9240
         # startLive needs csrf to sign but stopLive not
@@ -46,17 +45,3 @@ class StopLiveWorker(BaseWorker):
         self.logger.info(f"stopLive Result: {response}")
         if response["code"] != 0:
             raise StopLiveError(response["message"])
-
-    @staticmethod
-    @Slot()
-    def on_exception(parent_window: "StreamConfigPanel", *args, **kwargs):
-        parent_window.start_btn.setEnabled(False)
-        parent_window.parent_window.tray_start_live_action.setEnabled(False)
-        parent_window.stop_btn.setEnabled(True)
-        parent_window.parent_window.tray_stop_live_action.setEnabled(True)
-        # parent_window.parent_combo.setEnabled(False)
-        # parent_window.child_combo.setEnabled(False)
-        parent_window.modify_area_btn.setEnabled(True)
-
-    def on_finished(self):
-        self._session.close()
