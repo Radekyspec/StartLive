@@ -1,4 +1,4 @@
-name: Compile standalone for Windows
+name: Compile universal standalone binaries
 
 on:
   push:
@@ -8,7 +8,11 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [ windows-latest, macos-15-intel, macos-latest ]
+
+    runs-on: ${{ matrix.os }}
 
     env:
       UPX_VERSION: "5.0.2"
@@ -42,22 +46,47 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v5
+        if: matrix.os != 'macos-latest'
         with:
-          python-version: '3.13.7' # Version range or exact version of a Python version to use, using SemVer's version range syntax
+          python-version: '3.13.14' # Version range or exact version of a Python version to use, using SemVer's version range syntax
           architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
           cache: 'pip'
           cache-dependency-path: |
             **/requirements*.txt
 
+      - name: Setup Python for ARM
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.14' # Version range or exact version of a Python version to use, using SemVer's version range syntax
+          architecture: 'arm64' # optional x64 or x86. Defaults to x64 if not specified
+          cache: 'pip'
+          cache-dependency-path: |
+            **/requirements*.txt
+        if: matrix.os == 'macos-latest'
+
       - name: Install Dependencies
         run: |
           pip install -r requirements.txt
+
+      - name: Install ImageIO for Mac
+        if: matrix.os != 'windows-latest'
+        run: |
+          pip install imageio
+
+      # Remove problematic brew libs if Intel Mac
+      # https://github.com/Nuitka/Nuitka/issues/2853#issuecomment-2119520735
+      - name: Remove problematic brew libs
+        run: |
+          brew remove --force --ignore-dependencies openssl@3
+          brew cleanup openssl@3
+        if: matrix.os == 'macos-15-intel'
 
       - name: Generate _version.py
         run: |
           python tools/write_version.py
 
       - name: Download UPX (Windows)
+        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           $zip = "$env:RUNNER_TEMP\upx.zip"
@@ -69,16 +98,16 @@ jobs:
           echo "$env:UPX_DIR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build Executable for Windows
+        if: matrix.os == 'windows-latest'
         uses: Nuitka/Nuitka-Action@main
         with:
           nuitka-version: main
           script-name: StartLive.py
-          # mingw64: true
-          # Nuitka currently do not support mingw64 for Python 3.13
-          # Wait for update in future
+          #          mingw64: true
           msvc: latest
           mode: standalone
           enable-plugins: pyside6,upx
+          #          enable-plugins: pyside6
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
@@ -96,7 +125,28 @@ jobs:
           upx-disable-cache: true
           deployment: true
 
+      - name: Build Executable for Mac
+        uses: Nuitka/Nuitka-Action@main
+        if: matrix.os != 'windows-latest'
+        with:
+          nuitka-version: main
+          script-name: StartLive.py
+          mode: standalone
+          enable-plugins: pyside6
+          company-name: "Radekyspec"
+          product-name: "StartLive开播器"
+          file-description: "StartLive开播器"
+          file-version: ${{ env.VERSION }}
+          macos-app-icon: "resources/icon_left_macOS.ico"
+          noinclude-setuptools-mode: "nofollow"
+          noinclude-pytest-mode: "nofollow"
+          noinclude-unittest-mode: "nofollow"
+          include-data-dir: "resources=resources"
+          noinclude-data-files: "resources/version.json"
+          deployment: true
+
       - name: Flatten output
+        shell: bash
         run: |
           mkdir -p output
           mv build/StartLive.dist/* output/
@@ -104,7 +154,7 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-standalone
+          name: StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-${{ runner.arch }}-standalone
           path: |
             output/
           include-hidden-files: true
