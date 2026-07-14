@@ -16,14 +16,6 @@ def _on_velopack_first_run(_version) -> None:
 
 
 def main() -> int:
-    # 必须在单实例检查、Qt 初始化和其他正常启动逻辑之前运行。
-    # 安装、更新或卸载期间，Velopack 可能在这里直接终止进程。
-    (
-        App()
-        .on_first_run(_on_velopack_first_run)
-        .run()
-    )
-
     # 将较重的应用模块放在 Velopack 启动处理之后导入，
     # 可以避免安装/更新钩子执行时初始化完整 UI。
     from PySide6.QtGui import QFont, QIcon
@@ -75,11 +67,11 @@ def main() -> int:
 
     args, qt_args = parser.parse_known_args()
 
-    # Velopack 首次运行标志与旧 Squirrel 标志兼容
     first_run = _velopack_first_run or args.squirrel_first_run
 
     enable_hi_dpi()
     app = QApplication(qt_args)
+    # %LocalAppData%/StartLive in velopack and squirrel.windows
     base_path = Path(__file__).resolve().parent
     app.setWindowIcon(
         QIcon(str(base_path / "resources" / icon_file))
@@ -119,4 +111,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # 必须在单实例检查、Qt 初始化和其他正常启动逻辑之前运行。
+    # 安装、更新或卸载期间，Velopack 可能在这里直接终止进程。
+    (
+        App()
+        .on_first_run(_on_velopack_first_run)
+        .run()
+    )
+
     sys.exit(main())

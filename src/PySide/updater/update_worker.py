@@ -1,3 +1,5 @@
+from typing import Callable
+
 from PySide6.QtCore import QObject, Signal, Slot
 from velopack import UpdateManager
 
@@ -10,10 +12,11 @@ class VelopackUpdateWorker(QObject):
     failed = Signal(str)
     finished = Signal()
 
-    def __init__(self, update_url: str) -> None:
+    def __init__(self, update_url: str, progress: Callable) -> None:
         super().__init__()
         self._update_url = update_url
         self.logger = get_logger(self.__class__.__name__)
+        self._progress = progress
 
     @Slot()
     def run(self) -> None:
@@ -25,7 +28,7 @@ class VelopackUpdateWorker(QObject):
                 return
 
             # 此操作可能耗时，因此放在后台线程。
-            manager.download_updates(update_info)
+            manager.download_updates(update_info, self._progress)
             self.update_downloaded.emit(manager, update_info)
         except Exception as exc:
             self.logger.exception("Velopack update failed")

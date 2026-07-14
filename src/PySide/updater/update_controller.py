@@ -1,6 +1,7 @@
-from typing import Optional
+from typing import Optional, Callable
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
+from qdarktheme.qtpy.QtWidgets import QApplication
 
 from src.PySide.updater.update_worker import VelopackUpdateWorker
 
@@ -23,12 +24,12 @@ class VelopackUpdateController(QObject):
         self._update_info = None
 
     @Slot()
-    def start(self) -> None:
+    def start(self, progress_callback: Callable) -> None:
         if self._thread is not None:
             return
 
         thread = QThread(self)
-        worker = VelopackUpdateWorker(self._update_url)
+        worker = VelopackUpdateWorker(self._update_url, progress_callback)
 
         worker.moveToThread(thread)
 
@@ -71,6 +72,7 @@ class VelopackUpdateController(QObject):
         if self._manager is None or self._update_info is None:
             return
 
+        QApplication.quit()
         # Velopack 将等待当前进程退出、应用更新并重新启动程序。
         self._manager.apply_updates_and_restart(
             self._update_info

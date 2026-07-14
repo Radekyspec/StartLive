@@ -69,6 +69,8 @@ class MainWindow(SingleInstanceWindow):
     _logged_in: bool
     _cred_deleted: bool
     _no_const_update: bool
+    _new_version_str: Optional[str]
+    _download_per: int
     _server_started: bool
     _server_thread: Optional[HttpServerWorker]
     _current_cookie_idx: int
@@ -110,6 +112,7 @@ class MainWindow(SingleInstanceWindow):
         self._base_title = f"StartLive 开播器 {VERSION}"
         self._server_started = False
         self._new_version_str = None
+        self._download_per = 0
         self._gui_dispatcher = GUIDispatcher()
         self._gui_presenter = GUIPresenter(self)
         self._thread_manager = WorkerManager(self._gui_dispatcher)
@@ -205,7 +208,7 @@ class MainWindow(SingleInstanceWindow):
             # 等待窗口初始化完成后再检查。
             QTimer.singleShot(
                 1000,
-                self.update_controller.start,
+                lambda: self.update_controller.start(self._update_download_per),
             )
 
     def setup_ui(self, *, is_new: bool = False):
@@ -386,9 +389,13 @@ class MainWindow(SingleInstanceWindow):
         self._new_version_str = new_version
         self._rebuild_title()
 
+    def _update_download_per(self, download_per: int):
+        self._download_per = download_per
+        self._rebuild_title()
+
     def _rebuild_title(self):
         if self._new_version_str:
-            _new_version_title = f"有新版本可用: {self._new_version_str} - "
+            _new_version_title = f"新版本 {self._new_version_str} 下载中: {self._download_per}% - "
         else:
             _new_version_title = ""
         if self._server_started:
