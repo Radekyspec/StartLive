@@ -1,5 +1,3 @@
-from functools import partial
-
 from PIL.ImageQt import toqpixmap
 from PySide6.QtCore import (
     Qt, QBuffer, QByteArray, QIODevice,
@@ -9,6 +7,7 @@ from PySide6.QtWidgets import (
     QGridLayout, QLabel, QSizePolicy,
 )
 
+from src.PySide.interface_adapters.cover import CoverUploadPresenter
 from src.PySide.log import get_logger
 from src.PySide.widgets import CropLabel
 from src.core.workers.cover import CoverUploadWorker
@@ -87,10 +86,5 @@ class CoverCropWidget(QWidget):
         buf.open(QIODevice.OpenModeFlag.WriteOnly)
         pixmap.save(buf, "PNG")
         buf.close()
-        cover_uploader = CoverUploadWorker(ba.data())
-        self.parent_window.parent_window.add_thread(
-            cover_uploader,
-            on_finished=partial(cover_uploader.on_finished,
-                                self.parent_window),
-            on_exception=partial(cover_uploader.on_exception, self)
-        )
+        self.parent_window.parent_window.add_thread(CoverUploadWorker(
+            CoverUploadPresenter(self.parent_window), ba.data()))

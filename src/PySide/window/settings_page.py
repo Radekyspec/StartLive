@@ -1,5 +1,3 @@
-from functools import partial
-
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
@@ -137,13 +135,8 @@ class SettingsPage(SettingsWidget):
         delay_value = self.delay_edit.text()
         if not delay_value:
             delay_value = 0
-        update_delay = StreamTimeShiftUpdateWorker(
-            TimeShiftUpdatePresenter(self.delay_save_btn), delay_value)
-        self._parent_window.add_thread(
-            update_delay,
-            on_finished=update_delay.on_finished,
-            on_exception=partial(update_delay.on_exception, self.delay_save_btn)
-        )
+        self._parent_window.add_thread(StreamTimeShiftUpdateWorker(
+            TimeShiftUpdatePresenter(self.delay_save_btn), delay_value))
 
     @Slot()
     def _switch_tray_hint(self):

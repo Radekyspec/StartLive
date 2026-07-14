@@ -15,6 +15,8 @@ class StreamTimeShiftUpdateWorker(BaseWorker):
         self._delay = delay
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        if app_state.cookies_dict.get("bili_jct", None) is None:
+            return
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/upStreamConfig/SetAnchorSelfStreamTimeShift"
         self.logger.info(f"SetAnchorSelfStreamTimeShift Request")
         response = self._session.post(url, data=livehime_sign({

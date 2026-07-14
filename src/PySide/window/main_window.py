@@ -1,10 +1,12 @@
 # module import
+from concurrent.futures import Future
 from pathlib import Path
+from threading import Thread
 from typing import Optional
 
 # package import
 from PIL import ImageQt
-from PySide6.QtCore import (QEvent, QTimer, Slot)
+from PySide6.QtCore import (QEvent, QTimer, Slot, QEventLoop)
 from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import QAction, QIcon, QActionGroup
 from PySide6.QtGui import QPixmap, QImage, QPainter
@@ -93,6 +95,7 @@ class MainWindow(SingleInstanceWindow):
         self.logger = get_logger(self.__class__.__name__)
         self._bg_pixmap: QPixmap | None = None
         self._bg_cache: QPixmap | None = None
+        self._bg_cache: QPixmap | None = None
         self._blur_radius: float = 10.0
         self._opacity: float = 0.8
         self._mode: BackgroundMode = BackgroundMode.COVER
@@ -108,12 +111,12 @@ class MainWindow(SingleInstanceWindow):
         self._gui_dispatcher = GUIDispatcher()
         self._gui_presenter = GUIPresenter(self)
         self._thread_manager = WorkerManager(self._gui_dispatcher)
-        # Long live workers
-        self._ll_workers = []
         self.logger.info("Thread Pool initialized.")
+
         self.setWindowTitle(self._base_title)
         self._color_scheme = None
         self._stack = QStackedWidget(self)
+        self._stack.currentChanged.connect(self._on_settings_loaded)
         self._side_bar = SideBar(self, expanded_width=100, collapsed_width=56,
                                  icon_path=self._base_path / "resources")
         btn_group = QButtonGroup(self)
@@ -194,12 +197,13 @@ class MainWindow(SingleInstanceWindow):
         if app_state.obs_client is not None:
             ObsDaemonWorker.disconnect_obs()
             self.panel.obs_btn_state.obsDisconnected.emit()
-        self._thread_manager.restart(wait=True)
+
         if self.panel is not None:
             self.tray_start_live_action.triggered.disconnect(
                 self.panel.start_live)
             self.tray_stop_live_action.triggered.disconnect(
                 self.panel.stop_live)
+            self._restart_thread_manager()
 
         self.tray_start_live_action.setEnabled(True)
         self.tray_stop_live_action.setEnabled(False)
@@ -218,8 +222,8 @@ class MainWindow(SingleInstanceWindow):
         self._login_state.qrExpired.connect(self._qr_expired)
         self._login_state.qrNotConfirmed.connect(self._qr_not_confirmed)
         self._login_state.versionChecked.connect(self._new_version_hint)
-
         self.logger.info("StreamConfig initialized.")
+
         if self._no_const_update:
             self.logger.info("Constant update disabled.")
             app_state.scan_status["const_updated"] = True
@@ -258,7 +262,6 @@ class MainWindow(SingleInstanceWindow):
             self._stack.insertWidget(WidgetIndex.WIDGET_SETTINGS,
                                      self._settings_page)
         self._stack.setCurrentIndex(WidgetIndex.WIDGET_LOGIN)
-        self._stack.currentChanged.connect(self._on_settings_loaded)
         self._side_bar.btn_home.setChecked(True)
 
         central = QWidget(self)
@@ -311,6 +314,50 @@ class MainWindow(SingleInstanceWindow):
             self._server_thread.quit()
             self._server_started = False
             self._rebuild_title()
+
+    def add_thread(self, worker: BaseWorker | LongLiveWorker, /,
+                   on_progress: bool = False):
+        worker.add_presenter(self._gui_presenter)
+        self._thread_manager.submit(worker, on_progress=on_progress)
+
+    def _restart_thread_manager(self) -> None:
+        """
+        在辅助线程中等待旧线程池彻底关闭。
+
+        本方法只有在新线程池已经创建完成后才返回，
+        但等待期间 GUI 线程仍会处理 Qt 事件。
+        """
+        event_loop = QEventLoop(self)
+        completion: Future[None] = Future()
+
+        def restart_in_background() -> None:
+            try:
+                self._thread_manager.restart(cancel_running=True)
+            except BaseException as exc:
+                completion.set_exception(exc)
+            else:
+                completion.set_result(None)
+            finally:
+                # 必须通过 GUIDispatcher 回到 GUI 线程退出局部事件循环。
+                self._gui_dispatcher.post(event_loop.quit)
+
+        restart_thread = Thread(
+            target=restart_in_background,
+            name="worker-manager-restart",
+            daemon=False,
+        )
+        restart_thread.start()
+
+        # 同步等待，但继续处理绘制、QueuedConnection、定时器等事件。
+        #
+        # 暂时不处理鼠标和键盘输入，防止用户在 restart 尚未完成时
+        # 再次触发 setup_ui()、账号切换或其他会提交 Worker 的操作。
+        event_loop.exec(
+            QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents
+        )
+
+        # restart 已经完成，此处会把辅助线程中的异常重新抛到 GUI 线程。
+        completion.result()
 
     @Slot(Exception)
     def _http_error_handler(self, e: Exception):
@@ -371,8 +418,7 @@ class MainWindow(SingleInstanceWindow):
             self.logger.info("Saving app settings.")
             set_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS,
                          dumps(app_state.app_settings.internal))
-        for worker in self._ll_workers:
-            worker.stop()
+        self._thread_manager.shutdown(wait=False)
         self._stop_http_server()
         self.tray_icon.hide()
         self.tray_icon.deleteLater()
@@ -395,8 +441,9 @@ class MainWindow(SingleInstanceWindow):
         if not self._ready_switch_account():
             return
         self._settings_page.delay_edit.setText("")
-        self.add_thread(FetchStreamTimeShiftWorker(
-            FetchTimeShiftPresenter(self._settings_page.delay_edit)))
+        if self._logged_in:
+            self.add_thread(FetchStreamTimeShiftWorker(
+                FetchTimeShiftPresenter(self._settings_page.delay_edit)))
 
     @Slot(int, bool, bool)
     def _on_delete_cookies(self, is_new: bool, expired: bool):
@@ -426,8 +473,7 @@ class MainWindow(SingleInstanceWindow):
         self._cred_deleted = _cred_deleted
         QMessageBox.information(self, "凭据清空",
                                 "已清空全部凭据, 程序即将退出")
-        for worker in self._ll_workers:
-            worker.stop()
+        self._thread_manager.shutdown(wait=False)
         QApplication.quit()
 
     @Slot()
@@ -527,11 +573,6 @@ class MainWindow(SingleInstanceWindow):
         self.update_qr_image("")
         self._fetch_qr(True)
 
-    def add_thread(self, worker: BaseWorker | LongLiveWorker, /,
-                   on_progress: bool = False):
-        worker.add_presenter(self._gui_presenter)
-        self._thread_manager.submit(worker, on_progress=on_progress)
-
     @staticmethod
     # Helper: Generate QR code image from URL
     def generate_qr_code(data: str):
@@ -601,9 +642,9 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot()
     def _qr_expired(self):
+        self.status_label.clicked.connect(self._refresh_qr)
         self.status_label.setText("二维码已失效，点击这里刷新")
         self.status_label.setStyleSheet("color: red; font-size: 16pt;")
-        self.status_label.clicked.connect(self._refresh_qr)
 
     @Slot()
     def _qr_not_confirmed(self):
