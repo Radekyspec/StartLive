@@ -8,3 +8,4 @@ keyring~=25.6.0
 darkdetect~=0.8.0
 semver~=3.0.4
 PyQtDarkTheme-fork~=2.3.6
+velopack==1.2.0

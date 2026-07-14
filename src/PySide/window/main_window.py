@@ -55,6 +55,7 @@ from src.core.workers.obs_ws import ObsDaemonWorker
 from .face_qr import FaceQRWidget
 from .settings_page import SettingsPage
 from .stream_config import StreamConfigPanel
+from ..updater import VelopackUpdateController
 
 
 # Main GUI window
@@ -64,6 +65,7 @@ class MainWindow(SingleInstanceWindow):
     _thread_manager: WorkerManager
     _host: str
     _port: int
+    _first_run: bool
     _logged_in: bool
     _cred_deleted: bool
     _no_const_update: bool
@@ -85,7 +87,7 @@ class MainWindow(SingleInstanceWindow):
     tray_start_live_action: QAction
     tray_stop_live_action: QAction
 
-    def __init__(self, host, port, first_run, no_const_update, /, *,
+    def __init__(self, host, port, first_run, no_const_update, /,
                  base_path: Path):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
@@ -183,14 +185,28 @@ class MainWindow(SingleInstanceWindow):
         self.setMenuBar(self.menu_bar)
         self.logger.info("Menu bar initialized.")
 
-        if first_run:
-            QMessageBox.information(self, "安装完成",
-                                    f"StartLive开播器 版本{VERSION} 安装成功\n"
-                                    "之后再运行请使用桌面或开始菜单里的快捷方式。")
+        self._first_run = first_run
         # Widgets for login phase
         self.panel = None
         self.setup_ui()
         self._init_http_server()
+        if not no_const_update:
+            self.update_controller = VelopackUpdateController(
+                "https://startlive.bydfk.com/",
+                self,
+            )
+
+            self.update_controller.update_ready.connect(
+                lambda: self.update_controller.apply_and_restart()
+            )
+            self.update_controller.failed.connect(
+                lambda m: self.logger.warning("Automatic update failed: %s", m))
+
+            # 等待窗口初始化完成后再检查。
+            QTimer.singleShot(
+                1000,
+                self.update_controller.start,
+            )
 
     def setup_ui(self, *, is_new: bool = False):
         self._logged_in = False
@@ -381,6 +397,14 @@ class MainWindow(SingleInstanceWindow):
             _web_server_title = ""
         self.setWindowTitle(
             f"{_new_version_title}{self._base_title}{_web_server_title}")
+
+    def show(self, /):
+        super().show()
+        if self._first_run:
+            QMessageBox.information(self, "安装完成",
+                                    f"StartLive开播器 版本{VERSION} 安装成功\n"
+                                    "之后再运行请使用桌面或开始菜单里的快捷方式。")
+            self._first_run = False
 
     def resizeEvent(self, event):
         self._update_background_cache()
