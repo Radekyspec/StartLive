@@ -7,7 +7,6 @@ from src.PySide.log import get_logger
 
 
 class VelopackUpdateWorker(QObject):
-    no_update = Signal()
     update_downloaded = Signal(object, object)
     failed = Signal(str)
     finished = Signal()
@@ -24,7 +23,6 @@ class VelopackUpdateWorker(QObject):
             manager = UpdateManager(self._update_url)
             update_info = manager.check_for_updates()
             if update_info is None:
-                self.no_update.emit()
                 return
 
             # 此操作可能耗时，因此放在后台线程。

@@ -93,6 +93,7 @@ class MainWindow(SingleInstanceWindow):
                  base_path: Path):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, True)
         _, gui_handler = init_logger()
         self._log_viewer = LogViewer(self)
         gui_handler.recordUpdated.connect(self._log_viewer.append_line)
@@ -193,23 +194,22 @@ class MainWindow(SingleInstanceWindow):
         self.panel = None
         self.setup_ui()
         self._init_http_server()
-        if not no_const_update:
-            self.update_controller = VelopackUpdateController(
-                "https://startlive.bydfk.com/",
-                self,
-            )
+        self.update_controller = VelopackUpdateController(
+            "https://startlive.bydfk.com/",
+            self,
+            self._update_download_per
+        )
 
-            self.update_controller.update_ready.connect(
-                lambda: self.update_controller.apply_and_restart()
-            )
-            self.update_controller.failed.connect(
-                lambda m: self.logger.warning("Automatic update failed: %s", m))
+        self.update_controller.update_ready.connect(
+            self.update_controller.apply_and_restart)
+        self.update_controller.failed.connect(
+            lambda m: self.logger.warning(f"Automatic update failed: {m}"))
 
-            # 等待窗口初始化完成后再检查。
-            QTimer.singleShot(
-                1000,
-                lambda: self.update_controller.start(self._update_download_per),
-            )
+        # 等待窗口初始化完成后再检查。
+        QTimer.singleShot(
+            1000,
+            self.update_controller.start,
+        )
 
     def setup_ui(self, *, is_new: bool = False):
         self._logged_in = False
@@ -394,8 +394,12 @@ class MainWindow(SingleInstanceWindow):
         self._rebuild_title()
 
     def _rebuild_title(self):
-        if self._new_version_str:
-            _new_version_title = f"新版本 {self._new_version_str} 下载中: {self._download_per}% - "
+        if self._download_per > 0:
+            _download_title = f"新版本下载中: {self._download_per}% - "
+        else:
+            _download_title = ""
+        if self._new_version_str and not _download_title:
+            _new_version_title = f"有新版本可用: {self._new_version_str} - "
         else:
             _new_version_title = ""
         if self._server_started:
@@ -403,7 +407,7 @@ class MainWindow(SingleInstanceWindow):
         else:
             _web_server_title = ""
         self.setWindowTitle(
-            f"{_new_version_title}{self._base_title}{_web_server_title}")
+            f"{_new_version_title}{_download_title}{self._base_title}{_web_server_title}")
 
     def show(self, /):
         super().show()
@@ -449,7 +453,7 @@ class MainWindow(SingleInstanceWindow):
             self.logger.info("Saving app settings.")
             set_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS,
                          dumps(app_state.app_settings.internal))
-        self._thread_manager.shutdown(wait=False)
+        self._thread_manager.shutdown(wait=True)
         self._stop_http_server()
         self.tray_icon.hide()
         self.tray_icon.deleteLater()
