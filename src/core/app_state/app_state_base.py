@@ -1,0 +1,118 @@
+from copy import deepcopy
+from dataclasses import dataclass, field, fields, MISSING
+from threading import Lock
+from typing import Any, Mapping, Iterator, Tuple, ClassVar
+
+
+@dataclass(slots=True)
+class StateBase:
+    _lock: Lock = field(default_factory=Lock, init=False, repr=False)
+    _dirty: bool = field(default=False, init=False, repr=False)
+    _instance: ClassVar["StateBase | None"] = None
+    _initialized: bool = field(default=False, init=False, repr=False)
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = object.__new__(cls)
+        return cls._instance
+
+    def __post_init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
+
+    # obj["field"]
+    def __getitem__(self, key: str) -> Any:
+        with self._lock:
+            if not hasattr(self, key):
+                raise KeyError(key)
+            return getattr(self, key)
+
+    # obj["field"] = value
+    def __setitem__(self, key: str, value: Any) -> None:
+        self._dirty = True
+        with self._lock:
+            if not hasattr(self, key):
+                raise KeyError(key)
+            setattr(self, key, value)
+
+    # obj.get("field", default)
+    def get(self, key: str, default: Any = None) -> Any:
+        with self._lock:
+            if not hasattr(self, key):
+                return default
+            return getattr(self, key)
+
+    # obj.update({...})
+    def update(self, mapping: Mapping[str, Any] | None = None,
+               **kwargs: Any) -> None:
+        self._dirty = True
+        with self._lock:
+            if mapping:
+                for k, v in mapping.items():
+                    if hasattr(self, k):
+                        setattr(self, k, v)
+            for k, v in kwargs.items():
+                if hasattr(self, k):
+                    setattr(self, k, v)
+
+    def as_dict(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                f.name: getattr(self, f.name)
+                for f in fields(self)
+                if not f.name.startswith("_")
+            }
+
+    @classmethod
+    def default_dict(cls) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for f in fields(cls):
+            # 跳过内部字段（比如 _lock）
+            if f.name.startswith("_"):
+                continue
+
+            if f.default_factory is not MISSING:
+                value = f.default_factory()
+            elif f.default is not MISSING:
+                # 防止用到可变对象，做一层 deepcopy 稳妥
+                value = deepcopy(f.default)
+            else:
+                value = None
+
+            result[f.name] = value
+        return result
+
+    def reset(self) -> None:
+        self._dirty = False
+        defaults = type(self).default_dict()
+        with self._lock:
+            for name, value in defaults.items():
+                setattr(self, name, value)
+
+    @property
+    def internal(self) -> dict[str, Any]:
+        return self.as_dict()
+
+    def items(self) -> Iterator[Tuple[str, Any]]:
+        return iter(self.as_dict().items())
+
+    def values(self) -> Iterator[Any]:
+        return iter(self.as_dict().values())
+
+    def keys(self) -> Iterator[str]:
+        return iter(self.as_dict().keys())
+
+    def __iter__(self) -> Iterator[str]:
+        return self.keys()
+
+    def __contains__(self, key: str) -> bool:
+        with self._lock:
+            return hasattr(self, key)
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len([f for f in fields(self) if not f.name.startswith("_")])
+
+    def __bool__(self) -> bool:
+        return self._dirty
