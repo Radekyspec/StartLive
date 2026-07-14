@@ -1,4 +1,4 @@
-from typing import Optional, Callable
+from typing import Optional, Callable, Union
 
 from requests import Session
 
@@ -14,7 +14,7 @@ class BaseWorker:
 
     def __init__(self, /, name: str, *, with_session: bool = True,
                  headers_type: HeadersType = HeadersType.APP,
-                 presenter: Presenter | list[Presenter] | None = None):
+                 presenter: Optional[Union[Presenter, list[Presenter]]] = None):
         super().__init__()
         self.name = name
         if isinstance(presenter, list):

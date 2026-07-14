@@ -1,3 +1,5 @@
+from typing import Optional
+
 from src.core.constant import HeadersType
 from src.core.workers.base import BaseWorker, CancellationToken, Presenter
 
@@ -7,7 +9,7 @@ class LongLiveWorker(BaseWorker):
 
     def __init__(self, name: str, with_session: bool = True,
                  headers_type: HeadersType = HeadersType.APP,
-                 presenter: Presenter | None = None):
+                 presenter: Optional[Presenter] = None):
         super().__init__(name=name, with_session=with_session,
                          headers_type=headers_type, presenter=presenter)
         self._cancel_token = CancellationToken()
