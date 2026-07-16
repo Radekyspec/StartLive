@@ -1,10 +1,12 @@
-import json
 import os
 from base64 import b64decode, b64encode
 from hashlib import sha256
+from json import loads
 from typing import Any, Dict, Optional
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+from src.core.app_state import dumps
 
 MASK64 = 0xFFFFFFFFFFFFFFFF
 
@@ -163,8 +165,7 @@ class RiskCaptchaCodec:
             for i in range(len(encrypted_bytes))
         )
 
-        text = raw.decode("utf-8")
-        data = json.loads(text)
+        data = loads(raw.decode("utf-8"))
 
         self._salt = salt
 
@@ -231,11 +232,7 @@ class RiskCaptchaCodec:
             base64(AES-CBC(ciphertext))
         """
 
-        params_string = json.dumps(
-            params,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
+        params_string = dumps(params)
 
         plaintext = params_string.encode("utf-8")
 

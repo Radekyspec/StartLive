@@ -10,7 +10,8 @@ __all__ = [
     "LIGHT_COVER_CSS",
     "LIGHT_CSS",
     "ProxyMode", "PreferProto", "CoverStatus",
-    "WidgetIndex", "CacheType", "BackgroundMode", "HeadersType", "LoginResult"
+    "WidgetIndex", "CacheType", "BackgroundMode", "HeadersType", "LoginResult",
+    "FaceAuthType"
 ]
 
 
@@ -69,6 +70,12 @@ class LoginResult(IntEnum):
     SUCCESS = 0
     QR_EXPIRED = 86038
     QR_NOT_CONFIRMED = 86090
+
+
+@unique
+class FaceAuthType(IntEnum):
+    V1 = 1
+    V2 = 2
 
 
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"

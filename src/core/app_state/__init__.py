@@ -67,6 +67,7 @@ class StreamStatus(StateBase):
     identified_face: bool = False
     face_url: Optional[str] = None
     face_message: Optional[str] = None
+    face_voucher: Optional[str] = None
     stream_addr: Optional[str] = None
     stream_key: Optional[str] = None
 

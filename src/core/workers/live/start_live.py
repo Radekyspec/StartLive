@@ -71,6 +71,14 @@ class StartLiveWorker(BaseWorker):
                     "face_message": response["message"]
                 })
                 return 60024
+            case 60043:
+                # face_auth v2 using v_voucher
+                app_state.stream_status.update({
+                    "required_face": True,
+                    "face_voucher": response["data"]["risk_extra"]["v_voucher"],
+                    "face_message": response["message"]
+                })
+                return 60043
             case _:
                 logger.error(f"startLive Response error: {response}")
                 raise StartLiveError(response["message"])

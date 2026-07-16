@@ -30,6 +30,7 @@ class CredentialManagerPresenter(Presenter):
         panel.obs_auto_connect_checkbox.setChecked(
             app_state.obs_settings.get("auto_connect", False))
 
-    def prepare_fail_view(self, exception: Exception): ...
+    def prepare_fail_view(self, exception: Exception):
+        self._state.credentialLoaded.emit()
 
     def prepare_progress_view(self, *args, **kwargs): ...

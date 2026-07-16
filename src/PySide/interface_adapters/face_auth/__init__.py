@@ -1,1 +1,2 @@
 from .face_auth_presenter import FaceAuthPresenter
+from .face_captcha_presenter import FaceCaptchaPresenter

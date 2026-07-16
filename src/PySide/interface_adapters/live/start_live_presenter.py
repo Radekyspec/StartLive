@@ -2,9 +2,12 @@ from threading import Condition
 
 from PySide6.QtWidgets import QMessageBox
 
+from src.PySide.interface_adapters.face_auth import FaceCaptchaPresenter
 from src.PySide.states import StreamState
 from src.core import app_state
+from src.core.constant import FaceAuthType
 from src.core.workers.base import Presenter
+from src.core.workers.face_auth import FaceCaptchaWorker
 
 
 class StartLivePresenter(Presenter):
@@ -39,7 +42,13 @@ class StartLivePresenter(Presenter):
                 self._view.stop_btn.click()
             case 60024:
                 self._state.faceRequired.emit(
-                    app_state.stream_status["face_url"])
+                    app_state.stream_status["face_url"], FaceAuthType.V1)
+            case 60043:
+                self._view.parent_window.add_thread(
+                    FaceCaptchaWorker(
+                        FaceCaptchaPresenter(self._view.parent_window,
+                                             self._state))
+                )
 
     def prepare_fail_view(self, exception: Exception):
         self._view.start_btn.setEnabled(True)

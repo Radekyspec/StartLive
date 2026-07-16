@@ -685,7 +685,8 @@ class MainWindow(SingleInstanceWindow):
     def _qr_not_confirmed(self):
         self.status_label.setText("已扫码，等待确认登录...")
 
-    def popup_face_widget(self, face_url: str):
+    @Slot(str, int)
+    def popup_face_widget(self, face_url: str, auth_type: FaceAuthType):
         app_state.stream_status["required_face"] = False
         self.panel.start_btn.setEnabled(True)
         self.tray_start_live_action.setEnabled(True)
@@ -693,7 +694,7 @@ class MainWindow(SingleInstanceWindow):
         self.tray_stop_live_action.setEnabled(False)
         self.panel.parent_combo.setEnabled(True)
         self.panel.child_combo.setEnabled(True)
-        auth_worker = FaceAuthWorker(FaceAuthPresenter(self))
+        auth_worker = FaceAuthWorker(FaceAuthPresenter(self), auth_type)
         self.face_window = FaceQRWidget(auth_worker)
         self.face_window.face_qr.setPixmap(self._qpixmap_from_str(face_url))
         self.add_thread(auth_worker)
