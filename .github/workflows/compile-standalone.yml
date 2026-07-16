@@ -73,14 +73,6 @@ jobs:
         run: |
           pip install imageio
 
-      # Remove problematic brew libs if Intel Mac
-      # https://github.com/Nuitka/Nuitka/issues/2853#issuecomment-2119520735
-      - name: Remove problematic brew libs
-        run: |
-          brew remove --force --ignore-dependencies openssl@3
-          brew cleanup openssl@3
-        if: matrix.os == 'macos-15-intel'
-
       - name: Generate _version.py
         run: |
           python tools/write_version.py
