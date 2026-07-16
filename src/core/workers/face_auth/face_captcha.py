@@ -36,7 +36,6 @@ class FaceCaptchaWorker(BaseWorker):
             app_state.stream_status.face_voucher,
             risk_data_enc
         )
-        print(content)
         app_state.stream_status.face_voucher = content["token"]
         match (risk_type := content["type"]):
             case "realname":

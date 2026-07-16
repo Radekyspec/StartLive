@@ -56,7 +56,6 @@ class FaceAuthWorker(LongLiveWorker):
             self.logger.info("validatePreCheck Response")
             response.encoding = "utf-8"
             response = response.json()
-            print(response)
             self.logger.info(f"validatePreCheck Result: {response}")
             if response["data"] and response["data"]["status"] == 1:
                 verified = True
