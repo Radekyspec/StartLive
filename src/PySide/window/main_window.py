@@ -694,13 +694,16 @@ class MainWindow(SingleInstanceWindow):
         self.tray_stop_live_action.setEnabled(False)
         self.panel.parent_combo.setEnabled(True)
         self.panel.child_combo.setEnabled(True)
-        auth_worker = FaceAuthWorker(FaceAuthPresenter(self), auth_type)
-        self.face_window = FaceQRWidget(auth_worker)
+        self.face_window = FaceQRWidget(self)
         self.face_window.face_qr.setPixmap(self._qpixmap_from_str(face_url))
+        auth_worker = FaceAuthWorker(FaceAuthPresenter(self.face_window),
+                                     auth_type)
+        self.face_window.destroyed.connect(auth_worker.stop)
         self.add_thread(auth_worker)
         self.add_thread(
             ReportFaceRecognitionWorker(app_state.room_info["area_code"],
-                                        app_state.stream_status.face_message))
+                                        app_state.stream_status.face_message,
+                                        auth_type))
         self.face_window.show()
 
     def _apply_global_qss(self) -> None:

@@ -8,6 +8,7 @@ from src.core import app_state
 from src.core.constant import FaceAuthType
 from src.core.workers.base import Presenter
 from src.core.workers.face_auth import FaceCaptchaWorker
+from src.core.workers.live import ReportLiveDataWorker
 
 
 class StartLivePresenter(Presenter):
@@ -19,6 +20,7 @@ class StartLivePresenter(Presenter):
         self._cond = cond
 
     def prepare_success_view(self, live_result):
+        self._view.parent_window.add_thread(ReportLiveDataWorker())
         match live_result:
             case 0:
                 with self._cond:
@@ -40,10 +42,10 @@ class StartLivePresenter(Presenter):
                 QMessageBox.warning(self._view, "无可用SRT流",
                                     "没有检测到可用的SRT服务器，已停止直播")
                 self._view.stop_btn.click()
-            case 60024:
+            case FaceAuthType.V1:
                 self._state.faceRequired.emit(
                     app_state.stream_status["face_url"], FaceAuthType.V1)
-            case 60043:
+            case FaceAuthType.V2:
                 self._view.parent_window.add_thread(
                     FaceCaptchaWorker(
                         FaceCaptchaPresenter(self._view.parent_window,

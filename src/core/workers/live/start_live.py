@@ -2,7 +2,7 @@ from typing import Callable
 from warnings import warn
 
 from src.core import app_state, constant
-from src.core.constant import PreferProto
+from src.core.constant import PreferProto, FaceAuthType
 from src.core.exceptions import StartLiveError
 from src.core.log import get_logger
 from src.core.sign import livehime_sign, order_payload
@@ -63,22 +63,22 @@ class StartLiveWorker(BaseWorker):
                         logger.warning(
                             "startLive Response no srt")
                         return -1
-            case 60024:
+            case FaceAuthType.V1:
                 logger.warning(f"startLive Response face auth: {response}")
                 app_state.stream_status.update({
                     "required_face": True,
                     "face_url": response["data"]["qr"],
                     "face_message": response["message"]
                 })
-                return 60024
-            case 60043:
+                return FaceAuthType.V1
+            case FaceAuthType.V2:
                 # face_auth v2 using v_voucher
                 app_state.stream_status.update({
                     "required_face": True,
                     "face_voucher": response["data"]["risk_extra"]["v_voucher"],
                     "face_message": response["message"]
                 })
-                return 60043
+                return FaceAuthType.V2
             case _:
                 logger.error(f"startLive Response error: {response}")
                 raise StartLiveError(response["message"])

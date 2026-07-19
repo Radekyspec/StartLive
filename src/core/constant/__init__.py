@@ -74,8 +74,8 @@ class LoginResult(IntEnum):
 
 @unique
 class FaceAuthType(IntEnum):
-    V1 = 1
-    V2 = 2
+    V1 = 60024
+    V2 = 60043
 
 
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"

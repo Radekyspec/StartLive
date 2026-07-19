@@ -5,6 +5,7 @@ from urllib.parse import quote
 
 # local package import
 from src.core import app_state
+from src.core.constant import HeadersType
 from src.core.exceptions import StartLiveError
 # package import
 from src.core.log import get_logger
@@ -14,7 +15,8 @@ from src.core.workers.base import Presenter, BaseWorker
 
 class FaceCaptchaWorker(BaseWorker):
     def __init__(self, presenter: Presenter, /):
-        super().__init__(name="人脸认证v2", presenter=presenter)
+        super().__init__(name="人脸认证v2", presenter=presenter,
+                         headers_type=HeadersType.WEB)
         self._codec = RiskCaptchaCodec()
         self.logger = get_logger(self.__class__.__name__)
 
