@@ -126,6 +126,7 @@ jobs:
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
           file-version: ${{ env.VERSION }}
+          macos-app-version: ${{ env.VERSION }}
           macos-app-icon: "resources/icon_left_macOS.ico"
           macos-signed-app-name: "com.radekyspec.startlive"
           include-data-dir: "resources=resources"
