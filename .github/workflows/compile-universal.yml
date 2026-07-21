@@ -106,9 +106,6 @@ jobs:
           file-version: ${{ env.VERSION }}
           windows-icon-from-ico: "resources/icon_left.ico"
           windows-console-mode: "disable"
-          noinclude-setuptools-mode: "nofollow"
-          noinclude-pytest-mode: "nofollow"
-          noinclude-unittest-mode: "nofollow"
           include-data-dir: "resources=resources"
           noinclude-data-files: |
             "resources/version.json"
@@ -130,9 +127,7 @@ jobs:
           file-description: "StartLive开播器"
           file-version: ${{ env.VERSION }}
           macos-app-icon: "resources/icon_left_macOS.ico"
-          noinclude-setuptools-mode: "nofollow"
-          noinclude-pytest-mode: "nofollow"
-          noinclude-unittest-mode: "nofollow"
+          macos-signed-app-name: "com.radekyspec.startlive"
           include-data-dir: "resources=resources"
           noinclude-data-files: "resources/version.json"
           deployment: true
