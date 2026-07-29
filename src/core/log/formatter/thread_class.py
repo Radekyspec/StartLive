@@ -1,6 +1,6 @@
 from logging import Formatter
 from re import compile, IGNORECASE, VERBOSE
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
 _URL_PATTERN = compile(
     r"""
@@ -53,11 +53,8 @@ def _redact(text: str) -> str:
             for key, value in pairs
         ]
 
-        redacted_url = urlunsplit(
-            parsed._replace(query=urlencode(redacted_pairs))
-        )
-
-        return prefix + redacted_url
+        return prefix + parsed._replace(
+            query=urlencode(redacted_pairs)).geturl()
 
     return _URL_PATTERN.sub(redact_url, text)
 
