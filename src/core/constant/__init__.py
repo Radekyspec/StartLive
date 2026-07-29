@@ -7,9 +7,7 @@ __all__ = [
     "KEYRING_SETTINGS", "KEYRING_ROOM_INFO", "KEYRING_APP_SETTINGS",
     "LOCAL_SERVER_NAME", "LOGGER_NAME", "USERNAME_DISPLAY_TEMPLATE",
     "MAX_RECENT_TITLE", "VERSION", "DARK_COVER_CSS", "DARK_CSS",
-    "LIGHT_COVER_CSS",
-    "LIGHT_CSS",
-    "ProxyMode", "PreferProto", "CoverStatus",
+    "LIGHT_COVER_CSS", "LIGHT_CSS", "ProxyMode", "PreferProto", "CoverStatus",
     "WidgetIndex", "CacheType", "BackgroundMode", "HeadersType", "LoginResult",
     "FaceAuthType"
 ]

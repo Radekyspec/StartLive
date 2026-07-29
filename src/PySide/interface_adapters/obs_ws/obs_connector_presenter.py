@@ -1,8 +1,8 @@
 from threading import Condition
 
+from src.PySide.log import get_logger
 from src.PySide.states import ObsBtnState
 from src.core import app_state
-from src.core.log import get_logger
 from src.core.workers.base import Presenter
 from src.core.workers.obs_ws import ObsDaemonWorker
 

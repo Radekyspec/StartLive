@@ -1,7 +1,9 @@
+from contextlib import suppress
 from logging import DEBUG
 from logging import Logger, LoggerAdapter
 from logging import getLogger
 from logging.handlers import TimedRotatingFileHandler
+from os import remove
 from pathlib import Path
 
 from .formatter import ThreadClassFormatter
@@ -18,11 +20,13 @@ def init_logger(name: str = LOGGER_NAME) -> Logger:
     logger = getLogger(name)
     logger.setLevel(DEBUG)
     log_dir, log_path = get_log_path()
-    fh = TimedRotatingFileHandler(
-        log_path, when="midnight", interval=1, backupCount=14, encoding="utf-8"
-    )
+    fh = TimedRotatingFileHandler(log_path, when="midnight", interval=1,
+                                  backupCount=14, encoding="utf-8")
     fh.suffix = "%Y-%m-%d.log"
     fh.namer = lambda _name: _name.replace(".log.", ".")
+    for old_log in fh.getFilesToDelete():
+        with suppress(OSError):
+            remove(old_log)
     tc_formatter = ThreadClassFormatter(
         "%(asctime)s.%(msecs)03d [%(threadClassName)s] - %(message)s",
         "%Y-%m-%d %H:%M:%S")

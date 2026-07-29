@@ -2,27 +2,29 @@ from logging import Formatter
 from re import compile
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-
 _URL_PATTERN = compile(r'https?://[^\s\'"<>]+')
 _SENSITIVE_QUERY_PARAMETERS = frozenset(
-    {"csrf", "csrf_token", "qrcode_key"})
+    k.casefold() for k in ("csrf", "csrf_token", "qrcode_key")
+)
 
 
-def _redact_sensitive_query_parameters(text: str) -> str:
-    def redact_url(match) -> str:
+def _redact(text: str) -> str:
+    if not text:
+        return text
+
+    def redact_url(match):
         url = match.group(0)
-        parsed_url = urlsplit(url)
-        query_pairs = parse_qsl(parsed_url.query, keep_blank_values=True)
-        if not any(key.casefold() in _SENSITIVE_QUERY_PARAMETERS
-                   for key, _ in query_pairs):
+        parsed = urlsplit(url)
+        pairs = parse_qsl(parsed.query, keep_blank_values=True)
+        if not any(
+                k.casefold() in _SENSITIVE_QUERY_PARAMETERS for k, _ in pairs):
             return url
-
-        redacted_pairs = [
-            (key, "REDACTED" if key.casefold() in _SENSITIVE_QUERY_PARAMETERS
-             else value)
-            for key, value in query_pairs
+        redacted = [
+            (k,
+             "REDACTED" if k.casefold() in _SENSITIVE_QUERY_PARAMETERS else v)
+            for k, v in pairs
         ]
-        return urlunsplit(parsed_url._replace(query=urlencode(redacted_pairs)))
+        return urlunsplit(parsed._replace(query=urlencode(redacted)))
 
     return _URL_PATTERN.sub(redact_url, text)
 
@@ -30,8 +32,12 @@ def _redact_sensitive_query_parameters(text: str) -> str:
 class ThreadClassFormatter(Formatter):
     def format(self, record) -> str:
         record.threadClassName = getattr(record, 'threadClassName', 'N/A')
-        return super().format(record)
+        record.exc_text = None
+        try:
+            return super().format(record)
+        finally:
+            record.exc_text = None
 
     def formatException(self, exc_info) -> str:
-        return _redact_sensitive_query_parameters(
+        return _redact(
             super().formatException(exc_info))
