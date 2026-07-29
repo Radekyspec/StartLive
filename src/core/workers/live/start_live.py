@@ -87,16 +87,16 @@ class StartLiveWorker(BaseWorker):
     def parse_live_addr(response):
         prefer_proto = app_state.app_settings.get("prefer_proto",
                                                   PreferProto.RTMP)
+        if prefer_proto == PreferProto.RTMP:
+            app_state.stream_status.update({
+                "stream_addr": response["data"]["rtmp"]["addr"],
+                "stream_key": response["data"]["rtmp"]["code"]
+            })
+            return 0
         srt_protos = [d for d in response["data"]["protocols"] if
                       "srt" == d.get("protocol", "").casefold() and d.get(
                           "addr", "") and d.get("code", "")]
         match prefer_proto:
-            case PreferProto.RTMP:
-                app_state.stream_status.update({
-                    "stream_addr": response["data"]["rtmp"]["addr"],
-                    "stream_key": response["data"]["rtmp"]["code"]
-                })
-                return 0
             case PreferProto.SRT_FALLBACK_RTMP:
                 if srt_protos:
                     app_state.stream_status.update({

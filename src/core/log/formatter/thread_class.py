@@ -1,8 +1,26 @@
 from logging import Formatter
-from re import compile
+from re import compile, IGNORECASE, VERBOSE
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-_URL_PATTERN = compile(r'https?://[^\s\'"<>]+')
+_URL_PATTERN = compile(
+    r"""
+    # 普通的完整 URL
+    (?P<absolute>
+        https?://[^\s'"<>]+
+    )
+
+    |
+
+    # urllib3 / requests 报错里的相对 URL
+    (?P<prefix>
+        \bwith\s+url:\s*
+    )
+    (?P<relative>
+        /[^\s'"<>]+
+    )
+    """,
+    IGNORECASE | VERBOSE,
+)
 _SENSITIVE_QUERY_PARAMETERS = frozenset(
     k.casefold() for k in ("csrf", "csrf_token", "qrcode_key")
 )
@@ -13,18 +31,33 @@ def _redact(text: str) -> str:
         return text
 
     def redact_url(match):
-        url = match.group(0)
+        prefix = match.group("prefix") or ""
+        url = match.group("absolute") or match.group("relative")
+
         parsed = urlsplit(url)
         pairs = parse_qsl(parsed.query, keep_blank_values=True)
+
         if not any(
-                k.casefold() in _SENSITIVE_QUERY_PARAMETERS for k, _ in pairs):
-            return url
-        redacted = [
-            (k,
-             "REDACTED" if k.casefold() in _SENSITIVE_QUERY_PARAMETERS else v)
-            for k, v in pairs
+                key.casefold() in _SENSITIVE_QUERY_PARAMETERS
+                for key, _ in pairs
+        ):
+            return match.group(0)
+
+        redacted_pairs = [
+            (
+                key,
+                "REDACTED"
+                if key.casefold() in _SENSITIVE_QUERY_PARAMETERS
+                else value,
+            )
+            for key, value in pairs
         ]
-        return urlunsplit(parsed._replace(query=urlencode(redacted)))
+
+        redacted_url = urlunsplit(
+            parsed._replace(query=urlencode(redacted_pairs))
+        )
+
+        return prefix + redacted_url
 
     return _URL_PATTERN.sub(redact_url, text)
 
