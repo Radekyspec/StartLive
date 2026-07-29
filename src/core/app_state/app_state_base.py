@@ -1,24 +1,32 @@
 from copy import deepcopy
 from dataclasses import dataclass, field, fields, MISSING
 from threading import Lock
-from typing import Any, Mapping, Iterator, Tuple, ClassVar
+from typing import Any, Mapping, Iterator, Tuple, ClassVar, Self, cast
 
 
 @dataclass(slots=True)
 class StateBase:
-    _lock: Lock = field(default_factory=Lock, init=False, repr=False)
-    _dirty: bool = field(default=False, init=False, repr=False)
+    _lock: Lock = field(init=False, repr=False)
+    _dirty: bool = field(init=False, repr=False)
+    _initialized: bool = field(init=False, repr=False)
+
     _instance: ClassVar["StateBase | None"] = None
-    _initialized: bool = field(default=False, init=False, repr=False)
 
     def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = object.__new__(cls)
-        return cls._instance
+        instance = cls.__dict__.get("_instance")
+
+        if instance is None:
+            instance = object.__new__(cls)
+            cls._instance = instance
+
+        return cast(Self, instance)
 
     def __post_init__(self):
-        if self._initialized:
+        if getattr(self, "_initialized", False):
             return
+
+        self._lock = Lock()
+        self._dirty = False
         self._initialized = True
 
     # obj["field"]

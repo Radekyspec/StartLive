@@ -183,7 +183,7 @@ class StartLiveMenuBar(QMenuBar):
         :return: A boolean indicating if the system is ready to switch accounts.
         :rtype: bool
         """
-        return app_state.cookie_state.idx_equals_len() or all(
+        return app_state.cookie_state.is_exhausted() or all(
             [app_state.scan_status["scanned"],
              app_state.scan_status["area_updated"],
              app_state.scan_status["room_updated"],
@@ -195,8 +195,8 @@ class StartLiveMenuBar(QMenuBar):
 
     def _add_new_account(self):
         if app_state.cookie_state.cookie_index_len == 0 or \
-                app_state.cookie_state.idx_equals_len():
+                app_state.cookie_state.is_exhausted():
             return
-        app_state.cookie_state.incr_to_upper()
+        app_state.cookie_state.move_to_end()
         CredentialManagerWorker.reset_default()
         self.accountAdded.emit()

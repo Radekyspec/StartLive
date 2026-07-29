@@ -211,6 +211,7 @@ class MainWindow(SingleInstanceWindow):
             self.update_controller.start,
         )
 
+    @Slot()
     def setup_ui(self, *, is_new: bool = False):
         self._logged_in = False
         if app_state.obs_client is not None:
@@ -529,7 +530,7 @@ class MainWindow(SingleInstanceWindow):
         :return: A boolean indicating if the system is ready to switch accounts.
         :rtype: bool
         """
-        return app_state.cookie_state.idx_equals_len() or all(
+        return app_state.cookie_state.is_exhausted() or all(
             [app_state.scan_status["scanned"],
              app_state.scan_status["area_updated"],
              app_state.scan_status["room_updated"],
@@ -542,7 +543,7 @@ class MainWindow(SingleInstanceWindow):
     @Slot()
     def _populate_tray_menu(self):
         cookie_indices = app_state.cookie_indices
-        if app_state.cookie_state.idx_equals_len():
+        if app_state.cookie_state.is_exhausted():
             self.tray_curr_user.setText("当前账号未登录")
             self.tray_curr_user.setEnabled(False)
             return
@@ -579,6 +580,7 @@ class MainWindow(SingleInstanceWindow):
             self._fetch_qr()
         else:
             self.login_label.setText("登录时发生错误！请重试...")
+            self.status_label.clicked.connect(self.setup_ui)
 
     def _fetch_qr(self, retry: bool = False):
         # Start fetching QR and begin polling thread

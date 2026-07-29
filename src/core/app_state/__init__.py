@@ -96,10 +96,10 @@ class CookieState(StateBase):
     def cookie_index_len(self) -> int:
         return len(cookie_indices)
 
-    def idx_equals_len(self) -> bool:
+    def is_exhausted(self) -> bool:
         return self.cookie_index_len == self.current_cookie_idx
 
-    def incr_to_upper(self) -> None:
+    def move_to_end(self) -> None:
         self.current_cookie_idx = self.cookie_index_len
 
 

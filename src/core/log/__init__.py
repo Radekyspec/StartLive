@@ -18,6 +18,9 @@ def get_log_path(*, is_makedir: bool = True) -> tuple[Path, Path]:
 
 def init_logger(name: str = LOGGER_NAME) -> Logger:
     logger = getLogger(name)
+    if logger.hasHandlers():
+        return logger
+
     logger.setLevel(DEBUG)
     log_dir, log_path = get_log_path()
     fh = TimedRotatingFileHandler(log_path, when="midnight", interval=1,
