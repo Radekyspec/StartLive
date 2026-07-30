@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Check-out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Read version from _version.py
         shell: python
@@ -41,7 +41,7 @@ jobs:
           echo "APP_VERSION=${VERSION}+${SHORT_SHA}" >> "$GITHUB_ENV"
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.13.14' # Version range or exact version of a Python version to use, using SemVer's version range syntax
           architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
@@ -99,7 +99,7 @@ jobs:
           mv build/StartLive.dist/* output/
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-standalone
           path: |
