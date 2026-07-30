@@ -3,12 +3,14 @@ from threading import Condition
 from PySide6.QtWidgets import QMessageBox
 
 from src.PySide.interface_adapters.face_auth import FaceCaptchaPresenter
+from src.PySide.interface_adapters.obs_ws import WaitObsConnectedPresenter
 from src.PySide.states import StreamState
 from src.core import app_state
 from src.core.constant import FaceAuthType
 from src.core.workers.base import Presenter
 from src.core.workers.face_auth import FaceCaptchaWorker
 from src.core.workers.live import ReportLiveDataWorker
+from src.core.workers.obs_ws import WaitObsConnectedWorker
 
 
 class StartLivePresenter(Presenter):
@@ -23,21 +25,17 @@ class StartLivePresenter(Presenter):
         self._view.parent_window.add_thread(ReportLiveDataWorker())
         match live_result:
             case 0:
-                with self._cond:
-                    while app_state.obs_connecting:
-                        self._cond.wait()
-                self._state.addressUpdated.emit(
-                    app_state.stream_status["stream_addr"],
-                    app_state.stream_status["stream_key"])
+                self._view.parent_window.add_thread(
+                    WaitObsConnectedWorker(
+                        WaitObsConnectedPresenter(self._state), self._cond)
+                )
             case 1:
                 QMessageBox.warning(self._view, "无可用SRT流",
                                     "没有检测到可用的SRT服务器，已切换到RTMP协议")
-                with self._cond:
-                    while app_state.obs_connecting:
-                        self._cond.wait()
-                self._state.addressUpdated.emit(
-                    app_state.stream_status["stream_addr"],
-                    app_state.stream_status["stream_key"])
+                self._view.parent_window.add_thread(
+                    WaitObsConnectedWorker(
+                        WaitObsConnectedPresenter(self._state), self._cond)
+                )
             case -1:
                 QMessageBox.warning(self._view, "无可用SRT流",
                                     "没有检测到可用的SRT服务器，已停止直播")
