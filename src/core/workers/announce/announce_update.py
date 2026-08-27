@@ -1,7 +1,8 @@
 # module import
 from typing import Callable
 
-from ..base import BaseWorker, Presenter
+from src.core.workers.base.BaseWorker import BaseWorker
+from src.core.workers.base.Presenter import Presenter
 from ... import app_state
 from ...exceptions import AnnounceUpdateError
 from ...log import get_logger
@@ -15,6 +16,7 @@ class AnnounceUpdateWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/AnnounceCommit"
         announce_data = livehime_sign({})
         announce_data.update(
@@ -26,8 +28,8 @@ class AnnounceUpdateWorker(BaseWorker):
             }
         )
         announce_data = order_payload(announce_data)
-        self.logger.info(f"AnnounceCommit Request")
-        response = self._session.post(url, data=announce_data)
+        self.logger.info("AnnounceCommit Request")
+        response = session.post(url, data=announce_data)
         response.encoding = "utf-8"
         self.logger.info("AnnounceCommit Response")
         # print(response.text)

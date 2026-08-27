@@ -1,11 +1,11 @@
-from src.PySide.states import StreamState
 from src.core import app_state
 from src.core.constant import FaceAuthType
 from src.core.workers.base import Presenter
+from src.PySide.states import StreamState
 
 
 class FaceCaptchaPresenter(Presenter):
-    def __init__(self, view: "MainWindow", state: StreamState):
+    def __init__(self, view: object, state: StreamState):
         super().__init__()
         self._view = view
         self._state = state

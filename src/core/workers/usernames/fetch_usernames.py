@@ -1,13 +1,17 @@
 # module import
+from collections.abc import Callable
 from json import loads
 from time import sleep
-from typing import Callable
 
 from keyring import get_password
 
 # local package import
 from src.core import app_state
-from src.core.constant import *
+from src.core.constant import (
+    KEYRING_SERVICE_NAME,
+    USERNAME_DISPLAY_TEMPLATE,
+    HeadersType,
+)
 from src.core.log import get_logger
 from src.core.sign import livehime_sign
 from src.core.workers.base import BaseWorker
@@ -20,6 +24,7 @@ class FetchUsernamesWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         if not app_state.scan_status["scanned"]:
             return
         url = "https://api.bilibili.com/x/web-interface/nav"
@@ -31,8 +36,8 @@ class FetchUsernamesWorker(BaseWorker):
             sleep(1)
             cookies = loads(cookies)
             self.logger.info(f"fetch username of {key} Request")
-            self._session.cookies.update(cookies)
-            response = self._session.get(
+            session.cookies.update(cookies)
+            response = session.get(
                 url,
                 params=livehime_sign({},
                                      access_key=False,

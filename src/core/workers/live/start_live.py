@@ -15,8 +15,8 @@ class StartLiveWorker(BaseWorker):
         self.area = area
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
-
-        return self.start_live(self._session, self.area)
+        session = self.require_session()
+        return self.start_live(session, self.area)
 
     @classmethod
     def start_live(cls, session, area) -> int | None:
@@ -44,7 +44,7 @@ class StartLiveWorker(BaseWorker):
                 "csrf": app_state.cookies_dict["bili_jct"]
             })
             live_data = order_payload(live_data)
-        logger.info(f"startLive Request")
+        logger.info("startLive Request")
         response = session.post(live_url, data=live_data)
         response.encoding = "utf-8"
         logger.info("startLive Response")
@@ -123,6 +123,7 @@ class StartLiveWorker(BaseWorker):
                 raise ValueError(f"Invalid prefer_proto: {prefer_proto}")
 
     def fetch_upstream(self):
+        session = self.require_session()
         warn("fetch_upstream is deprecated", DeprecationWarning)
         stream_url = "https://api.live.bilibili.com/xlive/app-blink/v1/live/FetchWebUpStreamAddr"
         stream_data = livehime_sign({
@@ -133,7 +134,7 @@ class StartLiveWorker(BaseWorker):
             "csrf": app_state.cookies_dict["bili_jct"]
         })
         stream_data = order_payload(stream_data)
-        response = self._session.post(stream_url, data=stream_data)
+        response = session.post(stream_url, data=stream_data)
         response.encoding = "utf-8"
         response = response.json()
         return response["data"]["addr"]["addr"], response["data"]["addr"][

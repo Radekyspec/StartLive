@@ -1,7 +1,10 @@
+import logging
+from collections.abc import Callable
 from threading import Event, Lock
-from typing import Callable
 
 from ...exceptions import TaskCancelled
+
+logger = logging.getLogger(__name__)
 
 
 class CancellationToken:
@@ -23,7 +26,9 @@ class CancellationToken:
             try:
                 cb()
             except Exception:
-                pass
+                # A callback must not prevent other cancellation callbacks.
+                logger.debug("Cancellation callback failed", exc_info=True)
+                continue
 
     def wait(self, timeout: float | None = None) -> bool:
         return self._event.wait(timeout)

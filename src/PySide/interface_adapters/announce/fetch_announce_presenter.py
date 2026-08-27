@@ -1,5 +1,10 @@
+from typing import TYPE_CHECKING
+
 from src.core import app_state
 from src.core.workers.base import Presenter
+
+if TYPE_CHECKING:
+    from src.PySide.window.stream_config import StreamConfigPanel
 
 
 class FetchAnnouncePresenter(Presenter):

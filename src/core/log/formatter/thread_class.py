@@ -1,5 +1,7 @@
 from logging import Formatter
 from re import compile, IGNORECASE, VERBOSE
+from types import TracebackType
+from typing import cast
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
 _URL_PATTERN = compile(
@@ -68,6 +70,15 @@ class ThreadClassFormatter(Formatter):
         finally:
             record.exc_text = None
 
-    def formatException(self, exc_info) -> str:
+    def formatException(
+        self,
+        ei: tuple[
+            type[BaseException] | None,
+            BaseException | None,
+            TracebackType | None,
+        ],
+    ) -> str:
         return _redact(
-            super().formatException(exc_info))
+            super().formatException(cast(
+                tuple[type[BaseException], BaseException, TracebackType | None],
+                ei)))

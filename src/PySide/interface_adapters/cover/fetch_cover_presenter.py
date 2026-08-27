@@ -1,7 +1,12 @@
+from typing import TYPE_CHECKING
+
 from PySide6.QtGui import QPixmap
 
 from src.core import app_state
 from src.core.workers.base import Presenter
+
+if TYPE_CHECKING:
+    from src.PySide.window.cover_crop import CoverCropWidget
 
 
 class FetchCoverPresenter(Presenter):

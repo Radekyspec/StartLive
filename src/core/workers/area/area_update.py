@@ -1,7 +1,7 @@
 # module import
 from typing import Callable
 
-from ..base import Presenter
+from src.core.workers.base.Presenter import Presenter
 from ... import app_state, constant
 from ...exceptions import AreaUpdateError
 from ...log import get_logger
@@ -16,6 +16,7 @@ class AreaUpdateWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         url = "https://api.live.bilibili.com/xlive/app-blink/v2/room/AnchorChangeRoomArea"
         area_data = {
             "area_id": app_state.area_codes[self.area],
@@ -25,8 +26,8 @@ class AreaUpdateWorker(BaseWorker):
             "platform": "pc_link",
             "room_id": app_state.room_info["room_id"],
         }
-        self.logger.info(f"AnchorChangeRoomArea Request")
-        response = self._session.post(url, params=livehime_sign({}),
+        self.logger.info("AnchorChangeRoomArea Request")
+        response = session.post(url, params=livehime_sign({}),
                                       data=area_data)
         response.encoding = "utf-8"
         self.logger.info("AnchorChangeRoomArea Response")

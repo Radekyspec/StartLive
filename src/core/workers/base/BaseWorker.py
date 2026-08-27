@@ -1,11 +1,13 @@
-from typing import Optional, Callable, Union, final
+from collections.abc import Callable
+from typing import final
 
-from requests import Session
+from requests.sessions import Session
 
 from src.core.app_state import create_session
 from src.core.constant import HeadersType
 from src.core.exceptions.WorkerException import WorkerException
-from . import Presenter
+
+from .Presenter import Presenter
 
 
 class BaseWorker:
@@ -17,12 +19,12 @@ class BaseWorker:
         "on_exception",
     })
 
-    _session: Optional[Session]
+    _session: Session | None
     name: str
 
     def __init__(self, /, name: str, *, with_session: bool = True,
                  headers_type: HeadersType = HeadersType.APP,
-                 presenter: Optional[Union[Presenter, list[Presenter]]] = None):
+                 presenter: Presenter | list[Presenter] | None = None):
         super().__init__()
         self.name = name
         if isinstance(presenter, list):
@@ -52,6 +54,12 @@ class BaseWorker:
             raise TypeError(
                 f"{cls.__name__} Overriding {names} is not allowed"
             )
+
+    def require_session(self) -> Session:
+        """Return the worker HTTP session or fail clearly when disabled."""
+        if self._session is None:
+            raise RuntimeError(f"{self.name} requires an HTTP session")
+        return self._session
 
     @final
     def start(self, report_progress: Callable | None, *args, **kwargs):

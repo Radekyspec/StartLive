@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
@@ -8,8 +10,11 @@ from src.PySide.interface_adapters.live_delay import TimeShiftUpdatePresenter
 from src.PySide.widgets import SettingsWidget
 from src.core import app_state
 from src.core.app_state import bg_settings_default
-from src.core.constant import ProxyMode, PreferProto
+from src.core.constant import BackgroundMode, ProxyMode, PreferProto
 from src.core.workers.live_delay import StreamTimeShiftUpdateWorker
+
+if TYPE_CHECKING:
+    from .main_window import MainWindow
 
 
 class SettingsPage(SettingsWidget):
@@ -24,7 +29,7 @@ class SettingsPage(SettingsWidget):
     bg_blur_slider: QSlider
     tray_icon_edit: QLineEdit
 
-    def __init__(self, parent: "MainWindow" = None):
+    def __init__(self, parent: "MainWindow | None" = None):
         super().__init__(parent)
 
         self._parent_window = parent
@@ -114,8 +119,8 @@ class SettingsPage(SettingsWidget):
             name_filter="图片文件 (*.jfif;*.pjpeg;*.jpeg;*.pjp;*.jpg;*.png);;所有文件 (*)",
             placeholder=app_state.app_settings["custom_tray_icon"]
         )
-        self.tray_icon_edit.textChanged.connect(
-            self._parent_window.switch_tray_icon)
+        parent_window = self._require_parent_window()
+        self.tray_icon_edit.textChanged.connect(parent_window.switch_tray_icon)
 
         custom_tray_hint = app_state.app_settings["custom_tray_hint"]
         self.tray_hint_edit, self.tray_hint_btn = self.add_text_item(
@@ -129,18 +134,22 @@ class SettingsPage(SettingsWidget):
                     QFontDialog.FontDialogOption.DontUseNativeDialog | QFontDialog.FontDialogOption.ScalableFonts))
         self.main_vbox.addStretch(1)
 
+    def _require_parent_window(self) -> "MainWindow":
+        parent_window = self._parent_window
+        if parent_window is None:
+            raise RuntimeError("SettingsPage requires a MainWindow parent")
+        return parent_window
+
     @Slot()
     def _on_delay_save(self):
         self.delay_save_btn.setEnabled(False)
-        delay_value = self.delay_edit.text()
-        if not delay_value:
-            delay_value = 0
-        self._parent_window.add_thread(StreamTimeShiftUpdateWorker(
+        delay_value = self.delay_edit.text() or "0"
+        self._require_parent_window().add_thread(StreamTimeShiftUpdateWorker(
             TimeShiftUpdatePresenter(self.delay_save_btn), delay_value))
 
     @Slot()
     def _switch_tray_hint(self):
-        self._parent_window.switch_tray_hint(self.tray_hint_edit.text())
+        self._require_parent_window().switch_tray_hint(self.tray_hint_edit.text())
 
     @Slot(int)
     def _on_prefer_proto_changed(self, _id: int):
@@ -195,10 +204,11 @@ class SettingsPage(SettingsWidget):
 
     @Slot(int)
     def _on_bg_mode_changed(self, mode_index: int):
-        app_state.app_settings.custom_bg_mode = mode_index
+        mode = BackgroundMode(mode_index)
+        app_state.app_settings.custom_bg_mode = mode
         if self._parent_window is not None and hasattr(self._parent_window,
                                                        "set_background_mode"):
-            self._parent_window.set_background_mode(mode_index)
+            self._parent_window.set_background_mode(mode)
 
     @Slot(int)
     def _on_bg_opacity_changed(self, value: int):

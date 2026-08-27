@@ -8,8 +8,15 @@ from requests.cookies import cookiejar_from_dict
 # local package import
 from src.core import app_state
 from src.core.app_state import dumps
-from src.core.constant import *
-from src.core.constant import HeadersType
+from src.core.constant import (
+    HeadersType,
+    KEYRING_COOKIES,
+    KEYRING_COOKIES_INDEX,
+    KEYRING_ROOM_INFO,
+    KEYRING_SERVICE_NAME,
+    KEYRING_SETTINGS,
+    USERNAME_DISPLAY_TEMPLATE,
+)
 from src.core.exceptions import CredentialExpiredError, \
     CredentialDuplicatedError
 from src.core.log import get_logger
@@ -86,16 +93,16 @@ class CredentialManagerWorker(BaseWorker):
             self.logger.info(f"obs_settings loaded: {saved_settings}")
         else:
             app_state.obs_settings_default()
-            self.logger.info(f"obs_default_settings loaded")
+            self.logger.info("obs_default_settings loaded")
         if get_password(KEYRING_SERVICE_NAME,
                         KEYRING_ROOM_INFO) is not None:
             delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
         app_state.room_info_default()
-        self.logger.info(f"room_default_settings loaded")
+        self.logger.info("room_default_settings loaded")
 
         if self.is_new:
             app_state.scan_status["is_new"] = True
-            self.logger.info(f"new credentials created, exiting")
+            self.logger.info("new credentials created, exiting")
             app_state.cookies_dict.clear()
             return self.cookie_index
 
@@ -111,8 +118,9 @@ class CredentialManagerWorker(BaseWorker):
                          dumps([f"cookies|{uid}"]))
             set_password(KEYRING_SERVICE_NAME, f"cookies|{uid}",
                          dumps(saved_cookies))
-            self.logger.info(f"cookies index created")
+            self.logger.info("cookies index created")
 
+        session = self.require_session()
         self.get_cookie_indices()
         self.logger.info(
             f"cookies index loaded: {app_state.cookie_indices}")
@@ -126,11 +134,11 @@ class CredentialManagerWorker(BaseWorker):
             app_state.scan_status["is_new"] = True
             return self.cookie_index
         saved_cookies = loads(saved_cookies)
-        cookiejar_from_dict(saved_cookies, cookiejar=self._session.cookies,
+        cookiejar_from_dict(saved_cookies, cookiejar=session.cookies,
                             overwrite=True)
         nav_url = "https://api.bilibili.com/x/web-interface/nav"
-        self.logger.info(f"nav Request")
-        response = self._session.get(
+        self.logger.info("nav Request")
+        response = session.get(
             nav_url,
             params=livehime_sign({},
                                  access_key=False,

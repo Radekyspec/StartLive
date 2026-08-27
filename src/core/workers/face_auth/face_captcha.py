@@ -21,6 +21,7 @@ class FaceCaptchaWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs) -> None:
+        session = self.require_session()
         if app_state.stream_status.face_voucher is None:
             return
         reg_url = "https://api.bilibili.com/x/gaia-vgate/v2/register"
@@ -30,7 +31,7 @@ class FaceCaptchaWorker(BaseWorker):
             "csrf": app_state.cookies_dict["bili_jct"]
         }
         self.logger.info("face v2 register Request")
-        response = self._session.post(reg_url, data=risk_params)
+        response = session.post(reg_url, data=risk_params)
         self.logger.info("face v2 register Response")
         response.encoding = "utf-8"
         risk_data_enc = response.json()["data"]["content"]

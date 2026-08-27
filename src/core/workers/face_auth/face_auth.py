@@ -19,6 +19,7 @@ class FaceAuthWorker(LongLiveWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         if self._auth_type == FaceAuthType.V2:
             return self._face_auth_v2_precheck()
 
@@ -32,7 +33,7 @@ class FaceAuthWorker(LongLiveWorker):
         }
         while self.is_running:
             self.logger.info("IsUserIdentifiedByFaceAuth Request")
-            response = self._session.post(url, data=verify_data)
+            response = session.post(url, data=verify_data)
             response.encoding = "utf-8"
             self.logger.info("IsUserIdentifiedByFaceAuth Response")
             response = response.json()
@@ -44,6 +45,7 @@ class FaceAuthWorker(LongLiveWorker):
         return -1
 
     def _face_auth_v2_precheck(self):
+        session = self.require_session()
         url = "https://api.bilibili.com/x/gaia-vgate/v2/validatePreCheck"
         verify_params = {
             "token": app_state.stream_status.face_voucher,
@@ -52,7 +54,7 @@ class FaceAuthWorker(LongLiveWorker):
         }
         while self.is_running:
             self.logger.info("validatePreCheck Request")
-            response = self._session.post(url, data=verify_params)
+            response = session.post(url, data=verify_params)
             self.logger.info("validatePreCheck Response")
             response.encoding = "utf-8"
             response = response.json()

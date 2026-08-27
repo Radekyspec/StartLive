@@ -1,11 +1,11 @@
-from concurrent.futures import ThreadPoolExecutor, Future, CancelledError
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor
 from threading import RLock
 from typing import Any
 
-from .base import BaseWorker, LongLiveWorker
-from .dispatcher import Dispatcher
 from ..exceptions import TaskCancelled
 from ..log import get_logger
+from .base import BaseWorker, LongLiveWorker
+from .dispatcher import Dispatcher
 
 
 class WorkerManager:
@@ -87,7 +87,7 @@ class WorkerManager:
                 self.logger.info(
                     f"{worker_name} finished with result: {result!r}")
             except (TaskCancelled, CancelledError):
-                pass
+                self.logger.debug(f"{worker_name} cancelled")
             except Exception as e:
                 self.logger.exception(f"{worker_name} failed")
                 try:

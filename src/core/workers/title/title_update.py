@@ -18,6 +18,7 @@ class TitleUpdateWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/UpdatePreLiveInfo"
         title_data = {
             "csrf": app_state.cookies_dict["bili_jct"],
@@ -26,8 +27,8 @@ class TitleUpdateWorker(BaseWorker):
             "room_id": app_state.room_info["room_id"],
             "title": self._title,
         }
-        self.logger.info(f"updateV2 Request")
-        response = self._session.post(url, params=livehime_sign({}),
+        self.logger.info("updateV2 Request")
+        response = session.post(url, params=livehime_sign({}),
                                       data=title_data)
         response.encoding = "utf-8"
         self.logger.info("updateV2 Response")

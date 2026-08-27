@@ -14,14 +14,15 @@ class VersionCheckerWorker(BaseWorker):
     def __init__(self, presenter: Presenter):
         super().__init__(name="版本检查", presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
-        self._session.cookies.clear()
+        self.require_session().cookies.clear()
         self._latest_version = None
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
         url = "https://gh.bydfk.com/https://api.github.com/repos/Radekyspec/StartLive/releases/latest"
-        self.logger.info(f"releases Request")
-        response = self._session.get(url)
+        self.logger.info("releases Request")
+        response = session.get(url)
         response.encoding = "utf-8"
         self.logger.info("releases Response")
         response = response.json()

@@ -1,4 +1,9 @@
+from typing import TYPE_CHECKING
+
 from src.core.workers.base import Presenter
+
+if TYPE_CHECKING:
+    from src.PySide.window.stream_config import StreamConfigPanel
 
 
 class CoverStateUpdatePresenter(Presenter):

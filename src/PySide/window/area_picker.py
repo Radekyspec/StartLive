@@ -1,14 +1,23 @@
-# -*- coding: utf-8 -*-
 from functools import partial
 
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
-    QWidget, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QGridLayout, QScrollArea, QFrame, QButtonGroup, QSizePolicy
+    QButtonGroup,
+    QDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
 
-from src.PySide.widgets import RecentAreaBar
 from src.core import app_state
+from src.PySide.widgets import RecentAreaBar
 
 
 class AreaPickerPanel(QDialog):
@@ -286,12 +295,17 @@ class AreaPickerPanel(QDialog):
             self.child_layout.addWidget(btn, r, c)
 
         # 触发布局更新
-        self.child_inner.adjustSize()
-        self.child_inner.updateGeometry()
+        inner = self.child_inner
+        if inner is None:
+            return
+        inner.adjustSize()
+        inner.updateGeometry()
 
     def _clear_layout_keep_widgets(self):
         while self.child_layout.count():
             item = self.child_layout.takeAt(0)
+            if item is None:
+                return
             w = item.widget()
             if w is not None:
                 self.child_layout.removeWidget(w)
@@ -317,8 +331,7 @@ class AreaPickerPanel(QDialog):
     def _sync_current_label(self):
         p = self._selected_parent or ""
         c = self._selected_child or ""
-        self.recent_bar.select_recent(self._selected_parent,
-                                      self._selected_child)
+        self.recent_bar.select_recent(p, c)
         self.current_label.setText(f"当前分区：{p} - {c}")
 
     def _update_ok_enabled(self):

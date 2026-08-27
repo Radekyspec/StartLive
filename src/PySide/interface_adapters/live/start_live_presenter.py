@@ -1,4 +1,5 @@
 from threading import Condition
+from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QMessageBox
 
@@ -11,6 +12,9 @@ from src.core.workers.base import Presenter
 from src.core.workers.face_auth import FaceCaptchaWorker
 from src.core.workers.live import ReportLiveDataWorker
 from src.core.workers.obs_ws import WaitObsConnectedWorker
+
+if TYPE_CHECKING:
+    from src.PySide.window.stream_config import StreamConfigPanel
 
 
 class StartLivePresenter(Presenter):

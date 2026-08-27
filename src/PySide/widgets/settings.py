@@ -1,3 +1,5 @@
+from typing import overload
+
 from PySide6.QtCore import Qt, QSize, Slot
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout,
@@ -28,16 +30,30 @@ class SettingsWidget(QWidget):
         self.title_font.setPointSize(14)
         self.title_font.setBold(True)
 
-    def add_section_title(self, text: str):
+    def _create_section(self, label: str) -> tuple[QFrame, QVBoxLayout]:
         frame = QFrame()
-        v = QVBoxLayout(frame)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(6)
-        lbl = QLabel(text)
-        lbl.setFont(self.title_font)
-        v.addWidget(lbl)
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        title = QLabel(label)
+        title.setFont(self.title_font)
+        layout.addWidget(title)
+        return frame, layout
+
+    def add_section_title(self, text: str):
+        frame, _ = self._create_section(text)
         self.main_vbox.addWidget(frame)
         return frame
+
+    @overload
+    def add_text_item(self, label: str, btn_label: str,
+                      placeholder: str = "") -> tuple[
+                          FocusPlaceholderLineEdit, QPushButton]: ...
+
+    @overload
+    def add_text_item(self, label: str, btn_label: list[str],
+                      placeholder: str | list[str] = "") -> list[
+                          tuple[FocusPlaceholderLineEdit, QPushButton]]: ...
 
     def add_text_item(self, label: str, btn_label: str | list[str],
                       placeholder: str | list[str] = "") -> (
@@ -70,14 +86,7 @@ class SettingsWidget(QWidget):
             raise ValueError(
                 "placeholder list length must match btn_label list length")
 
-        frame = QFrame()
-        v = QVBoxLayout(frame)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(6)
-
-        lbl = QLabel(label)
-        lbl.setFont(self.title_font)
-        v.addWidget(lbl)
+        frame, v = self._create_section(label)
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
@@ -129,13 +138,7 @@ class SettingsWidget(QWidget):
                  the multiple-choice selection.
         :rtype: QButtonGroup
         """
-        frame = QFrame()
-        v = QVBoxLayout(frame)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(6)
-        lbl = QLabel(label)
-        lbl.setFont(self.title_font)
-        v.addWidget(lbl)
+        frame, v = self._create_section(label)
         opts_box = QVBoxLayout()
         opts_box.setSpacing(8)
         group = QButtonGroup(frame)
@@ -151,13 +154,7 @@ class SettingsWidget(QWidget):
         return group
 
     def add_switch_item(self, label: str, checked: bool = False) -> QCheckBox:
-        frame = QFrame()
-        v = QVBoxLayout(frame)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(6)
-        lbl = QLabel(label)
-        lbl.setFont(self.title_font)
-        v.addWidget(lbl)
+        frame, v = self._create_section(label)
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         sw = QCheckBox()
@@ -199,14 +196,7 @@ class SettingsWidget(QWidget):
                  dialog.
         :rtype: tuple[QLineEdit, QPushButton]
         """
-        frame = QFrame()
-        v = QVBoxLayout(frame)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(6)
-
-        lbl = QLabel(label)
-        lbl.setFont(self.title_font)
-        v.addWidget(lbl)
+        frame, v = self._create_section(label)
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
@@ -239,14 +229,7 @@ class SettingsWidget(QWidget):
     def add_font_picker_item(self, label: str, *, dialog_title="选择字体",
                              options
                              ) -> tuple[QLineEdit, QPushButton]:
-        frame = QFrame()
-        v = QVBoxLayout(frame)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(6)
-
-        lbl = QLabel(label)
-        lbl.setFont(self.title_font)
-        v.addWidget(lbl)
+        frame, v = self._create_section(label)
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
@@ -287,14 +270,7 @@ class SettingsWidget(QWidget):
         通用滑条项：Label + Slider + 当前数值标签。
         返回 QSlider，方便绑定 valueChanged。
         """
-        frame = QFrame()
-        v = QVBoxLayout(frame)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(6)
-
-        lbl = QLabel(label)
-        lbl.setFont(self.title_font)
-        v.addWidget(lbl)
+        frame, v = self._create_section(label)
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)

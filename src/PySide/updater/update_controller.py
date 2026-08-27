@@ -6,6 +6,10 @@ from PySide6.QtWidgets import QMainWindow, QApplication
 from src.PySide.updater.update_worker import VelopackUpdateWorker
 
 
+def _noop_progress(_progress: int) -> None:
+    return
+
+
 class VelopackUpdateController(QObject):
     update_ready = Signal()
     failed = Signal(str)
@@ -31,7 +35,8 @@ class VelopackUpdateController(QObject):
             return
 
         thread = QThread(self)
-        worker = VelopackUpdateWorker(self._update_url, self._callback)
+        progress_callback = self._callback or _noop_progress
+        worker = VelopackUpdateWorker(self._update_url, progress_callback)
 
         worker.moveToThread(thread)
 

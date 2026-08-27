@@ -1,10 +1,14 @@
 from threading import Condition
+from typing import TYPE_CHECKING
 
-from src.PySide.log import get_logger
-from src.PySide.states import ObsBtnState
 from src.core import app_state
 from src.core.workers.base import Presenter
 from src.core.workers.obs_ws import ObsDaemonWorker
+from src.PySide.log import get_logger
+from src.PySide.states import ObsBtnState
+
+if TYPE_CHECKING:
+    from src.PySide.window.stream_config import StreamConfigPanel
 
 
 class ObsConnectorPresenter(Presenter):
@@ -27,7 +31,7 @@ class ObsConnectorPresenter(Presenter):
                 ObsDaemonWorker(ObsDaemonPresenter()))
 
     def prepare_fail_view(self, exception: Exception):
-        self.logger.error(f"OBS connect failed.")
+        self.logger.error("OBS connect failed.")
         self._view.obs_auto_live_checkbox.setEnabled(False)
         with self._cond:
             app_state.obs_op = False

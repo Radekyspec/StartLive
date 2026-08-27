@@ -25,7 +25,7 @@ class HttpServerWorker(QThread):
                 f"HTTP Server running on http://{self.host}:{self.port}")
             self.httpd.serve_forever()
         except Exception as e:
-            self.logger.error(f"HTTP Server failed to start")
+            self.logger.error("HTTP Server failed to start")
             self.logger.error(
                 format_exception(type(e), e, e.__traceback__))
             self.signals.exception.emit(e)
@@ -53,8 +53,8 @@ class HttpServerWorker(QThread):
                     self.end_headers()
                     self.wfile.write(b"Not Found.")
 
-            def log_message(self, format_s, *args):
-                logger.info(format_s % args)
+            def log_message(self, format, *args):
+                logger.info(format % args)
 
         return EmitSignalHandler
 

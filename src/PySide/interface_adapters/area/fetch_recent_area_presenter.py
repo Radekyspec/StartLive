@@ -1,5 +1,10 @@
+from typing import TYPE_CHECKING
+
 from src.core import app_state
 from src.core.workers.base import Presenter
+
+if TYPE_CHECKING:
+    from src.PySide.window.area_picker import AreaPickerPanel
 
 
 class FetchRecentAreaPresenter(Presenter):

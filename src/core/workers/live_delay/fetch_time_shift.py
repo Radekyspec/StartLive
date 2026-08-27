@@ -14,9 +14,10 @@ class FetchStreamTimeShiftWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/upStreamConfig/GetAnchorSelfStreamTimeShift"
-        self.logger.info(f"AnchorSelfStreamTimeShift Request")
-        response = self._session.get(url, params=livehime_sign({
+        self.logger.info("AnchorSelfStreamTimeShift Request")
+        response = session.get(url, params=livehime_sign({
             "csrf": app_state.cookies_dict["bili_jct"],
             "csrf_token": app_state.cookies_dict["bili_jct"],
             "room_id": app_state.room_info["room_id"],

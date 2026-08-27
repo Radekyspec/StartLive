@@ -19,7 +19,7 @@ class CoverUploadWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
-
+        session = self.require_session()
         url = "https://api.bilibili.com/x/upload/web/image"
         self.logger.info("CoverUpload Request")
         params = {
@@ -30,7 +30,7 @@ class CoverUploadWorker(BaseWorker):
             "dir": (None, "new_room_cover"),
             "file": ("blob", self.data, "image/png")
         }
-        response = self._session.post(url, params=params, files=upload_data)
+        response = session.post(url, params=params, files=upload_data)
         self.logger.info("CoverUpload Response")
         response.raise_for_status()
         response = response.json()
@@ -40,6 +40,7 @@ class CoverUploadWorker(BaseWorker):
         self._update_pre_live(response["data"]["location"])
 
     def _update_pre_live(self, cover_url: str):
+        session = self.require_session()
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/UpdatePreLiveInfo"
         self.logger.info("UpdatePreLiveInfo Request")
         data = {
@@ -53,7 +54,7 @@ class CoverUploadWorker(BaseWorker):
             "csrf": app_state.cookies_dict["bili_jct"],
             "visit_id": "",
         }
-        response = self._session.post(url, data=data)
+        response = session.post(url, data=data)
         self.logger.info("UpdatePreLiveInfo Response")
         response.raise_for_status()
         response = response.json()

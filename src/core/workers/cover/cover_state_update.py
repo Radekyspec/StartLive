@@ -16,6 +16,7 @@ class CoverStateUpdateWorker(LongLiveWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         while self.is_running and app_state.room_info["cover_status"] == 0:
             url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/PreLive"
             params = livehime_sign({
@@ -28,7 +29,7 @@ class CoverStateUpdateWorker(LongLiveWorker):
                 "title": "true",
             })
             self.logger.info("PreLive Request")
-            response = self._session.get(url, params=params)
+            response = session.get(url, params=params)
             response.encoding = "utf-8"
             self.logger.info("PreLive Response")
             response = response.json()
