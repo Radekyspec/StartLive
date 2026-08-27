@@ -5,14 +5,22 @@ from argparse import ArgumentParser, SUPPRESS
 from pathlib import Path
 from platform import system
 
-from velopack import App
-
 _velopack_first_run = False
 
 
 def _on_velopack_first_run(_version) -> None:
     global _velopack_first_run
     _velopack_first_run = True
+
+
+def _run_velopack_hooks() -> None:
+    """Run installer hooks on platforms managed by Velopack."""
+    if system() == "Linux":
+        return
+
+    from velopack import App
+
+    App().on_first_run(_on_velopack_first_run).run()
 
 
 def main() -> int:
@@ -113,10 +121,6 @@ def main() -> int:
 if __name__ == "__main__":
     # 必须在单实例检查、Qt 初始化和其他正常启动逻辑之前运行。
     # 安装、更新或卸载期间，Velopack 可能在这里直接终止进程。
-    (
-        App()
-        .on_first_run(_on_velopack_first_run)
-        .run()
-    )
+    _run_velopack_hooks()
 
     sys.exit(main())
