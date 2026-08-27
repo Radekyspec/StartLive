@@ -1,16 +1,11 @@
-from typing import TYPE_CHECKING
-
-from src.PySide.states import StreamState
 from src.core import app_state
 from src.core.constant import FaceAuthType
 from src.core.workers.base import Presenter
-
-if TYPE_CHECKING:
-    from src.PySide.window.main_window import MainWindow
+from src.PySide.states import StreamState
 
 
 class FaceCaptchaPresenter(Presenter):
-    def __init__(self, view: "MainWindow", state: StreamState):
+    def __init__(self, view: object, state: StreamState):
         super().__init__()
         self._view = view
         self._state = state

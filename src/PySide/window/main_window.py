@@ -2,72 +2,76 @@
 from concurrent.futures import Future
 from pathlib import Path
 from threading import Thread
-from typing import Optional
+
+from darkdetect import isLight
+from keyring import set_password
 
 # package import
 from PIL import Image, ImageQt
-from PySide6.QtCore import (QEvent, QTimer, Slot, QEventLoop)
-from PySide6.QtCore import Qt, QRect
-from PySide6.QtGui import QAction, QIcon, QActionGroup
-from PySide6.QtGui import QPixmap, QImage, QPainter
-from PySide6.QtWidgets import (QApplication,
-                               QWidget,
-                               QVBoxLayout,
-                               QHBoxLayout,
-                               QLabel,
-                               QMessageBox, QSystemTrayIcon, QMenu,
-                               QStackedWidget, QButtonGroup,
-                               QGraphicsBlurEffect, QGraphicsScene,
-                               QGraphicsPixmapItem
-                               )
-from darkdetect import isLight
-from keyring import set_password
+from PySide6.QtCore import QEvent, QEventLoop, QRect, Qt, QTimer, Slot
+from PySide6.QtGui import QAction, QActionGroup, QIcon, QImage, QPainter, QPixmap
+from PySide6.QtWidgets import (
+    QApplication,
+    QButtonGroup,
+    QGraphicsBlurEffect,
+    QGraphicsPixmapItem,
+    QGraphicsScene,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QMessageBox,
+    QStackedWidget,
+    QSystemTrayIcon,
+    QVBoxLayout,
+    QWidget,
+)
 from qdarktheme import setup_theme
 from qrcode.main import QRCode
 
-from src.PySide.classes import SingleInstanceWindow, ClickableLabel
-from src.PySide.interface_adapters import GUIDispatcher
-from src.PySide.interface_adapters.const import ConstantUpdatePresenter, \
-    VersionCheckerPresenter
-from src.PySide.interface_adapters.credentials import CredentialManagerPresenter
-from src.PySide.interface_adapters.face_auth import FaceAuthPresenter
-from src.PySide.interface_adapters.gui_presenter import GUIPresenter
-from src.PySide.interface_adapters.live_delay import FetchTimeShiftPresenter
-from src.PySide.interface_adapters.login import FetchQRPresenter, \
-    FetchLoginPresenter
-from src.PySide.log import get_logger, init_logger
-from src.PySide.states import LoginState
-from src.PySide.web_server import HttpServerWorker
-from src.PySide.widgets import StartLiveMenuBar, LogViewer, SideBar
 from src.core import app_state
 from src.core.app_state import dumps
 from src.core.cache import del_cache_user
 from src.core.constant import (
-    BackgroundMode,
     DARK_COVER_CSS,
     DARK_CSS,
-    FaceAuthType,
     KEYRING_APP_SETTINGS,
     KEYRING_SERVICE_NAME,
     KEYRING_SETTINGS,
     LIGHT_COVER_CSS,
     LIGHT_CSS,
     VERSION,
+    BackgroundMode,
+    FaceAuthType,
     WidgetIndex,
 )
 from src.core.workers import WorkerManager
-from src.core.workers.base import LongLiveWorker, BaseWorker
+from src.core.workers.base import BaseWorker, LongLiveWorker
 from src.core.workers.const import ConstantUpdateWorker, VersionCheckerWorker
 from src.core.workers.credentials import CredentialManagerWorker
-from src.core.workers.face_auth import FaceAuthWorker, \
-    ReportFaceRecognitionWorker
+from src.core.workers.face_auth import FaceAuthWorker, ReportFaceRecognitionWorker
 from src.core.workers.live_delay import FetchStreamTimeShiftWorker
 from src.core.workers.login import FetchLoginWorker, FetchQRWorker
 from src.core.workers.obs_ws import ObsDaemonWorker
+from src.PySide.classes import ClickableLabel, SingleInstanceWindow
+from src.PySide.interface_adapters import GUIDispatcher
+from src.PySide.interface_adapters.const import (
+    ConstantUpdatePresenter,
+    VersionCheckerPresenter,
+)
+from src.PySide.interface_adapters.credentials import CredentialManagerPresenter
+from src.PySide.interface_adapters.face_auth import FaceAuthPresenter
+from src.PySide.interface_adapters.gui_presenter import GUIPresenter
+from src.PySide.interface_adapters.live_delay import FetchTimeShiftPresenter
+from src.PySide.interface_adapters.login import FetchLoginPresenter, FetchQRPresenter
+from src.PySide.log import get_logger, init_logger
+from src.PySide.states import LoginState
+from src.PySide.web_server import HttpServerWorker
+from src.PySide.widgets import LogViewer, SideBar, StartLiveMenuBar
+
+from ..updater import VelopackUpdateController
 from .face_qr import FaceQRWidget
 from .settings_page import SettingsPage
 from .stream_config import StreamConfigPanel
-from ..updater import VelopackUpdateController
 
 
 # Main GUI window
@@ -81,10 +85,10 @@ class MainWindow(SingleInstanceWindow):
     _logged_in: bool
     _cred_deleted: bool
     _no_const_update: bool
-    _new_version_str: Optional[str]
+    _new_version_str: str | None
     _download_per: int
     _server_started: bool
-    _server_thread: Optional[HttpServerWorker]
+    _server_thread: HttpServerWorker | None
     _current_cookie_idx: int
     _cookie_index_len: int
     _login_state: LoginState
@@ -96,8 +100,8 @@ class MainWindow(SingleInstanceWindow):
     qr_label: QLabel
     panel: StreamConfigPanel | None
     credential_worker: CredentialManagerWorker
-    login_worker: Optional[FetchLoginWorker]
-    face_window: Optional[FaceQRWidget]
+    login_worker: FetchLoginWorker | None
+    face_window: FaceQRWidget | None
     tray_start_live_action: QAction
     tray_stop_live_action: QAction
 
@@ -111,7 +115,6 @@ class MainWindow(SingleInstanceWindow):
         gui_handler.recordUpdated.connect(self._log_viewer.append_line)
         self.logger = get_logger(self.__class__.__name__)
         self._bg_pixmap: QPixmap | None = None
-        self._bg_cache: QPixmap | None = None
         self._bg_cache: QPixmap | None = None
         self._blur_radius: float = 10.0
         self._opacity: float = 0.8
@@ -314,12 +317,12 @@ class MainWindow(SingleInstanceWindow):
         self.login_worker = None
         self.add_thread(self.credential_worker)
 
-        self.face_window: Optional[FaceQRWidget] = None
+        self.face_window: FaceQRWidget | None = None
 
     def _init_http_server(self):
         self._server_started = False
         if self._host is not None and self._port is not None:
-            panel = self._require_panel()
+            panel = self.require_panel()
             self._server_thread = HttpServerWorker(self._host, self._port)
             self._server_thread.signals.startLive.connect(panel.start_live)
             self._server_thread.signals.stopLive.connect(panel.stop_live)
@@ -446,9 +449,9 @@ class MainWindow(SingleInstanceWindow):
         painter.end()
 
     def changeEvent(self, event):
-        if event.type() == QEvent.Type.WindowStateChange:
-            if self.isMinimized():
-                QTimer.singleShot(0, self.hide)  # 延迟隐藏窗口
+        if (event.type() == QEvent.Type.WindowStateChange
+                and self.isMinimized()):
+            QTimer.singleShot(0, self.hide)  # 延迟隐藏窗口
         super().changeEvent(event)
 
     def closeEvent(self, event):
@@ -493,7 +496,7 @@ class MainWindow(SingleInstanceWindow):
             self.add_thread(FetchStreamTimeShiftWorker(
                 FetchTimeShiftPresenter(self._settings_page.delay_edit)))
 
-    def _require_panel(self) -> StreamConfigPanel:
+    def require_panel(self) -> StreamConfigPanel:
         panel = self.panel
         if panel is None:
             raise RuntimeError("MainWindow panel is not initialized")
@@ -510,7 +513,7 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot()
     def _on_delete_settings(self):
-        self._require_panel().reset_obs_settings()
+        self.require_panel().reset_obs_settings()
         QMessageBox.information(self, "设置清空", "OBS连接设置清除成功")
 
     @Slot()
@@ -652,7 +655,7 @@ class MainWindow(SingleInstanceWindow):
         self.qr_label.setPixmap(self._qpixmap_from_str(qr_url))  # Show in UI
 
     def _after_login_success(self):
-        panel = self._require_panel()
+        panel = self.require_panel()
         panel.parent_combo.clear()
         panel.parent_combo.addItems(app_state.parent_area)
         self._stack.setCurrentIndex(1)
@@ -708,7 +711,7 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot(str, int)
     def popup_face_widget(self, face_url: str, auth_type: FaceAuthType):
-        panel = self._require_panel()
+        panel = self.require_panel()
         face_message = app_state.stream_status.face_message
         if face_message is None:
             raise RuntimeError("Face authentication message is unavailable")
@@ -854,8 +857,13 @@ class MainWindow(SingleInstanceWindow):
 
         elif self._mode == BackgroundMode.COVER:
             scale = max(win_w / img_w, win_h / img_h)
-            scaled_w = int(img_w * scale)
-            scaled_h = int(img_h * scale)
+            try:
+                scaled_w = int(img_w * scale)
+                scaled_h = int(img_h * scale)
+            except (OverflowError, ValueError):
+                painter.end()
+                self._bg_cache = None
+                return
 
             scaled = img.scaled(
                 scaled_w,

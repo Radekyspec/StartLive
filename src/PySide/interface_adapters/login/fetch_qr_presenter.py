@@ -1,14 +1,10 @@
-from typing import TYPE_CHECKING
-
 from src.core import app_state
 from src.core.workers.base import Presenter
-
-if TYPE_CHECKING:
-    from src.PySide.window.main_window import MainWindow
+from src.PySide.interface_adapters import MainWindowView
 
 
 class FetchQRPresenter(Presenter):
-    def __init__(self, view: "MainWindow"):
+    def __init__(self, view: MainWindowView):
         super().__init__()
         self._view = view
 

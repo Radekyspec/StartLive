@@ -1,22 +1,18 @@
-from typing import TYPE_CHECKING
-
 from src.core import app_state
 from src.core.workers.base import Presenter
 from src.core.workers.usernames import FetchUsernamesWorker
+from src.PySide.interface_adapters import MainWindowView
 from src.PySide.interface_adapters.login import FetchLoginPresenter
-
-if TYPE_CHECKING:
-    from src.PySide.window.main_window import MainWindow
 
 
 class CredentialManagerPresenter(Presenter):
-    def __init__(self, view: "MainWindow", state) -> None:
+    def __init__(self, view: MainWindowView, state) -> None:
         super().__init__()
         self._view = view
         self._state = state
 
     def prepare_success_view(self, cookie_index: int):
-        panel = self._view._require_panel()
+        panel = self._view.require_panel()
         FetchLoginPresenter.post_login(self._view, self._state)
         if not app_state.scan_status["is_new"]:
             fetch_usernames = FetchUsernamesWorker(
@@ -37,7 +33,7 @@ class CredentialManagerPresenter(Presenter):
 
     def prepare_fail_view(self, exception: Exception):
         self._state.credentialLoaded.emit()
-        panel = self._view._require_panel()
+        panel = self._view.require_panel()
         panel.host_input.setText(
             app_state.obs_settings.get("ip_addr", "localhost"))
         panel.port_input.setText(app_state.obs_settings.get("port", "4455"))
