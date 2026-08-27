@@ -7,7 +7,7 @@ from warnings import catch_warnings, simplefilter
 
 # package import
 from PIL import ImageQt
-from PySide6.QtCore import (QEvent, QTimer, Slot, QEventLoop, QObject, Signal)
+from PySide6.QtCore import (QEvent, QTimer, Slot, QEventLoop)
 from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import QAction, QIcon, QActionGroup
 from PySide6.QtGui import QPixmap, QImage, QPainter
@@ -37,7 +37,7 @@ from src.PySide.interface_adapters.live_delay import FetchTimeShiftPresenter
 from src.PySide.interface_adapters.login import FetchQRPresenter, \
     FetchLoginPresenter
 from src.PySide.log import get_logger, init_logger
-from src.PySide.states import LoginState
+from src.PySide.states import LoginState, ShutdownNotifier
 from src.PySide.web_server import HttpServerWorker
 from src.PySide.widgets import StartLiveMenuBar, LogViewer, SideBar
 from src.core import app_state
@@ -58,10 +58,6 @@ from .stream_config import StreamConfigPanel
 from ..updater import VelopackUpdateController
 
 
-class _ShutdownNotifier(QObject):
-    finished = Signal()
-
-
 # Main GUI window
 class MainWindow(SingleInstanceWindow):
     _gui_dispatcher: GUIDispatcher
@@ -77,8 +73,8 @@ class MainWindow(SingleInstanceWindow):
     _download_per: int
     _server_started: bool
     _server_thread: Optional[HttpServerWorker]
-    _current_cookie_idx: int
-    _cookie_index_len: int
+    _credential_target_idx: int
+    _credential_result_handled: bool
     _login_state: LoginState
     account_group: QActionGroup
     account_menu: QMenu
@@ -388,12 +384,12 @@ class MainWindow(SingleInstanceWindow):
         """
         old_dispatcher = self._gui_dispatcher
         old_manager = self._thread_manager
-        max_workers = old_manager._max_workers
+        max_workers = old_manager.max_workers
         old_dispatcher.close()
 
         event_loop = QEventLoop(self)
         completion: Future[None] = Future()
-        notifier = _ShutdownNotifier()
+        notifier = ShutdownNotifier()
         notifier.finished.connect(
             event_loop.quit,
             Qt.ConnectionType.QueuedConnection,

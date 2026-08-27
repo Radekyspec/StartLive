@@ -103,6 +103,20 @@ class CookieState(StateBase):
         self.current_cookie_idx = self.cookie_index_len
 
 
+@dataclass(slots=True, frozen=True)
+class StoredCredential:
+    key: str
+    index: int
+
+
+@dataclass(slots=True, frozen=True)
+class RemovedCredential:
+    key: str
+    uid: str
+    former_index: int
+    remaining_keys: tuple[str, ...]
+
+
 # Queue to communicate with OBS in a separate thread
 obs_req_queue = Queue()
 

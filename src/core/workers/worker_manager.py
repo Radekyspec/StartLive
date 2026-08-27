@@ -17,7 +17,7 @@ class WorkerManager:
     def __init__(self, dispatcher: Dispatcher,
                  max_workers: int | None = None) -> None:
         self._dispatcher = dispatcher
-        self._max_workers = max_workers
+        self.max_workers = max_workers
         self._executor = self._create_executor()
         self._jobs: dict[Future, BaseWorker] = {}
         self._worker_typeset: set[str] = set()
@@ -26,7 +26,7 @@ class WorkerManager:
 
     def _create_executor(self) -> ThreadPoolExecutor:
         return ThreadPoolExecutor(
-            max_workers=self._max_workers,
+            max_workers=self.max_workers,
             thread_name_prefix="backend-worker",
         )
 

@@ -3,6 +3,10 @@ from .AreaUpdateError import AreaUpdateError
 from .CoverUploadError import CoverUploadError
 from .CredentialDuplicatedError import CredentialDuplicatedError
 from .CredentialExpiredError import CredentialExpiredError
+from .CredentialIndexCorruptedError import CredentialIndexCorruptedError
+from .CredentialRecordCorruptedError import CredentialRecordCorruptedError
+from .CredentialTransactionError import CredentialTransactionError
+from .CredentialValidationError import CredentialValidationError
 from .LoginError import LoginError
 from .RoomStatusError import RoomStatusError
 from .StartLiveError import StartLiveError

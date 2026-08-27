@@ -1,62 +1,24 @@
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
 from json import dumps, loads
 from typing import Any, Mapping
 
 import keyring
 
 from src.core import app_state
+from src.core.app_state import StoredCredential, RemovedCredential
 from src.core.constant import (
     KEYRING_COOKIES,
     KEYRING_COOKIES_INDEX,
     KEYRING_ROOM_INFO,
     KEYRING_SERVICE_NAME,
 )
-from src.core.exceptions import CredentialDuplicatedError
-
-
-class CredentialIndexCorruptedError(Exception):
-    """Raised when the persisted credential index cannot be safely used."""
-
-
-class CredentialRecordCorruptedError(Exception):
-    """Raised when a persisted credential record cannot be safely used."""
-
-    def __init__(self, key: str, reason: str):
-        super().__init__(f"{key}: {reason}")
-
-
-class CredentialTransactionError(Exception):
-    """Raised when a credential write cannot be durably completed."""
-
-    def __init__(
-        self,
-        operation: str,
-        primary_error: Exception,
-        rollback_error: Exception | None = None,
-    ):
-        super().__init__(f"{operation} credential transaction failed")
-        self.operation = operation
-        self.primary_error = primary_error
-        self.rollback_error = rollback_error
-        # Short aliases keep callers from having to inspect exception details.
-        self.primary = primary_error
-        self.rollback = rollback_error
-
-
-@dataclass(frozen=True)
-class StoredCredential:
-    key: str
-    index: int
-
-
-@dataclass(frozen=True)
-class RemovedCredential:
-    key: str
-    uid: str
-    former_index: int
-    remaining_keys: tuple[str, ...]
+from src.core.exceptions import (
+    CredentialDuplicatedError,
+    CredentialRecordCorruptedError,
+    CredentialTransactionError,
+    CredentialIndexCorruptedError
+)
 
 
 class CredentialStore:
@@ -97,7 +59,8 @@ class CredentialStore:
             )
         except Exception as primary:
             rollback = self._restore_replaced_value(key, old_raw)
-            raise CredentialTransactionError("add", primary, rollback) from primary
+            raise CredentialTransactionError("add", primary,
+                                             rollback) from primary
 
         self._commit_index(new_keys)
         return StoredCredential(key=key, index=new_keys.index(key))
@@ -135,7 +98,8 @@ class CredentialStore:
             )
         except Exception as primary:
             rollback = self._restore_deleted_value(key, old_raw)
-            raise CredentialTransactionError("remove", primary, rollback) from primary
+            raise CredentialTransactionError("remove", primary,
+                                             rollback) from primary
 
         self._commit_index(new_keys)
         self._cleanup_removed_identity(key, former_index)
@@ -144,7 +108,8 @@ class CredentialStore:
         )
 
     def migrate_legacy(self) -> None:
-        legacy = self._backend.get_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES)
+        legacy = self._backend.get_password(KEYRING_SERVICE_NAME,
+                                            KEYRING_COOKIES)
         index = self._backend.get_password(
             KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX
         )
@@ -163,7 +128,8 @@ class CredentialStore:
     def clear_all(self) -> None:
         keys = self._load_index_for_transaction()
         deleted: list[tuple[str, str | None]] = []
-        targets = [*keys, KEYRING_COOKIES, KEYRING_ROOM_INFO, KEYRING_COOKIES_INDEX]
+        targets = [*keys, KEYRING_COOKIES, KEYRING_ROOM_INFO,
+                   KEYRING_COOKIES_INDEX]
         try:
             for key in targets:
                 raw = self._backend.get_password(KEYRING_SERVICE_NAME, key)
@@ -173,7 +139,8 @@ class CredentialStore:
                 deleted.append((key, raw))
         except Exception as primary:
             rollback = self._restore_deleted_values(deleted)
-            raise CredentialTransactionError("clear_all", primary, rollback) from primary
+            raise CredentialTransactionError("clear_all", primary,
+                                             rollback) from primary
 
         self._clear_unusable_cache()
 
@@ -190,22 +157,24 @@ class CredentialStore:
             keys = loads(raw)
         except (TypeError, ValueError) as exc:
             self._clear_unusable_cache()
-            raise CredentialIndexCorruptedError("cookiesIndex is not JSON") from exc
+            raise CredentialIndexCorruptedError(
+                "cookiesIndex is not JSON") from exc
         if (
-            not isinstance(keys, list)
-            or any(
-                not isinstance(key, str) or not key.startswith("cookies|")
-                for key in keys
-            )
-            or len(keys) != len(set(keys))
+                not isinstance(keys, list)
+                or any(
+            not isinstance(key, str) or not key.startswith("cookies|")
+            for key in keys
+        )
+                or len(keys) != len(set(keys))
         ):
             self._clear_unusable_cache()
-            raise CredentialIndexCorruptedError("cookiesIndex has invalid entries")
+            raise CredentialIndexCorruptedError(
+                "cookiesIndex has invalid entries")
         return self._commit_index(keys) if commit else keys
 
     @staticmethod
     def _decode_record(
-        key: str, raw: str, *, legacy: bool = False
+            key: str, raw: str, *, legacy: bool = False
     ) -> dict[str, str]:
         try:
             record = loads(raw)
@@ -214,19 +183,20 @@ class CredentialStore:
                 key, "credential is not JSON"
             ) from exc
         if not isinstance(record, dict):
-            raise CredentialRecordCorruptedError(key, "credential is not a mapping")
+            raise CredentialRecordCorruptedError(key,
+                                                 "credential is not a mapping")
         uid = record.get("DedeUserID")
         if (
-            not isinstance(uid, str)
-            or not uid
-            or (not legacy and key != f"cookies|{uid}")
+                not isinstance(uid, str)
+                or not uid
+                or (not legacy and key != f"cookies|{uid}")
         ):
             raise CredentialRecordCorruptedError(
                 key, "credential identity does not match its key"
             )
         if any(
-            not isinstance(name, str) or not isinstance(value, str)
-            for name, value in record.items()
+                not isinstance(name, str) or not isinstance(value, str)
+                for name, value in record.items()
         ):
             raise CredentialRecordCorruptedError(
                 key, "credential contains non-string cookie data"
@@ -237,10 +207,11 @@ class CredentialStore:
     def _key_for_cookies(cookies: Mapping[str, str]) -> str:
         uid = cookies.get("DedeUserID")
         if not isinstance(uid, str) or not uid:
-            raise ValueError("cookies must contain a non-empty string DedeUserID")
+            raise ValueError(
+                "cookies must contain a non-empty string DedeUserID")
         if any(
-            not isinstance(name, str) or not isinstance(value, str)
-            for name, value in cookies.items()
+                not isinstance(name, str) or not isinstance(value, str)
+                for name, value in cookies.items()
         ):
             raise ValueError("cookies must contain only string data")
         return f"cookies|{uid}"
@@ -250,7 +221,7 @@ class CredentialStore:
         return key.removeprefix("cookies|")
 
     def _restore_replaced_value(
-        self, key: str, old_raw: str | None
+            self, key: str, old_raw: str | None
     ) -> Exception | None:
         try:
             if old_raw is None:
@@ -262,7 +233,7 @@ class CredentialStore:
         return None
 
     def _restore_deleted_value(
-        self, key: str, old_raw: str | None
+            self, key: str, old_raw: str | None
     ) -> Exception | None:
         if old_raw is None:
             return None
@@ -273,7 +244,7 @@ class CredentialStore:
         return None
 
     def _restore_deleted_values(
-        self, deleted: list[tuple[str, str | None]]
+            self, deleted: list[tuple[str, str | None]]
     ) -> Exception | None:
         rollback_error = None
         for key, raw in reversed(deleted):
@@ -301,6 +272,17 @@ class CredentialStore:
 
     @staticmethod
     def _cleanup_removed_identity(key: str, former_index: int) -> None:
+        """
+        Removes an identity by its key and updates application state based on the
+        identity's former index. Clears state variables or adjusts indices as required.
+
+        This method operates on global application state, and should be used cautiously
+        to ensure that the state integrity is maintained.
+
+        :param key: The unique identifier for the credential to be removed.
+        :param former_index: The previous index of the identity in the cookie indices.
+        :return: None
+        """
         uid = CredentialStore._uid_from_key(key)
         app_state.usernames.pop(key, None)
         if app_state.cookies_dict.get("DedeUserID") == uid:
@@ -310,7 +292,7 @@ class CredentialStore:
         elif former_index < app_state.cookie_state.current_cookie_idx:
             app_state.cookie_state.current_cookie_idx -= 1
         elif app_state.cookie_state.current_cookie_idx >= len(
-            app_state.cookie_indices
+                app_state.cookie_indices
         ):
             app_state.cookie_state.current_cookie_idx = len(
                 app_state.cookie_indices

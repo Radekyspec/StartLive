@@ -1,4 +1,3 @@
-from enum import StrEnum
 from json import loads
 from typing import Any, Callable, Mapping
 
@@ -11,24 +10,15 @@ from requests.cookies import cookiejar_from_dict
 from src.core import app_state
 from src.core.constant import *
 from src.core.constant import HeadersType
-from src.core.credentials import (
+from src.core.credentials import CredentialStore
+from src.core.exceptions import (
     CredentialRecordCorruptedError,
-    CredentialStore,
     CredentialTransactionError,
+    CredentialValidationError
 )
 from src.core.log import get_logger
 from src.core.sign import livehime_sign
 from src.core.workers.base import BaseWorker, Presenter
-
-
-class CredentialValidationError(Exception):
-    """Raised when credential validation should be retried later."""
-
-
-class ValidationOutcome(StrEnum):
-    VALID = "valid"
-    PERMANENT_INVALID = "permanent_invalid"
-    TEMPORARY_FAILURE = "temporary_failure"
 
 
 class CredentialManagerWorker(BaseWorker):
@@ -50,26 +40,6 @@ class CredentialManagerWorker(BaseWorker):
         app_state.room_info_default()
         app_state.scan_settings_default()
         app_state.stream_status_default()
-
-    @staticmethod
-    def add_cookie(allow_duplicate: bool = False) -> str:
-        """
-        Adds a new cookie credential to the credential manager.
-
-        This static method adds a unique cookie credential to the credential manager,
-        using the combination of a user ID and the application configuration dictionary.
-        If the cookie credential already exists, a duplicate error is raised.
-        The credential is stored securely alongside the index of cookie credentials.
-
-        :raises CredentialDuplicatedError: If the cookie credential already exists in
-            the credential manager.
-        :return: The unique key for the added cookie credential.
-        :rtype: str
-        """
-        return CredentialStore().add(
-            app_state.cookies_dict,
-            allow_duplicate=allow_duplicate,
-        ).key
 
     def _request_nav(self) -> Mapping[str, Any]:
         try:
