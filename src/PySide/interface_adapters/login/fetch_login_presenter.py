@@ -27,12 +27,13 @@ class FetchLoginPresenter(Presenter):
     @staticmethod
     def post_login(parent: "MainWindow", state: LoginState):
         if app_state.scan_status["scanned"]:
+            panel = parent._require_panel()
             parent.add_thread(TicketFetchWorker(TicketFetchPresenter()))
             parent.add_thread(FetchRoomStatusWorker())
             parent.add_thread(
-                FetchPreLiveWorker(FetchPreLivePresenter(parent.panel, state)))
+                FetchPreLiveWorker(FetchPreLivePresenter(panel, state)))
             parent.add_thread(
-                FetchAnnounceWorker(FetchAnnouncePresenter(parent.panel)))
+                FetchAnnounceWorker(FetchAnnouncePresenter(panel)))
             parent.add_thread(
                 FetchAreaWorker(FetchAreaPresenter(state)))
 
