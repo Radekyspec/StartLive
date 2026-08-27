@@ -36,6 +36,9 @@ winget install Radekyspec.StartLive
 paru -S startlive-git
 ```
 
+受支持的 Linux 安装由系统包管理器负责安装和更新。Linux 下会禁用应用内的
+Velopack 更新器，因此无需单独安装 Velopack。
+
 ## 软件截图
 
 ![2bf8d9d51186e774903b6cd26831f355](https://github.com/user-attachments/assets/974b0dbb-fcd5-4b26-be76-42db728b8942)

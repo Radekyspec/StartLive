@@ -1,7 +1,7 @@
+from platform import system
 from typing import Callable
 
 from PySide6.QtCore import QObject, Signal, Slot
-from velopack import UpdateManager
 
 from src.PySide.log import get_logger
 
@@ -20,6 +20,15 @@ class VelopackUpdateWorker(QObject):
     @Slot()
     def run(self) -> None:
         try:
+            if system() == "Linux":
+                self.logger.info(
+                    "Automatic updates are disabled on Linux; "
+                    "use the system package manager instead."
+                )
+                return
+
+            from velopack import UpdateManager
+
             manager = UpdateManager(self._update_url)
             update_info = manager.check_for_updates()
             if update_info is None:
