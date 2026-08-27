@@ -1,7 +1,8 @@
 from copy import deepcopy
 from dataclasses import dataclass, field, fields, MISSING
+from collections.abc import Iterator, Mapping
 from threading import Lock
-from typing import Any, Mapping, Iterator, Tuple, ClassVar, Self, cast
+from typing import Any, ClassVar, Self, cast
 
 
 @dataclass(slots=True)
@@ -102,7 +103,7 @@ class StateBase:
     def internal(self) -> dict[str, Any]:
         return self.as_dict()
 
-    def items(self) -> Iterator[Tuple[str, Any]]:
+    def items(self) -> Iterator[tuple[str, Any]]:
         return iter(self.as_dict().items())
 
     def values(self) -> Iterator[Any]:
@@ -112,7 +113,7 @@ class StateBase:
         return iter(self.as_dict().keys())
 
     def __iter__(self) -> Iterator[str]:
-        return self.keys()
+        yield from self.keys()
 
     def __contains__(self, key: str) -> bool:
         with self._lock:

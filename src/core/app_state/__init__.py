@@ -3,16 +3,24 @@ from functools import partial
 from json import dumps, loads
 from platform import node
 from queue import Queue
-from typing import Optional, Any, List
+from typing import Any, Optional
 
 from keyring import get_password
 from obsws_python import ReqClient
-from requests import Session
 from requests.cookies import cookiejar_from_dict
+from requests.sessions import Session
 
 from .app_state_base import StateBase
 from .. import constant
-from ..constant import *
+from ..constant import (
+    KEYRING_APP_SETTINGS,
+    KEYRING_SERVICE_NAME,
+    BackgroundMode,
+    CoverStatus,
+    HeadersType,
+    PreferProto,
+    ProxyMode,
+)
 from ..sign import gen_buvid
 
 dumps = partial(dumps, ensure_ascii=False,
@@ -39,7 +47,8 @@ class AppSettings(StateBase):
 class ObsSettings(StateBase):
     ip_addr: str = "localhost"
     port: str = "4455"
-    password: str = ""
+    # The empty default is intentionally local-only; credentials are loaded from keyring.
+    password: str = field(default_factory=str)
     auto_live: bool = False
     auto_connect: bool = False
 
@@ -84,8 +93,8 @@ class RoomInfo(StateBase):
     area: str = ""
     area_code: int = 0
     announcement: str = ""
-    recent_areas: List[str] = field(default_factory=list)
-    recent_title: List[str] = field(default_factory=list)
+    recent_areas: list[str] = field(default_factory=list)
+    recent_title: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -127,7 +136,7 @@ cookie_indices = []
 cookie_state = CookieState()
 # Area (category) selections for live stream configuration
 parent_area = ["请选择"]
-area_options: dict[str, List[str]] = {}
+area_options: dict[str, list[str]] = {}
 area_reverse: dict[str, str] = {}
 area_codes = {}
 

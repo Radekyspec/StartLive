@@ -11,11 +11,10 @@ def cache_base_dir(kind: CacheType) -> Path:
     if kind in _cache_dir:
         return Path(_cache_dir[kind])
     if (_arch := system()) == "Windows":
-        try:
-            _base_dir = Path(__compiled__.containing_dir).resolve()
-        except NameError:
-            _base_dir = Path.cwd().resolve()
-        _base_dir = _base_dir / kind
+        # Nuitka exposes ``__compiled__`` at runtime; regular Python does not.
+        compiled = globals().get("__compiled__")
+        containing_dir = getattr(compiled, "containing_dir", None)
+        _base_dir = Path(containing_dir or Path.cwd()).resolve() / kind
     elif _arch == "Linux":
         _base_dir = Path.home() / ".cache" / "StartLive" / kind
     elif _arch == "Darwin":
