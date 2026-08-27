@@ -12,6 +12,7 @@ from src.core.workers.base import BaseWorker, Presenter
 class FetchQRWorker(BaseWorker):
     def __init__(self, presenter: Presenter):
         super().__init__(name="登录二维码", headers_type=HeadersType.WEB,
+                         inherit_account_cookies=False,
                          presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
 
@@ -31,6 +32,5 @@ class FetchQRWorker(BaseWorker):
         response.encoding = "utf-8"
         self.logger.info("QRGenerate Response")
         response = response.json()
-        self.logger.info(f"QRGenerate Result: {response}")
         app_state.scan_status["qr_key"] = response["data"]["qrcode_key"]
         app_state.scan_status["qr_url"] = response["data"]["url"]
