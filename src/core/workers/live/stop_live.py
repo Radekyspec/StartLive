@@ -15,7 +15,7 @@ class StopLiveWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
-
+        session = self.require_session()
         url = "https://api.live.bilibili.com/room/v1/Room/stopLive"
         # [0.3.5]: Watch here because in livehime ver 9240
         # startLive needs csrf to sign but stopLive not
@@ -37,8 +37,8 @@ class StopLiveWorker(BaseWorker):
                 "csrf": app_state.cookies_dict["bili_jct"]
             })
             stop_data = order_payload(stop_data)
-        self.logger.info(f"stopLive Request")
-        response = self._session.post(url, data=stop_data)
+        self.logger.info("stopLive Request")
+        response = session.post(url, data=stop_data)
         response.encoding = "utf-8"
         self.logger.info("stopLive Response")
         response = response.json()

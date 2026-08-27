@@ -18,14 +18,15 @@ class ConstantUpdateWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
         self._base_dir, self._const_path = get_cache_path(CacheType.CONFIG,
                                                           "version.json")
-        self._session.cookies.clear()
+        self.require_session().cookies.clear()
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
         self._load_from_file()
         url = "https://gh.bydfk.com/https://raw.githubusercontent.com/Radekyspec/StartLive/refs/heads/master/resources/version.json"
-        self.logger.info(f"version.json Request")
-        response = self._session.get(url)
+        self.logger.info("version.json Request")
+        response = session.get(url)
         response.encoding = "utf-8"
         self.logger.info("version.json Response")
         response = response.json()

@@ -1,7 +1,7 @@
 # module import
 from typing import Callable
 
-from ..base import Presenter
+from src.core.workers.base.Presenter import Presenter
 # local package import
 from ... import app_state
 from ...log import get_logger
@@ -15,10 +15,10 @@ class FetchAreaWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
-
+        session = self.require_session()
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/GetAreaListForLive"
-        self.logger.info(f"Area/getList Request")
-        response = self._session.get(url, params=livehime_sign({}))
+        self.logger.info("Area/getList Request")
+        response = session.get(url, params=livehime_sign({}))
         response.encoding = "utf-8"
         self.logger.info("Area/getList Response")
         response = response.json()

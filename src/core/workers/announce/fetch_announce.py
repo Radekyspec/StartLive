@@ -1,7 +1,8 @@
 # module import
 from typing import Callable
 
-from ..base import BaseWorker, Presenter
+from src.core.workers.base.BaseWorker import BaseWorker
+from src.core.workers.base.Presenter import Presenter
 from ... import app_state
 from ...log import get_logger
 from ...sign import livehime_sign
@@ -13,10 +14,11 @@ class FetchAnnounceWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/room/AnnounceInfo"
-        self.logger.info(f"Announcement info Request")
+        self.logger.info("Announcement info Request")
         params = livehime_sign({})
-        response = self._session.get(url, params=params)
+        response = session.get(url, params=params)
         response.encoding = "utf-8"
         self.logger.info("Announcement info Response")
         response = response.json()

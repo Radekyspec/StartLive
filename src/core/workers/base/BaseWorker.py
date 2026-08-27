@@ -53,6 +53,12 @@ class BaseWorker:
                 f"{cls.__name__} Overriding {names} is not allowed"
             )
 
+    def require_session(self) -> Session:
+        """Return the worker HTTP session or fail clearly when disabled."""
+        if self._session is None:
+            raise RuntimeError(f"{self.name} requires an HTTP session")
+        return self._session
+
     @final
     def start(self, report_progress: Callable | None, *args, **kwargs):
         try:

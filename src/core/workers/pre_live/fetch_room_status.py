@@ -13,9 +13,10 @@ class FetchRoomStatusWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/index/GetRoomPreLiveStatus"
-        self.logger.info(f"GetRoomPreLiveStatus Request")
-        response = self._session.get(url,
+        self.logger.info("GetRoomPreLiveStatus Request")
+        response = session.get(url,
                                      params=livehime_sign({}, access_key=False))
         response.encoding = "utf-8"
         self.logger.info("GetRoomPreLiveStatus Response")

@@ -16,6 +16,7 @@ class FetchQRWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         # logic from run_qr_login()
         generate_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
         ts = str(time_ns())
@@ -26,8 +27,8 @@ class FetchQRWorker(BaseWorker):
                       f"livehime_create_ts={ts[:13]}&livehime_ts={ts[:10]}",
             "web_location": "0.0"
         }
-        self.logger.info(f"QRGenerate Request")
-        response = self._session.get(generate_url, params=gen_data)
+        self.logger.info("QRGenerate Request")
+        response = session.get(generate_url, params=gen_data)
         response.encoding = "utf-8"
         self.logger.info("QRGenerate Response")
         response = response.json()

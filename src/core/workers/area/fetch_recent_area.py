@@ -1,7 +1,8 @@
 # module import
 from typing import Callable
 
-from ..base import BaseWorker, Presenter
+from src.core.workers.base.BaseWorker import BaseWorker
+from src.core.workers.base.Presenter import Presenter
 from ... import app_state
 from ...log import get_logger
 from ...sign import livehime_sign
@@ -13,10 +14,10 @@ class FetchRecentAreaWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
-
+        session = self.require_session()
         url = "https://api.live.bilibili.com/room/v1/Area/getMyChooseArea"
         self.logger.info("getMyChooseArea Request")
-        response = self._session.get(url, params=livehime_sign({
+        response = session.get(url, params=livehime_sign({
             "roomid": app_state.room_info["room_id"],
         }))
         self.logger.info("getMyChooseArea Response")

@@ -26,7 +26,8 @@ class ObsConnectorWorker(BaseWorker):
             app_state.obs_op = True
             app_state.obs_connecting = True
             self._cond.notify_all()
-        report_progress()
+        if report_progress is not None:
+            report_progress()
         self.logger.info("OBS connecting")
         app_state.obs_client = ReqClient(host=self.host, port=self.port,
                                          password=self.password,

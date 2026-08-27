@@ -17,7 +17,7 @@ class TicketFetchWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
-
+        session = self.require_session()
         if int(app_state.cookies_dict.get("bili_ticket_expires", 0)) < int(
                 time()):
             self.logger.info("buvid_ticket Request")
@@ -27,7 +27,7 @@ class TicketFetchWorker(BaseWorker):
                 "context[ts]": int(time()),
                 "csrf": app_state.cookies_dict.get("bili_jct", "")
             }
-            response = self._session.post(
+            response = session.post(
                 "https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket",
                 params=ticket_param)
             self.logger.info("buvid_ticket Response")
@@ -44,7 +44,7 @@ class TicketFetchWorker(BaseWorker):
         if not app_state.cookies_dict.get(
                 "buvid3") or not app_state.cookies_dict.get("buvid4"):
             self.logger.info("buvid3 Request")
-            response = self._session.get(
+            response = session.get(
                 "https://api.bilibili.com/x/frontend/finger/spi")
             self.logger.info("buvid3 Response")
             response.encoding = "utf-8"

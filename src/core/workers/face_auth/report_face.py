@@ -17,6 +17,7 @@ class ReportFaceRecognitionWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs) -> None:
+        session = self.require_session()
         url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/ReportFaceRecognition"
         self.logger.info("ReportFaceRecognition Request")
         report_data = livehime_sign({})
@@ -29,7 +30,7 @@ class ReportFaceRecognitionWorker(BaseWorker):
             "room_id": app_state.room_info.room_id,
             "scene": "startLive"
         })
-        response = self._session.post(url, data=order_payload(report_data))
+        response = session.post(url, data=order_payload(report_data))
         self.logger.info("ReportFaceRecognition Response")
         response.encoding = "utf-8"
         self.logger.info(response.text)

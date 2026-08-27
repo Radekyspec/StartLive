@@ -13,8 +13,9 @@ class FetchCoverWorker(BaseWorker):
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        session = self.require_session()
         url = app_state.room_info["cover_url"]
-        self.logger.info(f"cover data Request")
-        response = self._session.get(url)
+        self.logger.info("cover data Request")
+        response = session.get(url)
         self.logger.info("cover data Response")
         app_state.room_info["cover_data"] = response.content
