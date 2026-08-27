@@ -97,10 +97,24 @@ class CookieState(StateBase):
         return len(cookie_indices)
 
     def is_exhausted(self) -> bool:
-        return self.cookie_index_len == self.current_cookie_idx
+        return self.current_cookie_idx >= self.cookie_index_len
 
     def move_to_end(self) -> None:
         self.current_cookie_idx = self.cookie_index_len
+
+
+@dataclass(slots=True, frozen=True)
+class StoredCredential:
+    key: str
+    index: int
+
+
+@dataclass(slots=True, frozen=True)
+class RemovedCredential:
+    key: str
+    uid: str
+    former_index: int
+    remaining_keys: tuple[str, ...]
 
 
 # Queue to communicate with OBS in a separate thread
@@ -140,7 +154,8 @@ obs_connecting = False
 cookies_dict = {}
 
 
-def create_session(h_type: HeadersType) -> Session:
+def create_session(h_type: HeadersType, *,
+                   inherit_account_cookies: bool = True) -> Session:
     session = Session()
     if h_type == HeadersType.WEB:
         session.headers.update(constant.HEADERS_WEB)
@@ -153,7 +168,9 @@ def create_session(h_type: HeadersType) -> Session:
     session.cookies.set("device_platform", "Windows Version: 10.0 x86_64",
                         domain="bilibili.com", path="/")
     session.cookies.set("buvid3", app_settings.app_buvid)
-    cookiejar_from_dict(cookies_dict, cookiejar=session.cookies, overwrite=True)
+    if inherit_account_cookies:
+        cookiejar_from_dict(cookies_dict, cookiejar=session.cookies,
+                            overwrite=True)
     session.headers.update({
         "buvid": app_settings.app_buvid,
     })

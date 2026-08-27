@@ -57,8 +57,8 @@ does not need to be installed separately.
 
 ### Prerequisites
 
-- `3.11 <= Python <= 3.13`
-- Tested on **Python 3.13.7**; **Python 3.12.10** recommended
+- `3.11 <= Python <= 3.14`
+- Tested on **Python 3.14.6**; **Python 3.12.10** recommended
 - Desktop environment
 - `PySide6 (Qt for Python)` [supported platforms/architectures](https://wiki.qt.io/Qt_for_Python)
 - A keyring backend supported by the [`keyring`](https://pypi.org/project/keyring/) package  

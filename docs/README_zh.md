@@ -53,8 +53,8 @@ Velopack 更新器，因此无需单独安装 Velopack。
 
 ### 前置要求
 
-* `3.11 <= Python <= 3.13`
-* `Python 3.13.7` 经测试可用, 推荐使用`3.12.10`
+* `3.11 <= Python <= 3.14`
+* `Python 3.14.6` 经测试可用, 推荐使用`3.12.10`
 * 桌面端环境
 * `PySide6 (Qt for Python)` [支持的架构](https://wiki.qt.io/Qt_for_Python)
 * 受 [keyring](https://pypi.org/project/keyring/) 支持的密钥后端存储服务

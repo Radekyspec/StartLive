@@ -1,11 +1,13 @@
 from src.core.workers.base import Presenter
-from src.core.workers.credentials.credential_manager import \
-    CredentialManagerWorker
+from src.core import app_state
+from src.core.credentials import CredentialStore
 
 
 class TicketFetchPresenter(Presenter):
     def prepare_success_view(self):
-        CredentialManagerWorker.add_cookie(True)
+        CredentialStore().add(
+            app_state.cookies_dict, allow_duplicate=True
+        )
 
     def prepare_fail_view(self, exception: Exception): ...
 

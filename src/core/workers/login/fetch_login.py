@@ -6,16 +6,19 @@ from typing import Callable
 from src.core import app_state
 # package import
 from src.core.constant import HeadersType, LoginResult
+from src.core.credentials import CredentialStore
 from src.core.exceptions import LoginError
 from src.core.log import get_logger
 from src.core.workers.base import LongLiveWorker, Presenter
-from src.core.workers.credentials import CredentialManagerWorker
 
 
 class FetchLoginWorker(LongLiveWorker):
     def __init__(self, presenter: Presenter):
-        super().__init__(name="登录", headers_type=HeadersType.WEB,
+        super().__init__(name="登录", with_session=False,
                          presenter=presenter)
+        self._session = app_state.create_session(
+            HeadersType.WEB, inherit_account_cookies=False
+        )
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
@@ -36,27 +39,25 @@ class FetchLoginWorker(LongLiveWorker):
             result = response.json()
             match result["data"]["code"]:
                 case 86101:  # Not scanned yet
-                    self.logger.info(f"QR poll Result: {result}")
                     sleep(1)
                     continue
                 case 86038:  # QR expired
-                    self.logger.info(f"QR poll Result: {result}")
                     app_state.scan_status["timeout"] = True
                     return LoginResult.QR_EXPIRED
                 case 86090:  # Scanned but not confirmed
-                    self.logger.info(f"QR poll Result: {result}")
                     app_state.scan_status["wait_for_confirm"] = True
                     report_progress(LoginResult.QR_NOT_CONFIRMED)
                     sleep(1)
                     continue
                 case 0:  # Login successful
+                    new_cookies = response.cookies.get_dict()
+                    stored = CredentialStore().add(new_cookies)
                     app_state.cookies_dict.clear()
-                    app_state.cookies_dict.update(
-                        response.cookies.get_dict())
+                    app_state.cookies_dict.update(new_cookies)
                     # config.cookies_dict["refresh_token"] = result["data"][
                     #     "refresh_token"]
 
-                    CredentialManagerWorker.add_cookie()
+                    app_state.cookie_state.current_cookie_idx = stored.index
                     app_state.scan_status["scanned"] = True
                     return LoginResult.SUCCESS
                 case _:

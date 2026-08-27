@@ -9,7 +9,7 @@ __all__ = [
     "MAX_RECENT_TITLE", "VERSION", "DARK_COVER_CSS", "DARK_CSS",
     "LIGHT_COVER_CSS", "LIGHT_CSS", "ProxyMode", "PreferProto", "CoverStatus",
     "WidgetIndex", "CacheType", "BackgroundMode", "HeadersType", "LoginResult",
-    "FaceAuthType"
+    "FaceAuthType", "ValidationOutcome"
 ]
 
 
@@ -74,6 +74,13 @@ class LoginResult(IntEnum):
 class FaceAuthType(IntEnum):
     V1 = 60024
     V2 = 60043
+
+
+@unique
+class ValidationOutcome(StrEnum):
+    VALID = "valid"
+    PERMANENT_INVALID = "permanent_invalid"
+    TEMPORARY_FAILURE = "temporary_failure"
 
 
 KEYRING_SERVICE_NAME = "StartLive|userCredentials"

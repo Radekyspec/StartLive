@@ -30,6 +30,7 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication
     from qdarktheme import enable_hi_dpi
 
+    from src.PySide.classes import ErrorCenter, install_exception_handlers
     from src.PySide.window import MainWindow
     from src.core import app_state
 
@@ -106,6 +107,8 @@ def main() -> int:
         args.no_update,
         base_path=base_path,
     )
+    error_center = ErrorCenter()
+    install_exception_handlers(error_center)
 
     window.apply_color_scheme(
         app.styleHints().colorScheme()
