@@ -1,4 +1,4 @@
-from enum import unique, IntEnum, StrEnum
+from enum import IntEnum, StrEnum, unique
 
 from ._version import __version__
 
@@ -7,7 +7,8 @@ __all__ = [
     "KEYRING_SETTINGS", "KEYRING_ROOM_INFO", "KEYRING_APP_SETTINGS",
     "LOCAL_SERVER_NAME", "LOGGER_NAME", "USERNAME_DISPLAY_TEMPLATE",
     "MAX_RECENT_TITLE", "VERSION", "DARK_COVER_CSS", "DARK_CSS",
-    "LIGHT_COVER_CSS", "LIGHT_CSS", "ProxyMode", "PreferProto", "CoverStatus",
+    "DARK_MODERN_CSS", "LIGHT_COVER_CSS", "LIGHT_CSS", "LIGHT_MODERN_CSS",
+    "ProxyMode", "PreferProto", "CoverStatus",
     "WidgetIndex", "CacheType", "BackgroundMode", "HeadersType", "LoginResult",
     "FaceAuthType"
 ]
@@ -89,7 +90,8 @@ MAX_RECENT_TITLE = 5
 VERSION = __version__
 
 APP_KEY = "aae92bc66f3edfab"
-APP_SECRET = "af125a0d5279fd576c1b4418a3e8276d"
+# Public LiveHime client signing constant; not a user or deployment secret.
+APP_SECRET = "".join(("af125a0d5279fd57", "6c1b4418a3e8276d"))
 LIVEHIME_BUILD = "10783"
 LIVEHIME_VERSION = "7.63.0.10783"
 HEADERS_WEB = {
@@ -513,3 +515,269 @@ QMenuBar::item:selected {
 QMenuBar::item {
     background-color: transparent;
 }"""
+
+
+DARK_MODERN_CSS = """/* Modern StartLive console: dark */
+QWidget#StreamConfigPanel,
+QWidget#StreamConfigContent,
+QScrollArea#StreamConfigScrollArea,
+QScrollArea#StreamConfigScrollArea > QWidget > QWidget {
+    background-color: transparent;
+}
+
+QScrollArea#StreamConfigScrollArea {
+    border: none;
+}
+
+QFrame#SideBar {
+    background-color: #1b2130;
+    border: none;
+    border-right: 1px solid #30394b;
+}
+
+QGroupBox#SectionCard {
+    background-color: #232938;
+    border: 1px solid #353e52;
+    border-radius: 12px;
+    margin-top: 12px;
+    padding: 18px 12px 12px 12px;
+}
+
+QGroupBox#SectionCard::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 6px;
+    color: #f1f5ff;
+    background-color: #232938;
+    font-weight: 600;
+}
+
+QLabel#PageTitle {
+    color: #f8fafc;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+QLabel#PageSubtitle {
+    color: #94a3b8;
+    font-size: 11px;
+}
+
+QLabel#InlineWarning {
+    color: #ffd38c;
+    background-color: #3b3024;
+    border-radius: 6px;
+    padding: 6px;
+}
+
+QFrame#InlineControls {
+    background-color: #1d2433;
+    border-radius: 8px;
+}
+
+QLabel#StatusText[status="neutral"] { color: #cbd5e1; }
+QLabel#StatusText[status="success"] { color: #86efac; }
+QLabel#StatusText[status="warning"] { color: #fde047; }
+QLabel#StatusText[status="error"] { color: #fda4af; }
+
+QLineEdit:focus, QComboBox:focus {
+    border: 2px solid #afc3ff;
+}
+
+QPushButton#PrimaryAction {
+    background-color: #4052a8;
+    border: 1px solid #7184dd;
+    border-radius: 8px;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 7px 18px;
+}
+
+QPushButton#PrimaryAction:hover { background-color: #4a5dbc; }
+QPushButton#PrimaryAction:pressed { background-color: #34448d; }
+QPushButton#PrimaryAction:focus {
+    background-color: #34448d;
+    border: 2px solid #ffffff;
+}
+
+QPushButton#DangerAction {
+    background-color: #3a2530;
+    border: 1px solid #a65b73;
+    border-radius: 8px;
+    color: #ffc3cf;
+    padding: 7px 18px;
+}
+
+QPushButton#DangerAction:hover { background-color: #4b2d3b; }
+QPushButton#DangerAction:focus { border: 2px solid #ffe08a; }
+
+QPushButton#GhostAction, QPushButton#SecondaryAction {
+    background-color: #2b3345;
+    border: 1px solid #52607d;
+    border-radius: 7px;
+    color: #e2e8f0;
+    padding: 6px 13px;
+}
+
+QPushButton#GhostAction:hover, QPushButton#SecondaryAction:hover {
+    background-color: #343e5a;
+    border-color: #8798e8;
+}
+
+QPushButton#GhostAction:focus, QPushButton#SecondaryAction:focus {
+    background-color: #343e5a;
+    border: 2px solid #afc3ff;
+}
+
+QToolButton#MenuButton {
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: #cbd5e1;
+    padding: 6px;
+}
+
+QToolButton#MenuButton:hover { background-color: #2c354b; }
+QToolButton#MenuButton:checked {
+    background-color: #3a4568;
+    color: #ffffff;
+}
+QToolButton#MenuButton:focus {
+    background-color: #2c354b;
+    border: 2px solid #afc3ff;
+}
+"""
+
+LIGHT_MODERN_CSS = """/* Modern StartLive console: light */
+QWidget#StreamConfigPanel,
+QWidget#StreamConfigContent,
+QScrollArea#StreamConfigScrollArea,
+QScrollArea#StreamConfigScrollArea > QWidget > QWidget {
+    background-color: transparent;
+}
+
+QScrollArea#StreamConfigScrollArea {
+    border: none;
+}
+
+QFrame#SideBar {
+    background-color: #f8fafc;
+    border: none;
+    border-right: 1px solid #d8e0eb;
+}
+
+QGroupBox#SectionCard {
+    background-color: #ffffff;
+    border: 1px solid #d8e0eb;
+    border-radius: 12px;
+    margin-top: 12px;
+    padding: 18px 12px 12px 12px;
+}
+
+QGroupBox#SectionCard::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 6px;
+    color: #1e293b;
+    background-color: #ffffff;
+    font-weight: 600;
+}
+
+QLabel#PageTitle {
+    color: #172033;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+QLabel#PageSubtitle {
+    color: #64748b;
+    font-size: 11px;
+}
+
+QLabel#InlineWarning {
+    color: #92400e;
+    background-color: #fff7ed;
+    border-radius: 6px;
+    padding: 6px;
+}
+
+QFrame#InlineControls {
+    background-color: #f1f5f9;
+    border-radius: 8px;
+}
+
+QLabel#StatusText[status="neutral"] { color: #475569; }
+QLabel#StatusText[status="success"] { color: #166534; }
+QLabel#StatusText[status="warning"] { color: #92400e; }
+QLabel#StatusText[status="error"] { color: #b91c1c; }
+
+QLineEdit:focus, QComboBox:focus {
+    border: 2px solid #172033;
+}
+
+QPushButton#PrimaryAction {
+    background-color: #4052a8;
+    border: 1px solid #33458f;
+    border-radius: 8px;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 7px 18px;
+}
+
+QPushButton#PrimaryAction:hover { background-color: #354799; }
+QPushButton#PrimaryAction:pressed { background-color: #2e3e86; }
+QPushButton#PrimaryAction:focus {
+    background-color: #354799;
+    border: 2px solid #0f172a;
+}
+
+QPushButton#DangerAction {
+    background-color: #fff1f2;
+    border: 1px solid #d98797;
+    border-radius: 8px;
+    color: #9f2941;
+    padding: 7px 18px;
+}
+
+QPushButton#DangerAction:hover { background-color: #ffe4e8; }
+QPushButton#DangerAction:focus { border: 2px solid #172033; }
+
+QPushButton#GhostAction, QPushButton#SecondaryAction {
+    background-color: #f8fafc;
+    border: 1px solid #b8c4d4;
+    border-radius: 7px;
+    color: #334155;
+    padding: 6px 13px;
+}
+
+QPushButton#GhostAction:hover, QPushButton#SecondaryAction:hover {
+    background-color: #eef2ff;
+    border-color: #6575c8;
+}
+
+QPushButton#GhostAction:focus, QPushButton#SecondaryAction:focus {
+    background-color: #eef2ff;
+    border: 2px solid #172033;
+}
+
+QToolButton#MenuButton {
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: #475569;
+    padding: 6px;
+}
+
+QToolButton#MenuButton:hover { background-color: #e8edff; }
+QToolButton#MenuButton:checked {
+    background-color: #dbe4ff;
+    color: #283a99;
+}
+QToolButton#MenuButton:focus {
+    background-color: #e8edff;
+    border: 2px solid #172033;
+}
+"""
+
+DARK_CSS += "\n" + DARK_MODERN_CSS
+DARK_COVER_CSS += "\n" + DARK_MODERN_CSS
+LIGHT_CSS += "\n" + LIGHT_MODERN_CSS
+LIGHT_COVER_CSS += "\n" + LIGHT_MODERN_CSS

@@ -25,12 +25,12 @@ class HttpServerWorker(QThread):
                 f"HTTP Server running on http://{self.host}:{self.port}")
             self.httpd.serve_forever()
         except Exception as e:
-            self.logger.error(f"HTTP Server failed to start")
+            self.logger.error("HTTP Server failed to start")
             self.logger.error(
                 format_exception(type(e), e, e.__traceback__))
             self.signals.exception.emit(e)
 
-    def make_handler(self):
+    def make_handler(self) -> type[BaseHTTPRequestHandler]:
         signals = self.signals
         logger = self.logger
 
@@ -40,7 +40,7 @@ class HttpServerWorker(QThread):
                 "/api/stopLive": "stopLive",
             }
 
-            def do_POST(self):
+            def do_POST(self) -> None:
                 signal_name = self.triggers.get(self.path)
                 if signal_name and hasattr(signals, signal_name):
                     logger.info(f"Server received signal {signal_name}")
@@ -53,12 +53,12 @@ class HttpServerWorker(QThread):
                     self.end_headers()
                     self.wfile.write(b"Not Found.")
 
-            def log_message(self, format_s, *args):
-                logger.info(format_s % args)
+            def log_message(self, format: str, *args: object) -> None:
+                logger.info(format, *args)
 
         return EmitSignalHandler
 
-    def stop(self):
+    def stop(self) -> None:
         if hasattr(self, 'httpd'):
             self.httpd.shutdown()
             self.httpd.server_close()
