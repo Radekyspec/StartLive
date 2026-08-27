@@ -1,17 +1,7 @@
 name: WinGet submission on release
 
 on:
-  release:
-    types: [released]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: Stable release tag to submit
-        required: true
-        type: string
-
-permissions:
-  contents: read
 
 jobs:
   winget:
@@ -25,18 +15,15 @@ jobs:
     env:
       WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.PT_WINGET }}
 
-    # Release events must be stable; manual dispatches supply an explicit stable tag.
-    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
+    # Only submit stable releases
+    if: ${{ !github.event.release.prerelease }}
     steps:
       - name: Upgrade the package Radekyspec.StartLive
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
-          # Resolve release data through the API so event/input values never expand into the script.
-          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" | ConvertFrom-Json
-          $installerUrl = $release.assets | Where-Object -Property name -match 'StartLive-Setup.exe' | Select -ExpandProperty browser_download_url
-          $packageVersion = $release.tag_name
+          # Get installer info from GitHub release event
+          $assets = '${{ toJSON(github.event.release.assets) }}' | ConvertFrom-Json
+          $installerUrl = $assets | Where-Object -Property name -match 'StartLive-Setup.exe' | Select -ExpandProperty browser_download_url
+          $packageVersion = ${{ toJSON(github.event.release.tag_name) }}
 
           # Update package using wingetcreate
           curl.exe -JLO https://aka.ms/wingetcreate/latest

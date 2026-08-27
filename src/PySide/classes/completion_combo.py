@@ -10,7 +10,6 @@ class CompletionComboBox(QComboBox):
         self.setEditable(True)
         self.items = items.copy()
         self._completion_model = QStringListModel(items, self)
-        self.setModel(self._completion_model)
         self._completion_completer = QCompleter(self._completion_model, self)
         self.setCompleter(self._completion_completer)
         line_edit = self.lineEdit()
@@ -19,14 +18,15 @@ class CompletionComboBox(QComboBox):
         super().addItems(items)
 
     def addItems(self, texts: Sequence[str], /) -> None:
-        super().addItems(self.items)
-        self.items.extend(texts)
+        additions = list(texts)
+        super().addItems(additions)
+        self.items.extend(additions)
         self._completion_model.setStringList(self.items)
 
-    def clear(self):
+    def clear(self) -> None:
+        super().clear()
         self.items.clear()
         self._completion_model.setStringList([])
-        super().clear()
 
     def update_completer(self, text):
         filtered_items = [item for item in self.items

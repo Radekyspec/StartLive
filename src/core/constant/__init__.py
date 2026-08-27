@@ -2,34 +2,6 @@ from enum import IntEnum, StrEnum, unique
 
 from ._version import __version__
 
-__all__ = [
-    "KEYRING_SERVICE_NAME",
-    "KEYRING_COOKIES",
-    "KEYRING_COOKIES_INDEX",
-    "KEYRING_SETTINGS",
-    "KEYRING_ROOM_INFO",
-    "KEYRING_APP_SETTINGS",
-    "LOCAL_SERVER_NAME",
-    "LOGGER_NAME",
-    "USERNAME_DISPLAY_TEMPLATE",
-    "MAX_RECENT_TITLE",
-    "VERSION",
-    "DARK_COVER_CSS",
-    "DARK_CSS",
-    "LIGHT_COVER_CSS",
-    "LIGHT_CSS",
-    "ProxyMode",
-    "PreferProto",
-    "CoverStatus",
-    "WidgetIndex",
-    "CacheType",
-    "BackgroundMode",
-    "HeadersType",
-    "LoginResult",
-    "FaceAuthType",
-]
-
-
 @unique
 class ProxyMode(IntEnum):
     NONE = 0

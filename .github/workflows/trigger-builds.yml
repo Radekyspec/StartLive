@@ -8,11 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: write
-      contents: none
+      contents: read
     
     steps:
       - name: Trigger compile-standalone
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -24,7 +24,7 @@ jobs:
             })
 
       - name: Trigger compile-universal
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
