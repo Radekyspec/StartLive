@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from contextlib import suppress
 # module import
 from ipaddress import ip_address, IPv6Address
 from threading import Condition
@@ -18,7 +17,8 @@ from src.PySide.classes import FocusAwareLineEdit, \
 from src.PySide.interface_adapters.announce import AnnounceUpdatePresenter
 from src.PySide.interface_adapters.area import FetchRecentAreaPresenter, \
     AreaUpdatePresenter
-from src.PySide.interface_adapters.cover import FetchCoverPresenter
+from src.PySide.interface_adapters.cover import (CoverStateUpdatePresenter,
+                                                   FetchCoverPresenter)
 from src.PySide.interface_adapters.live import StartLivePresenter, \
     StopLivePresenter
 from src.PySide.interface_adapters.obs_ws import ObsConnectorPresenter
@@ -30,7 +30,7 @@ from src.core import app_state
 from src.core.constant import CoverStatus
 from src.core.workers.announce import AnnounceUpdateWorker
 from src.core.workers.area import FetchRecentAreaWorker, AreaUpdateWorker
-from src.core.workers.cover import FetchCoverWorker
+from src.core.workers.cover import CoverStateUpdateWorker, FetchCoverWorker
 from src.core.workers.live import StartLiveWorker, StopLiveWorker
 from src.core.workers.obs_ws import ObsDaemonWorker, ObsConnectorWorker
 from src.core.workers.title import TitleUpdateWorker
@@ -53,6 +53,7 @@ class StreamConfigPanel(QWidget):
         self.obs_btn_state.obsDisconnected.connect(self._obs_btn_disconnected)
         self.obs_btn_state.obsConnecting.connect(self._obs_btn_connecting)
         self.cover_crop_widget: CoverCropWidget | None = None
+        self._cover_audit_monitor_active = False
         self.main_layout = QVBoxLayout()
         self.setLayout(self.main_layout)
         self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -407,6 +408,20 @@ class StreamConfigPanel(QWidget):
                 f"审核未通过: {app_state.room_info['cover_audit_reason']}")
             self.cover_status.setStyleSheet("color: red")
 
+    def ensure_cover_audit_monitor(self):
+        if self._cover_audit_monitor_active:
+            return
+        self._cover_audit_monitor_active = True
+        try:
+            self.parent_window.add_thread(
+                CoverStateUpdateWorker(CoverStateUpdatePresenter(self)))
+        except Exception:
+            self._cover_audit_monitor_active = False
+            raise
+
+    def finish_cover_audit_monitor(self):
+        self._cover_audit_monitor_active = False
+
     @Slot()
     def _save_title(self):
         self.save_title_btn.setEnabled(False)
@@ -416,8 +431,6 @@ class StreamConfigPanel(QWidget):
 
     @Slot()
     def _edit_cover(self):
-        if app_state.room_info["cover_status"] == 0:
-            return
         self.cover_edit_btn.setEnabled(False)
         self.cover_crop_widget = CoverCropWidget(self)
         self.cover_crop_widget.destroyed.connect(self._on_cover_exit)
@@ -427,12 +440,8 @@ class StreamConfigPanel(QWidget):
 
     @Slot()
     def _on_cover_exit(self):
-        self.cover_edit_btn.setEnabled(True)
-        with suppress(RuntimeError):
-            self.cover_crop_widget.hide()
-        with suppress(RuntimeError):
-            self.cover_crop_widget.deleteLater()
         self.cover_crop_widget = None
+        self.cover_edit_btn.setEnabled(True)
 
     @Slot()
     def _save_announce(self):

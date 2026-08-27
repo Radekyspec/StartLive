@@ -1,4 +1,9 @@
+from typing import TYPE_CHECKING
+
 from src.core.workers.base import Presenter
+
+if TYPE_CHECKING:
+    from src.PySide.window.stream_config import StreamConfigPanel
 
 
 class CoverStateUpdatePresenter(Presenter):
@@ -7,8 +12,12 @@ class CoverStateUpdatePresenter(Presenter):
         self._view = view
 
     def prepare_success_view(self):
-        self._view.cover_audit_state()
+        try:
+            self._view.cover_audit_state()
+        finally:
+            self._view.finish_cover_audit_monitor()
 
-    def prepare_fail_view(self, exception: Exception): ...
+    def prepare_fail_view(self, exception: Exception):
+        self._view.finish_cover_audit_monitor()
 
     def prepare_progress_view(self, *args, **kwargs): ...

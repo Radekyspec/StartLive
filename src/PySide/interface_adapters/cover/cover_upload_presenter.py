@@ -1,6 +1,9 @@
-from src.PySide.interface_adapters.cover import CoverStateUpdatePresenter
+from typing import TYPE_CHECKING
+
 from src.core.workers.base import Presenter
-from src.core.workers.cover import CoverStateUpdateWorker
+
+if TYPE_CHECKING:
+    from src.PySide.window.stream_config import StreamConfigPanel
 
 
 class CoverUploadPresenter(Presenter):
@@ -10,13 +13,15 @@ class CoverUploadPresenter(Presenter):
 
     def prepare_success_view(self, *args, **kwargs):
         self._view.cover_audit_state()
-        self._view.parent_window.add_thread(
-            CoverStateUpdateWorker(CoverStateUpdatePresenter(self._view)))
+        self._view.ensure_cover_audit_monitor()
         if self._view.cover_crop_widget is not None:
             self._view.cover_crop_widget.close()
 
     def prepare_fail_view(self, exception: Exception):
-        self._view.cover_crop_widget.btn_upload.setText("保存封面")
-        self._view.cover_crop_widget.btn_upload.setEnabled(True)
+        widget = self._view.cover_crop_widget
+        if widget is None:
+            return
+        widget.btn_upload.setText("保存封面")
+        widget.btn_upload.setEnabled(True)
 
     def prepare_progress_view(self, *args, **kwargs): ...
