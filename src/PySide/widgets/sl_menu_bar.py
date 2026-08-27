@@ -4,29 +4,29 @@ from shutil import rmtree
 from PySide6.QtCore import Slot, QUrl, Signal
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices
 from PySide6.QtWidgets import QMenuBar, QMenu
-from keyring import delete_password, set_password
+from keyring import delete_password
 from keyring.errors import PasswordDeleteError
 
 from src.PySide.log import get_logger, get_log_path
 from src.core import app_state
-from src.core.app_state import dumps
-from src.core.cache import cache_base_dir
+from src.core.cache import cache_base_dir, del_cache_user
 from src.core.constant import *
-from src.core.workers.credentials import CredentialManagerWorker
+from src.core.credentials import CredentialStore
 
 
 class StartLiveMenuBar(QMenuBar):
-    cookieDeleted = Signal(bool, bool)
+    cookieDeleted = Signal(int, bool)
     obsSettingsDeleted = Signal()
     appSettingsDeleted = Signal()
     bgDeleted = Signal()
     credDeleted = Signal(bool)
-    accountSwitch = Signal()
+    accountSwitch = Signal(int)
     accountAdded = Signal()
 
     def __init__(self, parent=None, /):
         super().__init__(parent)
         self.logger = get_logger(self.__class__.__name__)
+        self._store = CredentialStore()
         self._tools_menu = QMenu("文件", self)
         _open_log_folder_action = QAction("显示日志文件", self)
         _open_log_folder_action.triggered.connect(self._open_log_folder)
@@ -94,38 +94,23 @@ class StartLiveMenuBar(QMenuBar):
 
     @Slot()
     def delete_cookies(self):
-        # Goes here when manually delete cookies or when cookies are expired.
-        # If cookies are expired, we allow user to delete the expired cookies
-        # and reset the scanning status to allow retrying scan without
-        # restarting the app. If the user manually deletes cookies,
-        # we also allow deleting cookies and reset the scanning status
-        # in case the user wants to switch an account after deleting cookies.
-        self.logger.info(
-            f"scanned={app_state.scan_status.scanned}, "
-            f"expired={app_state.scan_status.expired}")
-        if not app_state.scan_status["scanned"] and \
-                not app_state.scan_status["expired"]:
+        if app_state.cookie_state.is_exhausted():
             return
-        expired = app_state.scan_status["expired"]
-        cookie_index = CredentialManagerWorker.get_cookie_indices()
-        self.logger.info(f"origin cookie index: {cookie_index}")
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME,
-                            cookie_index[
-                                app_state.cookie_state.current_cookie_idx])
-        cookie_index.remove(
-            cookie_index[app_state.cookie_state.current_cookie_idx])
-        self.logger.info(f"new cookie index: {cookie_index}")
-        set_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX,
-                     dumps(cookie_index))
-        if not expired:
-            # delete cookies manually
-            app_state.cookie_state.current_cookie_idx = max(0,
-                                                            app_state.cookie_state.current_cookie_idx - 1)
+
+        current = app_state.cookie_state.current_cookie_idx
+        key = self._store.load_index()[current]
+        removed = self._store.remove(key)
+        del_cache_user(removed.uid)
+        remaining = list(removed.remaining_keys)
+        target = (
+            max(0, min(removed.former_index - 1, len(remaining) - 1))
+            if remaining
+            else 0
+        )
         self._populate_account_menu()
-        CredentialManagerWorker.reset_default()
-        self.cookieDeleted.emit(app_state.cookie_state.cookie_index_len == 0,
-                                expired)
+        result = (target, not remaining)
+        self.cookieDeleted.emit(*result)
+        return result
 
     @Slot()
     def _delete_settings(self):
@@ -142,13 +127,9 @@ class StartLiveMenuBar(QMenuBar):
 
     @Slot()
     def _delete_cred(self):
+        self._store.clear_all()
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
-        for cookie in CredentialManagerWorker.get_cookie_indices():
-            with suppress(PasswordDeleteError):
-                delete_password(KEYRING_SERVICE_NAME, cookie)
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_COOKIES_INDEX)
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
         if cache_base_dir(CacheType.CONFIG).is_dir():
@@ -161,14 +142,14 @@ class StartLiveMenuBar(QMenuBar):
 
     @Slot()
     def _switch_account(self, action: QAction):
-        idx = action.data()
-        self.logger.info(f"select account index: {idx}")
-        if idx == app_state.cookie_state.cookie_index_len or not self._ready_switch_account():
-            return
-        elif idx != app_state.cookie_state.current_cookie_idx:
-            app_state.cookie_state.current_cookie_idx = idx
-            CredentialManagerWorker.reset_default()
-            self.accountSwitch.emit()
+        target = action.data()
+        self.logger.info(f"select account index: {target}")
+        if (
+            target != app_state.cookie_state.current_cookie_idx
+            and target != app_state.cookie_state.cookie_index_len
+            and self._ready_switch_account()
+        ):
+            self.accountSwitch.emit(target)
 
     def _ready_switch_account(self):
         """
@@ -197,6 +178,4 @@ class StartLiveMenuBar(QMenuBar):
         if app_state.cookie_state.cookie_index_len == 0 or \
                 app_state.cookie_state.is_exhausted():
             return
-        app_state.cookie_state.move_to_end()
-        CredentialManagerWorker.reset_default()
         self.accountAdded.emit()

@@ -41,7 +41,6 @@ from src.PySide.web_server import HttpServerWorker
 from src.PySide.widgets import StartLiveMenuBar, LogViewer, SideBar
 from src.core import app_state
 from src.core.app_state import dumps
-from src.core.cache import del_cache_user
 from src.core.constant import *
 from src.core.workers import WorkerManager
 from src.core.workers.base import LongLiveWorker, BaseWorker
@@ -212,18 +211,28 @@ class MainWindow(SingleInstanceWindow):
         )
 
     @Slot()
-    def setup_ui(self, *, is_new: bool = False):
+    def setup_ui(self, *, is_new: bool = False,
+                 cookie_index: int | None = None):
+        target = (app_state.cookie_state.current_cookie_idx
+                  if cookie_index is None else cookie_index)
+        current_panel = self.panel
         self._logged_in = False
         if app_state.obs_client is not None:
             ObsDaemonWorker.disconnect_obs()
-            self.panel.obs_btn_state.obsDisconnected.emit()
+            if current_panel is not None:
+                current_panel.obs_btn_state.obsDisconnected.emit()
 
-        if self.panel is not None:
+        if current_panel is not None:
             self.tray_start_live_action.triggered.disconnect(
-                self.panel.start_live)
+                current_panel.start_live)
             self.tray_stop_live_action.triggered.disconnect(
-                self.panel.stop_live)
+                current_panel.stop_live)
             self._restart_thread_manager()
+
+        app_state.cookies_dict.clear()
+        app_state.cookie_state.move_to_end()
+        CredentialManagerWorker.reset_default()
+        self._credential_target_idx = target
 
         self.tray_start_live_action.setEnabled(True)
         self.tray_stop_live_action.setEnabled(False)
@@ -299,7 +308,7 @@ class MainWindow(SingleInstanceWindow):
         # Start fetching QR and begin polling thread
         self.credential_worker = CredentialManagerWorker(
             CredentialManagerPresenter(self, self._login_state),
-            app_state.cookie_state.current_cookie_idx, is_new)
+            target, is_new)
         self.login_worker = None
         self.add_thread(self.credential_worker)
 
@@ -481,14 +490,11 @@ class MainWindow(SingleInstanceWindow):
             self.add_thread(FetchStreamTimeShiftWorker(
                 FetchTimeShiftPresenter(self._settings_page.delay_edit)))
 
-    @Slot(int, bool, bool)
-    def _on_delete_cookies(self, is_new: bool, expired: bool):
-        if not expired:
-            del_cache_user(app_state.cookies_dict["DedeUserID"])
-            QMessageBox.information(self, "账号退出", "账号退出成功")
-            self.setup_ui(is_new=is_new)
-        self.logger.info(
-            f"Cookie {app_state.cookies_dict['DedeUserID']} deleted.")
+    @Slot(int, bool)
+    def _on_delete_cookies(self, target: int, is_empty: bool):
+        QMessageBox.information(self, "账号退出", "账号退出成功")
+        self.setup_ui(cookie_index=target, is_new=is_empty)
+        self.logger.info("Credential manually deleted.")
 
     @Slot()
     def _on_delete_settings(self):
@@ -512,9 +518,9 @@ class MainWindow(SingleInstanceWindow):
         self._thread_manager.shutdown(wait=False)
         QApplication.quit()
 
-    @Slot()
-    def _on_switch_account(self):
-        self.setup_ui()
+    @Slot(int)
+    def _on_switch_account(self, target: int):
+        self.setup_ui(cookie_index=target)
 
     @staticmethod
     def _ready_switch_account():
@@ -574,13 +580,13 @@ class MainWindow(SingleInstanceWindow):
             # Needs update credential
             self.logger.info("load new credential")
             self._fetch_qr()
-        elif app_state.scan_status["expired"]:
-            self.logger.info("credential expired")
-            self.menu_bar.delete_cookies()
-            self._fetch_qr()
         else:
             self.login_label.setText("登录时发生错误！请重试...")
-            self.status_label.clicked.connect(self.setup_ui)
+            self.status_label.clicked.connect(
+                lambda: self.setup_ui(
+                    cookie_index=self._credential_target_idx
+                )
+            )
 
     def _fetch_qr(self, retry: bool = False):
         # Start fetching QR and begin polling thread
