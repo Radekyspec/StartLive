@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Check-out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Read version from _version.py
         shell: python
@@ -45,37 +45,38 @@ jobs:
           echo "APP_VERSION=${VERSION}+${SHORT_SHA}" >> "$GITHUB_ENV"
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         if: matrix.os != 'macos-latest'
         with:
-          python-version: '3.14.6' # Version range or exact version of a Python version to use, using SemVer's version range syntax
-          architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
-          cache: 'pip'
-          cache-dependency-path: |
-            **/requirements*.txt
+          python-version: '3.14.6'
+          architecture: 'x64'
 
       - name: Setup Python for ARM
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.14.6' # Version range or exact version of a Python version to use, using SemVer's version range syntax
-          architecture: 'arm64' # optional x64 or x86. Defaults to x64 if not specified
-          cache: 'pip'
-          cache-dependency-path: |
-            **/requirements*.txt
+          python-version: '3.14.6'
+          architecture: 'arm64'
         if: matrix.os == 'macos-latest'
 
-      - name: Install Dependencies
-        run: |
-          pip install -r requirements.txt
+      - name: Setup uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.12.6'
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
-      - name: Install ImageIO for Mac
-        if: matrix.os != 'windows-latest'
-        run: |
-          pip install imageio
+      - name: Install locked dependencies
+        run: uv sync --locked --no-dev --group build --python 3.14.6
+
+      - name: Add uv environment to PATH
+        shell: bash
+        run: >-
+          uv run --no-sync python -c
+          'import os, sysconfig;
+          open(os.environ["GITHUB_PATH"], "a").write(sysconfig.get_path("scripts") + "\n")'
 
       - name: Generate _version.py
-        run: |
-          python tools/write_version.py
+        run: uv run --no-sync python tools/write_version.py
 
       - name: Download UPX (Windows)
         if: matrix.os == 'windows-latest'
@@ -91,7 +92,7 @@ jobs:
 
       - name: Build Executable for Windows
         if: matrix.os == 'windows-latest'
-        uses: Nuitka/Nuitka-Action@main
+        uses: Nuitka/Nuitka-Action@99c9d3ab258c7008c0604617d925574101327e5d # main (pinned)
         with:
           nuitka-version: main
           script-name: StartLive.py
@@ -115,7 +116,7 @@ jobs:
           deployment: true
 
       - name: Build Executable for Mac
-        uses: Nuitka/Nuitka-Action@main
+        uses: Nuitka/Nuitka-Action@99c9d3ab258c7008c0604617d925574101327e5d # main (pinned)
         if: matrix.os != 'windows-latest'
         with:
           nuitka-version: main
@@ -134,7 +135,7 @@ jobs:
           deployment: true
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-${{ runner.arch }}
           path: |

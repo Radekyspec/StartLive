@@ -1,0 +1,39 @@
+[project]
+name = "startlive"
+dynamic = ["version"]
+description = "A cross-platform Bilibili streaming launcher"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+license = "GPL-3.0-only"
+dependencies = [
+    "PySide6~=6.11.0",
+    "pillow~=12.2.0",
+    "qrcode~=8.2",
+    "requests[socks]~=2.32.5",
+    "obsws-python",
+    "keyring~=25.6.0",
+    "darkdetect~=0.8.0",
+    "semver~=3.0.4",
+    "PyQtDarkTheme-fork~=2.3.6",
+    "velopack==1.2.0",
+    "cryptography~=49.0.0",
+]
+
+[dependency-groups]
+build = [
+    "imageio>=2.37,<3; sys_platform == 'darwin'",
+]
+dev = [
+    "ruff~=0.15.4",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+# Start with fatal syntax and Pyflakes checks that pass the existing codebase.
+# Broader rules can be enabled incrementally without rewriting production code.
+select = ["E9", "F63", "F7", "F822", "F823"]
