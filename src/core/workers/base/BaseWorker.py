@@ -22,6 +22,7 @@ class BaseWorker:
 
     def __init__(self, /, name: str, *, with_session: bool = True,
                  headers_type: HeadersType = HeadersType.APP,
+                 inherit_account_cookies: bool = True,
                  presenter: Optional[Union[Presenter, list[Presenter]]] = None):
         super().__init__()
         self.name = name
@@ -32,7 +33,10 @@ class BaseWorker:
         else:
             self._presenters = []
         if with_session:
-            self._session = create_session(headers_type)
+            self._session = create_session(
+                headers_type,
+                inherit_account_cookies=inherit_account_cookies,
+            )
         else:
             self._session = None
 
