@@ -37,7 +37,7 @@ from src.PySide.interface_adapters.live_delay import FetchTimeShiftPresenter
 from src.PySide.interface_adapters.login import FetchQRPresenter, \
     FetchLoginPresenter
 from src.PySide.log import get_logger, init_logger
-from src.PySide.states import LoginState, ShutdownNotifier
+from src.PySide.states import LoginState, RestartState
 from src.PySide.web_server import HttpServerWorker
 from src.PySide.widgets import StartLiveMenuBar, LogViewer, SideBar
 from src.core import app_state
@@ -389,7 +389,7 @@ class MainWindow(SingleInstanceWindow):
 
         event_loop = QEventLoop(self)
         completion: Future[None] = Future()
-        notifier = ShutdownNotifier()
+        notifier = RestartState()
         notifier.finished.connect(
             event_loop.quit,
             Qt.ConnectionType.QueuedConnection,

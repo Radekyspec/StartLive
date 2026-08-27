@@ -1,5 +1,5 @@
 from PySide6.QtCore import QObject, Signal
 
 
-class ShutdownNotifier(QObject):
+class RestartState(QObject):
     finished = Signal()
