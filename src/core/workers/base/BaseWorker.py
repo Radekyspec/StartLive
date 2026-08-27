@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import final
 
-from requests import Session
+from requests.sessions import Session
 
 from src.core.app_state import create_session
 from src.core.constant import HeadersType
