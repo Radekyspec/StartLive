@@ -1,23 +1,23 @@
 from typing import TYPE_CHECKING
 
-from src.PySide.interface_adapters.title import RecentTitlePresenter
-from src.PySide.states import LoginState
 from src.core import app_state
 from src.core.constant import CoverStatus
 from src.core.workers.base import Presenter
 from src.core.workers.title import LoadRecentTitleWorker
+from src.PySide.interface_adapters.title import RecentTitlePresenter
+from src.PySide.states import LoginState
 
 if TYPE_CHECKING:
     from src.PySide.window.stream_config import StreamConfigPanel
 
 
 class FetchPreLivePresenter(Presenter):
-    def __init__(self, view: "StreamConfigPanel", state: LoginState):
+    def __init__(self, view: "StreamConfigPanel", state: LoginState) -> None:
         super().__init__()
         self._view = view
         self._state = state
 
-    def prepare_success_view(self):
+    def prepare_success_view(self) -> None:
         title_text = app_state.room_info["title"]
         app_state.room_info["recent_title"].insert(0, title_text)
         self._view.title_input.currentTextChanged.connect(
@@ -38,8 +38,8 @@ class FetchPreLivePresenter(Presenter):
             self._view.ensure_cover_audit_monitor()
         self._state.roomUpdated.emit()
 
-    def prepare_fail_view(self, exception: Exception):
+    def prepare_fail_view(self, exception: Exception) -> None:
         ...
 
-    def prepare_progress_view(self, *args, **kwargs):
+    def prepare_progress_view(self, *args, **kwargs) -> None:
         ...

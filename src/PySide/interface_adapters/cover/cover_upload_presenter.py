@@ -11,13 +11,13 @@ class CoverUploadPresenter(Presenter):
         super().__init__()
         self._view = view
 
-    def prepare_success_view(self, *args, **kwargs):
+    def prepare_success_view(self, *args, **kwargs) -> None:
         self._view.cover_audit_state()
         self._view.ensure_cover_audit_monitor()
         if self._view.cover_crop_widget is not None:
             self._view.cover_crop_widget.close()
 
-    def prepare_fail_view(self, exception: Exception):
+    def prepare_fail_view(self, exception: Exception) -> None:
         widget = self._view.cover_crop_widget
         if widget is None:
             return

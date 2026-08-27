@@ -1,39 +1,48 @@
-# -*- coding: utf-8 -*-
 # module import
-from ipaddress import ip_address, IPv6Address
+from ipaddress import IPv6Address, ip_address
 from threading import Condition
 
 # package import
-from PySide6.QtCore import (Qt, Slot)
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QIntValidator
-from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
-                               QHBoxLayout,
-                               QLabel, QLineEdit, QPushButton,
-                               QVBoxLayout, QWidget,
-                               QApplication, QFrame)
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
-from src.PySide.classes import FocusAwareLineEdit, \
-    CompletionComboBox
-from src.PySide.interface_adapters.announce import AnnounceUpdatePresenter
-from src.PySide.interface_adapters.area import FetchRecentAreaPresenter, \
-    AreaUpdatePresenter
-from src.PySide.interface_adapters.cover import (CoverStateUpdatePresenter,
-                                                   FetchCoverPresenter)
-from src.PySide.interface_adapters.live import StartLivePresenter, \
-    StopLivePresenter
-from src.PySide.interface_adapters.obs_ws import ObsConnectorPresenter
-from src.PySide.interface_adapters.title import TitleUpdatePresenter
-from src.PySide.states import ObsBtnState, StreamState
-from src.PySide.window import AreaPickerPanel, CoverCropWidget
 # local package import
 from src.core import app_state
 from src.core.constant import CoverStatus
 from src.core.workers.announce import AnnounceUpdateWorker
-from src.core.workers.area import FetchRecentAreaWorker, AreaUpdateWorker
+from src.core.workers.area import AreaUpdateWorker, FetchRecentAreaWorker
 from src.core.workers.cover import CoverStateUpdateWorker, FetchCoverWorker
 from src.core.workers.live import StartLiveWorker, StopLiveWorker
-from src.core.workers.obs_ws import ObsDaemonWorker, ObsConnectorWorker
+from src.core.workers.obs_ws import ObsConnectorWorker, ObsDaemonWorker
 from src.core.workers.title import TitleUpdateWorker
+from src.PySide.classes import CompletionComboBox, FocusAwareLineEdit
+from src.PySide.interface_adapters.announce import AnnounceUpdatePresenter
+from src.PySide.interface_adapters.area import (
+    AreaUpdatePresenter,
+    FetchRecentAreaPresenter,
+)
+from src.PySide.interface_adapters.cover import (
+    CoverStateUpdatePresenter,
+    FetchCoverPresenter,
+)
+from src.PySide.interface_adapters.live import StartLivePresenter, StopLivePresenter
+from src.PySide.interface_adapters.obs_ws import ObsConnectorPresenter
+from src.PySide.interface_adapters.title import TitleUpdatePresenter
+from src.PySide.states import ObsBtnState, StreamState
+from src.PySide.window import AreaPickerPanel, CoverCropWidget
 
 
 class StreamConfigPanel(QWidget):
@@ -334,9 +343,9 @@ class StreamConfigPanel(QWidget):
         app_state.stream_status["stream_addr"] = None
         self.addr_input.setText("")
         self.key_input.setText("")
-        if app_state.obs_client is not None:
-            if self.obs_auto_live_checkbox.isChecked():
-                app_state.obs_req_queue.put(("StopStream", {}))
+        if (app_state.obs_client is not None
+                and self.obs_auto_live_checkbox.isChecked()):
+            app_state.obs_req_queue.put(("StopStream", {}))
         self.parent_window.add_thread(StopLiveWorker(StopLivePresenter(self)))
 
     def fill_stream_info(self, addr: str, key: str):
@@ -369,7 +378,8 @@ class StreamConfigPanel(QWidget):
                 if isinstance(ip_object, IPv6Address):
                     obs_host = f"[{obs_host}]"
             except ValueError:
-                pass
+                # Host names require no IPv6 bracket normalization.
+                obs_host = str(obs_host)
             connector = ObsConnectorWorker(
                 ObsConnectorPresenter(self, self.obs_btn_state, self._cond),
                 host=obs_host,
@@ -408,7 +418,7 @@ class StreamConfigPanel(QWidget):
                 f"审核未通过: {app_state.room_info['cover_audit_reason']}")
             self.cover_status.setStyleSheet("color: red")
 
-    def ensure_cover_audit_monitor(self):
+    def ensure_cover_audit_monitor(self) -> None:
         if self._cover_audit_monitor_active:
             return
         self._cover_audit_monitor_active = True
@@ -419,7 +429,7 @@ class StreamConfigPanel(QWidget):
             self._cover_audit_monitor_active = False
             raise
 
-    def finish_cover_audit_monitor(self):
+    def finish_cover_audit_monitor(self) -> None:
         self._cover_audit_monitor_active = False
 
     @Slot()
@@ -439,7 +449,7 @@ class StreamConfigPanel(QWidget):
         self.cover_crop_widget.show()
 
     @Slot()
-    def _on_cover_exit(self):
+    def _on_cover_exit(self) -> None:
         self.cover_crop_widget = None
         self.cover_edit_btn.setEnabled(True)
 
