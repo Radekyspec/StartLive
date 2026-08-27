@@ -53,40 +53,30 @@ Velopack 更新器，因此无需单独安装 Velopack。
 
 ### 前置要求
 
-* `3.11 <= Python <= 3.13`
-* `Python 3.13.7` 经测试可用, 推荐使用`3.12.10`
-* 桌面端环境
-* `PySide6 (Qt for Python)` [支持的架构](https://wiki.qt.io/Qt_for_Python)
-* 受 [keyring](https://pypi.org/project/keyring/) 支持的密钥后端存储服务
+- `3.12 <= Python < 3.15`（仓库默认使用 Python 3.14）
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/)
+- 桌面端环境
+- `PySide6 (Qt for Python)` [支持的架构](https://wiki.qt.io/Qt_for_Python)
+- 受 [keyring](https://pypi.org/project/keyring/) 支持的密钥后端存储服务
   - 在 `Windows` 上通常为系统自带的 [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)
-  - 在 `macOS` 上通常为系统自带的 [Keychain钥匙串](https://en.wikipedia.org/wiki/Keychain_%28software%29)
+  - 在 `macOS` 上通常为系统自带的 [Keychain 钥匙串](https://en.wikipedia.org/wiki/Keychain_%28software%29)
+  - 在 `Linux` 上需要安装并解锁 Secret Service 服务，例如 GNOME Keyring 或 KWallet；可运行 `uv run keyring diagnose` 检查当前后端
 
 ### 安装 & 运行
 
-> [!NOTE]
-> 只有 CPython 官方解释器和 pip
-> 包管理器（可在 [Python.org](https://www.python.org) 下载）经过测试且支持
->
-> 如果在安装依赖时遇到问题，请先排查是否使用了正确的包管理器
-
-* 创建虚拟环境
+`uv` 会创建 `.venv`，并按照 `uv.lock` 中记录的版本安装依赖：
 
 ```shell
-python -m venv venv
+git clone https://github.com/Radekyspec/StartLive.git
+cd StartLive
+uv sync --locked
+uv run python StartLive.py
 ```
 
-- **Windows**: 
+提交代码前，请运行 Ruff：
 
 ```shell
-.\venv\Script\pip.exe install -r .\requirements.txt
-.\venv\Script\python.exe .\StartLive.py
-```
-
-- **macOS / Linux**:
-
-```shell
-./venv/bin/pip install -r ./requirements.txt
-./venv/bin/python ./StartLive.py
+uv run ruff check .
 ```
 
 > 请注意，Bilibili目前没有对所有用户支持HEVC编码推流，如果推流失败可以检查一下编码。

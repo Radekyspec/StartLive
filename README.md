@@ -57,41 +57,30 @@ does not need to be installed separately.
 
 ### Prerequisites
 
-- `3.11 <= Python <= 3.13`
-- Tested on **Python 3.13.7**; **Python 3.12.10** recommended
+- `3.12 <= Python < 3.15` (the repository defaults to Python 3.14)
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/)
 - Desktop environment
 - `PySide6 (Qt for Python)` [supported platforms/architectures](https://wiki.qt.io/Qt_for_Python)
-- A keyring backend supported by the [`keyring`](https://pypi.org/project/keyring/) package  
-  - On **Windows**: typically the built-in [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)  
-  - On **macOS**: typically the system `Keychain`  
+- A keyring backend supported by the [`keyring`](https://pypi.org/project/keyring/) package
+  - On **Windows**: typically the built-in [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)
+  - On **macOS**: typically the system `Keychain`
+  - On **Linux**: install and unlock a Secret Service provider such as GNOME Keyring or KWallet; use `uv run keyring diagnose` to inspect the selected backend
 
 ### Install & Run
 
-> [!NOTE]
-> Only CPython official python (available
-> on [Python.org](https://www.python.org)) and pip are tested and recommended.
->
-> If you encounter issues when installing dependencies, make sure to use the
-> correct package manager first.
-
-Create a virtual environment:
+`uv` creates `.venv` and installs the dependency versions recorded in `uv.lock`:
 
 ```shell
-python -m venv venv
+git clone https://github.com/Radekyspec/StartLive.git
+cd StartLive
+uv sync --locked
+uv run python StartLive.py
 ```
 
-- **Windows**: 
+Run Ruff before contributing:
 
 ```shell
-.\venv\Script\pip.exe install -r .\requirements.txt
-.\venv\Script\python.exe .\StartLive.py
-```
-
-- **macOS / Linux**:
-
-```shell
-./venv/bin/pip install -r ./requirements.txt
-./venv/bin/python ./StartLive.py
+uv run ruff check .
 ```
 
 > Note: Bilibili does **not** enable **HEVC (High Efficiency Video Coding)** streaming for all users. If pushing the stream fails, please check your encoder/codec settings.
