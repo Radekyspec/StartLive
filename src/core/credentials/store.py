@@ -150,6 +150,8 @@ class CredentialStore:
         try:
             for key in targets:
                 raw = self._backend.get_password(KEYRING_SERVICE_NAME, key)
+                if raw is None:
+                    continue
                 self._backend.delete_password(KEYRING_SERVICE_NAME, key)
                 deleted.append((key, raw))
         except Exception as primary:
