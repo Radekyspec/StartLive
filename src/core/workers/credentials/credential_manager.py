@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import StrEnum
 from json import loads
 from typing import Any, Callable, Mapping
 
@@ -25,14 +25,10 @@ class CredentialValidationError(Exception):
     """Raised when credential validation should be retried later."""
 
 
-class ValidationOutcome(Enum):
+class ValidationOutcome(StrEnum):
     VALID = "valid"
     PERMANENT_INVALID = "permanent_invalid"
     TEMPORARY_FAILURE = "temporary_failure"
-
-    def __init__(self, label: str, message: str):
-        self.label = label
-        self.message = message
 
 
 class CredentialManagerWorker(BaseWorker):
@@ -133,7 +129,7 @@ class CredentialManagerWorker(BaseWorker):
         self.logger.info(
             "credential validation code=%s classification=%s",
             log_code,
-            outcome.label,
+            outcome,
         )
         return outcome
 
@@ -204,7 +200,7 @@ class CredentialManagerWorker(BaseWorker):
                 keys = self._remove_invalid(key)
                 continue
             if outcome is not ValidationOutcome.VALID:
-                raise CredentialValidationError(outcome.message)
+                raise CredentialValidationError("credential validation failed")
 
             data = payload["data"]
             app_state.usernames[key] = USERNAME_DISPLAY_TEMPLATE.format(

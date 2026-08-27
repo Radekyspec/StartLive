@@ -34,7 +34,7 @@ def nav(code: int) -> dict[str, object]:
     return {"code": code, "message": "fixture"}
 
 
-def nav_ok(uid: str, *, is_login: bool = True) -> dict[str, object]:
+def nav_ok(uid: str, *, is_login: object = True) -> dict[str, object]:
     return {
         "code": 0,
         "message": "0",
@@ -261,6 +261,20 @@ class CredentialManagerTests(unittest.TestCase):
 
         self.assertEqual(worker.run(None), 0)
         self.assertEqual(self.persisted_index(), ["cookies|2"])
+
+    def test_falsy_is_login_values_prune_candidate_and_load_next(self):
+        for is_login in (False, None, 0, ""):
+            with self.subTest(is_login=is_login):
+                self.keyring = FailingReadKeyring()
+                self.seed_accounts("1", "2")
+                worker = self.worker(
+                    candidate=0,
+                    responses=[nav_ok("1", is_login=is_login), nav_ok("2")],
+                )
+
+                self.assertEqual(worker.run(None), 0)
+                self.assertEqual(self.persisted_index(), ["cookies|2"])
+                self.assertEqual(app_state.cookies_dict["DedeUserID"], "2")
 
     def test_returned_uid_mismatch_is_permanently_invalid(self):
         self.seed_accounts("1", "2")
