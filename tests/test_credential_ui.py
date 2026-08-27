@@ -8,7 +8,7 @@ from threading import Event
 from unittest.mock import patch
 
 import keyring
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtTest import QSignalSpy
 from PySide6.QtWidgets import (
@@ -602,6 +602,22 @@ class FollowupWorker(BaseWorker):
         self._deliveries.append("followup-ran")
 
 
+class DelayedCredentialWriter(BaseWorker):
+    def __init__(self, store: CredentialStore, release: Event):
+        super().__init__(name="delayed-credential-writer", with_session=False)
+        self._store = store
+        self._release = release
+        self.started = Event()
+
+    def run(self, report_progress, *args, **kwargs):
+        self.started.set()
+        if not self._release.wait(timeout=2):
+            raise TimeoutError("credential writer was not released")
+        self._store.add(
+            {"DedeUserID": "9", "SESSDATA": "session-9"}
+        )
+
+
 class StaleFollowupPresenter(Presenter):
     def __init__(self, view, deliveries: list[str]):
         super().__init__()
@@ -638,6 +654,9 @@ class GenerationWindowHarness(SetupWindowHarness):
         self._thread_manager = WorkerManager(
             self._gui_dispatcher, max_workers=1
         )
+
+    def _shutdown_thread_manager(self):
+        MainWindow._shutdown_thread_manager(self)
 
     def _restart_thread_manager(self):
         MainWindow._restart_thread_manager(self)
@@ -778,6 +797,41 @@ class MainWindowLifecycleTests(QtStateTestCase):
         window._gui_dispatcher.close()
         window._thread_manager.shutdown(wait=True)
         window.deleteLater()
+
+
+class CredentialClearLifecycleTests(MenuFixtureMixin, QtStateTestCase):
+    def test_clear_all_waits_for_running_credential_writer_before_deletion(self):
+        clear_requested = self.menu.credentialClearRequested
+        window = GenerationWindowHarness()
+        old_manager = window._thread_manager
+        release = Event()
+        worker = DelayedCredentialWriter(self.store, release)
+        clear_requested.connect(
+            lambda: MainWindow._shutdown_thread_manager(window)
+        )
+        future = old_manager.submit(worker)
+
+        try:
+            self.assertTrue(worker.started.wait(timeout=1))
+            QTimer.singleShot(0, release.set)
+            with TemporaryDirectory() as temp_dir, patch.object(
+                menu_module,
+                "cache_base_dir",
+                new=lambda _kind: Path(temp_dir) / "missing",
+            ):
+                self.menu._delete_cred()
+            QApplication.processEvents()
+            future.result(timeout=1)
+
+            self.assertIsNone(
+                self.keyring.values.get((SERVICE, "cookies|9"))
+            )
+            self.assertEqual(self.persisted_index(), [])
+            self.assertIs(window._thread_manager, old_manager)
+        finally:
+            release.set()
+            old_manager.shutdown(wait=True)
+            window.deleteLater()
 
 
 class LoadCredentialsHarness:

@@ -19,6 +19,7 @@ class StartLiveMenuBar(QMenuBar):
     obsSettingsDeleted = Signal()
     appSettingsDeleted = Signal()
     bgDeleted = Signal()
+    credentialClearRequested = Signal()
     credDeleted = Signal(bool)
     accountSwitch = Signal(int)
     accountAdded = Signal()
@@ -136,6 +137,7 @@ class StartLiveMenuBar(QMenuBar):
 
     @Slot()
     def _delete_cred(self):
+        self.credentialClearRequested.emit()
         self._store.clear_all()
         with suppress(PasswordDeleteError):
             delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)

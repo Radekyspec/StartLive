@@ -182,6 +182,9 @@ class MainWindow(SingleInstanceWindow):
         self.menu_bar.cookieDeleted.connect(self._on_delete_cookies)
         self.menu_bar.obsSettingsDeleted.connect(self._on_delete_settings)
         self.menu_bar.appSettingsDeleted.connect(self._on_delete_app_settings)
+        self.menu_bar.credentialClearRequested.connect(
+            self._shutdown_thread_manager
+        )
         self.menu_bar.credDeleted.connect(self._on_delete_cred)
         self.menu_bar.accountSwitch.connect(self._on_switch_account)
         self.menu_bar.accountAdded.connect(self._on_add_account)
@@ -375,16 +378,15 @@ class MainWindow(SingleInstanceWindow):
         except (RuntimeError, TypeError):
             pass
 
-    def _restart_thread_manager(self) -> None:
+    def _shutdown_thread_manager(self) -> None:
         """
         在辅助线程中等待旧线程池彻底关闭。
 
-        关闭旧 GUI 调度器后完整等待旧线程池退出，再创建新一代调度器与线程池。
+        关闭旧 GUI 调度器后完整等待旧线程池退出。
         等待期间 GUI 线程仍会处理 Qt 事件。
         """
         old_dispatcher = self._gui_dispatcher
         old_manager = self._thread_manager
-        max_workers = old_manager.max_workers
         old_dispatcher.close()
 
         event_loop = QEventLoop(self)
@@ -422,6 +424,11 @@ class MainWindow(SingleInstanceWindow):
 
         shutdown_thread.join()
         completion.result()
+
+    def _restart_thread_manager(self) -> None:
+        """完整关闭旧线程池，再创建新一代调度器与线程池。"""
+        max_workers = self._thread_manager.max_workers
+        self._shutdown_thread_manager()
         self._gui_dispatcher = GUIDispatcher()
         self._gui_presenter = GUIPresenter(self)
         self._thread_manager = WorkerManager(
