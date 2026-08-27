@@ -1,13 +1,20 @@
+from collections.abc import Callable
 from time import time
-from typing import Callable
 from urllib.parse import quote
 
 # local package import
 from src.core import app_state
-from src.core.constant import *
+from src.core.constant import HeadersType
 from src.core.log import get_logger
 from src.core.sign import ticket_hmac_sha256
 from src.core.workers.base import BaseWorker, Presenter
+
+
+def _current_timestamp() -> int:
+    try:
+        return int(time())
+    except (OverflowError, ValueError) as exc:
+        raise RuntimeError("System clock returned an invalid timestamp") from exc
 
 
 class TicketFetchWorker(BaseWorker):
@@ -18,13 +25,19 @@ class TicketFetchWorker(BaseWorker):
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
         session = self.require_session()
-        if int(app_state.cookies_dict.get("bili_ticket_expires", 0)) < int(
-                time()):
+        try:
+            ticket_expires = int(
+                app_state.cookies_dict.get("bili_ticket_expires", 0)
+            )
+        except (TypeError, ValueError, OverflowError):
+            ticket_expires = 0
+        timestamp = _current_timestamp()
+        if ticket_expires < timestamp:
             self.logger.info("buvid_ticket Request")
             ticket_param = {
                 "key_id": "ec02",
-                "hexsign": ticket_hmac_sha256(int(time())),
-                "context[ts]": int(time()),
+                "hexsign": ticket_hmac_sha256(timestamp),
+                "context[ts]": timestamp,
                 "csrf": app_state.cookies_dict.get("bili_jct", "")
             }
             response = session.post(

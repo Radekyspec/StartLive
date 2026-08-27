@@ -1,13 +1,17 @@
 # module import
+from collections.abc import Callable
 from json import loads
 from time import sleep
-from typing import Callable
 
 from keyring import get_password
 
 # local package import
 from src.core import app_state
-from src.core.constant import *
+from src.core.constant import (
+    KEYRING_SERVICE_NAME,
+    USERNAME_DISPLAY_TEMPLATE,
+    HeadersType,
+)
 from src.core.log import get_logger
 from src.core.sign import livehime_sign
 from src.core.workers.base import BaseWorker
