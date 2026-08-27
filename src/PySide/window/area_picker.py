@@ -317,8 +317,7 @@ class AreaPickerPanel(QDialog):
     def _sync_current_label(self):
         p = self._selected_parent or ""
         c = self._selected_child or ""
-        self.recent_bar.select_recent(self._selected_parent,
-                                      self._selected_child)
+        self.recent_bar.select_recent(p, c)
         self.current_label.setText(f"当前分区：{p} - {c}")
 
     def _update_ok_enabled(self):

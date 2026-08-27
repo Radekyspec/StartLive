@@ -384,7 +384,8 @@ class StreamConfigPanel(QWidget):
                 if isinstance(ip_object, IPv6Address):
                     obs_host = f"[{obs_host}]"
             except ValueError:
-                pass
+                # OBS accepts hostnames as well as IP addresses; leave them unchanged.
+                obs_host = str(obs_host)
             connector = ObsConnectorWorker(
                 ObsConnectorPresenter(self, self.obs_btn_state, self._cond),
                 host=obs_host,
@@ -447,10 +448,12 @@ class StreamConfigPanel(QWidget):
     @Slot()
     def _on_cover_exit(self):
         self.cover_edit_btn.setEnabled(True)
-        with suppress(RuntimeError):
-            self.cover_crop_widget.hide()
-        with suppress(RuntimeError):
-            self.cover_crop_widget.deleteLater()
+        cover_widget = self.cover_crop_widget
+        if cover_widget is not None:
+            with suppress(RuntimeError):
+                cover_widget.hide()
+            with suppress(RuntimeError):
+                cover_widget.deleteLater()
         self.cover_crop_widget = None
 
     @Slot()

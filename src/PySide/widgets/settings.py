@@ -1,3 +1,5 @@
+from typing import overload
+
 from PySide6.QtCore import Qt, QSize, Slot
 from PySide6.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout,
@@ -38,6 +40,16 @@ class SettingsWidget(QWidget):
         v.addWidget(lbl)
         self.main_vbox.addWidget(frame)
         return frame
+
+    @overload
+    def add_text_item(self, label: str, btn_label: str,
+                      placeholder: str = "") -> tuple[
+                          FocusPlaceholderLineEdit, QPushButton]: ...
+
+    @overload
+    def add_text_item(self, label: str, btn_label: list[str],
+                      placeholder: str | list[str] = "") -> list[
+                          tuple[FocusPlaceholderLineEdit, QPushButton]]: ...
 
     def add_text_item(self, label: str, btn_label: str | list[str],
                       placeholder: str | list[str] = "") -> (

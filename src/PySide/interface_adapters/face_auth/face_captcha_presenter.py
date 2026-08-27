@@ -1,7 +1,12 @@
+from typing import TYPE_CHECKING
+
 from src.PySide.states import StreamState
 from src.core import app_state
 from src.core.constant import FaceAuthType
 from src.core.workers.base import Presenter
+
+if TYPE_CHECKING:
+    from src.PySide.window.main_window import MainWindow
 
 
 class FaceCaptchaPresenter(Presenter):

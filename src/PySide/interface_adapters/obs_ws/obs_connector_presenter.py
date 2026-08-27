@@ -1,10 +1,14 @@
 from threading import Condition
+from typing import TYPE_CHECKING
 
 from src.PySide.log import get_logger
 from src.PySide.states import ObsBtnState
 from src.core import app_state
 from src.core.workers.base import Presenter
 from src.core.workers.obs_ws import ObsDaemonWorker
+
+if TYPE_CHECKING:
+    from src.PySide.window.stream_config import StreamConfigPanel
 
 
 class ObsConnectorPresenter(Presenter):

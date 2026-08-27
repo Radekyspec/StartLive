@@ -5,7 +5,7 @@ from threading import Thread
 from typing import Optional
 
 # package import
-from PIL import ImageQt
+from PIL import Image, ImageQt
 from PySide6.QtCore import (QEvent, QTimer, Slot, QEventLoop)
 from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import QAction, QIcon, QActionGroup
@@ -214,15 +214,14 @@ class MainWindow(SingleInstanceWindow):
     @Slot()
     def setup_ui(self, *, is_new: bool = False):
         self._logged_in = False
-        if app_state.obs_client is not None:
+        panel = self.panel
+        if app_state.obs_client is not None and panel is not None:
             ObsDaemonWorker.disconnect_obs()
-            self.panel.obs_btn_state.obsDisconnected.emit()
+            panel.obs_btn_state.obsDisconnected.emit()
 
-        if self.panel is not None:
-            self.tray_start_live_action.triggered.disconnect(
-                self.panel.start_live)
-            self.tray_stop_live_action.triggered.disconnect(
-                self.panel.stop_live)
+        if panel is not None:
+            self.tray_start_live_action.triggered.disconnect(panel.start_live)
+            self.tray_stop_live_action.triggered.disconnect(panel.stop_live)
             self._restart_thread_manager()
 
         self.tray_start_live_action.setEnabled(True)
@@ -308,9 +307,10 @@ class MainWindow(SingleInstanceWindow):
     def _init_http_server(self):
         self._server_started = False
         if self._host is not None and self._port is not None:
+            panel = self._require_panel()
             self._server_thread = HttpServerWorker(self._host, self._port)
-            self._server_thread.signals.startLive.connect(self.panel.start_live)
-            self._server_thread.signals.stopLive.connect(self.panel.stop_live)
+            self._server_thread.signals.startLive.connect(panel.start_live)
+            self._server_thread.signals.stopLive.connect(panel.stop_live)
             self._server_thread.signals.exception.connect(
                 self._http_error_handler)
             return True
@@ -481,6 +481,12 @@ class MainWindow(SingleInstanceWindow):
             self.add_thread(FetchStreamTimeShiftWorker(
                 FetchTimeShiftPresenter(self._settings_page.delay_edit)))
 
+    def _require_panel(self) -> StreamConfigPanel:
+        panel = self.panel
+        if panel is None:
+            raise RuntimeError("MainWindow panel is not initialized")
+        return panel
+
     @Slot(int, bool, bool)
     def _on_delete_cookies(self, is_new: bool, expired: bool):
         if not expired:
@@ -492,7 +498,7 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot()
     def _on_delete_settings(self):
-        self.panel.reset_obs_settings()
+        self._require_panel().reset_obs_settings()
         QMessageBox.information(self, "设置清空", "OBS连接设置清除成功")
 
     @Slot()
@@ -612,7 +618,7 @@ class MainWindow(SingleInstanceWindow):
 
     @staticmethod
     # Helper: Generate QR code image from URL
-    def generate_qr_code(data: str):
+    def generate_qr_code(data: str) -> Image.Image:
         qr = QRCode(box_size=4, border=1)
         qr.add_data(data)
         qr.make(fit=True)
@@ -620,11 +626,11 @@ class MainWindow(SingleInstanceWindow):
             img = qr.make_image(fill_color="black", back_color="white")
         else:
             img = qr.make_image(fill_color="white", back_color="black")
-        return img.convert("RGB")
+        return img.get_image().convert("RGB")
 
     @classmethod
     # Helper: Convert a PIL image to QPixmap for display in QLabel
-    def _qpixmap_from_str(cls, data: str):
+    def _qpixmap_from_str(cls, data: str) -> QPixmap:
         return QPixmap.fromImage(ImageQt.ImageQt(cls.generate_qr_code(data)))
 
     def update_qr_image(self, qr_url: str):
@@ -634,17 +640,18 @@ class MainWindow(SingleInstanceWindow):
         self.qr_label.setPixmap(self._qpixmap_from_str(qr_url))  # Show in UI
 
     def _after_login_success(self):
-        self.panel.parent_combo.clear()
-        self.panel.parent_combo.addItems(app_state.parent_area)
+        panel = self._require_panel()
+        panel.parent_combo.clear()
+        panel.parent_combo.addItems(app_state.parent_area)
         self._stack.setCurrentIndex(1)
         self._side_bar.btn_home.setChecked(True)
         if app_state.obs_settings.get("auto_connect", False):
-            self.panel.connect_btn.click()
-        self.panel.parent_combo.setCurrentText(
+            panel.connect_btn.click()
+        panel.parent_combo.setCurrentText(
             app_state.room_info.get("parent_area", "请选择"))
-        self.panel.child_combo.setCurrentText(
+        panel.child_combo.setCurrentText(
             app_state.room_info.get("area", ""))
-        self.panel.enable_child_combo_autosave(True)
+        panel.enable_child_combo_autosave(True)
         self._logged_in = True
         self._start_http_server()
 
@@ -689,13 +696,17 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot(str, int)
     def popup_face_widget(self, face_url: str, auth_type: FaceAuthType):
+        panel = self._require_panel()
+        face_message = app_state.stream_status.face_message
+        if face_message is None:
+            raise RuntimeError("Face authentication message is unavailable")
         app_state.stream_status["required_face"] = False
-        self.panel.start_btn.setEnabled(True)
+        panel.start_btn.setEnabled(True)
         self.tray_start_live_action.setEnabled(True)
-        self.panel.stop_btn.setEnabled(False)
+        panel.stop_btn.setEnabled(False)
         self.tray_stop_live_action.setEnabled(False)
-        self.panel.parent_combo.setEnabled(True)
-        self.panel.child_combo.setEnabled(True)
+        panel.parent_combo.setEnabled(True)
+        panel.child_combo.setEnabled(True)
         self.face_window = FaceQRWidget(self)
         self.face_window.face_qr.setPixmap(self._qpixmap_from_str(face_url))
         auth_worker = FaceAuthWorker(FaceAuthPresenter(self.face_window),
@@ -704,13 +715,13 @@ class MainWindow(SingleInstanceWindow):
         self.add_thread(auth_worker)
         self.add_thread(
             ReportFaceRecognitionWorker(app_state.room_info["area_code"],
-                                        app_state.stream_status.face_message,
+                                        face_message,
                                         auth_type))
         self.face_window.show()
 
     def _apply_global_qss(self) -> None:
         app = QApplication.instance()
-        if app is None:
+        if not isinstance(app, QApplication):
             return
 
         color_scheme = app.styleHints().colorScheme()

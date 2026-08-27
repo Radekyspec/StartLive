@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from src.PySide.interface_adapters.announce import FetchAnnouncePresenter
 from src.PySide.interface_adapters.area import FetchAreaPresenter
 from src.PySide.interface_adapters.login import TicketFetchPresenter
@@ -11,6 +13,9 @@ from src.core.workers.base import Presenter
 from src.core.workers.login import TicketFetchWorker
 from src.core.workers.pre_live import FetchRoomStatusWorker, FetchPreLiveWorker
 from src.core.workers.usernames import FetchUsernamesWorker
+
+if TYPE_CHECKING:
+    from src.PySide.window.main_window import MainWindow
 
 
 class FetchLoginPresenter(Presenter):

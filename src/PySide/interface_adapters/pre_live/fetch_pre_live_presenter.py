@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from src.PySide.interface_adapters.cover import CoverStateUpdatePresenter
 from src.PySide.interface_adapters.title import RecentTitlePresenter
 from src.PySide.states import LoginState
@@ -6,6 +8,9 @@ from src.core.constant import CoverStatus
 from src.core.workers.base import Presenter
 from src.core.workers.cover import CoverStateUpdateWorker
 from src.core.workers.title import LoadRecentTitleWorker
+
+if TYPE_CHECKING:
+    from src.PySide.window.stream_config import StreamConfigPanel
 
 
 class FetchPreLivePresenter(Presenter):
