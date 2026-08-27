@@ -39,6 +39,10 @@ winget install Radekyspec.StartLive
 paru -S startlive-git
 ```
 
+Supported Linux installations are managed and updated through the system
+package manager. The in-app Velopack updater is disabled on Linux, so Velopack
+does not need to be installed separately.
+
 ## Screenshots
 
 ![2bf8d9d51186e774903b6cd26831f355](https://github.com/user-attachments/assets/974b0dbb-fcd5-4b26-be76-42db728b8942)
