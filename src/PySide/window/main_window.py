@@ -3,10 +3,11 @@ from concurrent.futures import Future
 from pathlib import Path
 from threading import Thread
 from typing import Optional
+from warnings import catch_warnings, simplefilter
 
 # package import
 from PIL import ImageQt
-from PySide6.QtCore import (QEvent, QTimer, Slot, QEventLoop)
+from PySide6.QtCore import (QEvent, QTimer, Slot, QEventLoop, QObject, Signal)
 from PySide6.QtCore import Qt, QRect
 from PySide6.QtGui import QAction, QIcon, QActionGroup
 from PySide6.QtGui import QPixmap, QImage, QPainter
@@ -55,6 +56,10 @@ from .face_qr import FaceQRWidget
 from .settings_page import SettingsPage
 from .stream_config import StreamConfigPanel
 from ..updater import VelopackUpdateController
+
+
+class _ShutdownNotifier(QObject):
+    finished = Signal()
 
 
 # Main GUI window
@@ -216,6 +221,7 @@ class MainWindow(SingleInstanceWindow):
         target = (app_state.cookie_state.current_cookie_idx
                   if cookie_index is None else cookie_index)
         current_panel = self.panel
+        server_thread = getattr(self, "_server_thread", None)
         self._logged_in = False
         if app_state.obs_client is not None:
             ObsDaemonWorker.disconnect_obs()
@@ -223,16 +229,28 @@ class MainWindow(SingleInstanceWindow):
                 current_panel.obs_btn_state.obsDisconnected.emit()
 
         if current_panel is not None:
-            self.tray_start_live_action.triggered.disconnect(
+            MainWindow._disconnect_route(
+                self.tray_start_live_action.triggered,
                 current_panel.start_live)
-            self.tray_stop_live_action.triggered.disconnect(
+            MainWindow._disconnect_route(
+                self.tray_stop_live_action.triggered,
                 current_panel.stop_live)
+            if server_thread is not None:
+                MainWindow._disconnect_route(
+                    server_thread.signals.startLive,
+                    current_panel.start_live,
+                )
+                MainWindow._disconnect_route(
+                    server_thread.signals.stopLive,
+                    current_panel.stop_live,
+                )
             self._restart_thread_manager()
 
         app_state.cookies_dict.clear()
         app_state.cookie_state.move_to_end()
         CredentialManagerWorker.reset_default()
         self._credential_target_idx = target
+        self._credential_result_handled = False
 
         self.tray_start_live_action.setEnabled(True)
         self.tray_stop_live_action.setEnabled(False)
@@ -240,6 +258,9 @@ class MainWindow(SingleInstanceWindow):
         self.panel = StreamConfigPanel(self)
         self.tray_start_live_action.triggered.connect(self.panel.start_live)
         self.tray_stop_live_action.triggered.connect(self.panel.stop_live)
+        if server_thread is not None:
+            server_thread.signals.startLive.connect(self.panel.start_live)
+            server_thread.signals.stopLive.connect(self.panel.stop_live)
         self.login_label = QLabel("正在获取保存的登录凭证...")
         self.status_label = ClickableLabel("等待登录中...")
         self.qr_label = QLabel()
@@ -349,33 +370,51 @@ class MainWindow(SingleInstanceWindow):
         worker.add_presenter(self._gui_presenter)
         self._thread_manager.submit(worker, on_progress=on_progress)
 
+    @staticmethod
+    def _disconnect_route(signal, slot) -> None:
+        try:
+            with catch_warnings():
+                simplefilter("ignore", RuntimeWarning)
+                signal.disconnect(slot)
+        except (RuntimeError, TypeError):
+            pass
+
     def _restart_thread_manager(self) -> None:
         """
         在辅助线程中等待旧线程池彻底关闭。
 
-        本方法只有在新线程池已经创建完成后才返回，
-        但等待期间 GUI 线程仍会处理 Qt 事件。
+        关闭旧 GUI 调度器后完整等待旧线程池退出，再创建新一代调度器与线程池。
+        等待期间 GUI 线程仍会处理 Qt 事件。
         """
+        old_dispatcher = self._gui_dispatcher
+        old_manager = self._thread_manager
+        max_workers = old_manager._max_workers
+        old_dispatcher.close()
+
         event_loop = QEventLoop(self)
         completion: Future[None] = Future()
+        notifier = _ShutdownNotifier()
+        notifier.finished.connect(
+            event_loop.quit,
+            Qt.ConnectionType.QueuedConnection,
+        )
 
-        def restart_in_background() -> None:
+        def shutdown_in_background() -> None:
             try:
-                self._thread_manager.restart(cancel_running=True)
+                old_manager.shutdown(cancel_running=True, wait=True)
             except BaseException as exc:
                 completion.set_exception(exc)
             else:
                 completion.set_result(None)
             finally:
-                # 必须通过 GUIDispatcher 回到 GUI 线程退出局部事件循环。
-                self._gui_dispatcher.post(event_loop.quit)
+                notifier.finished.emit()
 
-        restart_thread = Thread(
-            target=restart_in_background,
-            name="worker-manager-restart",
+        shutdown_thread = Thread(
+            target=shutdown_in_background,
+            name="worker-manager-shutdown",
             daemon=False,
         )
-        restart_thread.start()
+        shutdown_thread.start()
 
         # 同步等待，但继续处理绘制、QueuedConnection、定时器等事件。
         #
@@ -385,8 +424,14 @@ class MainWindow(SingleInstanceWindow):
             QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents
         )
 
-        # restart 已经完成，此处会把辅助线程中的异常重新抛到 GUI 线程。
+        shutdown_thread.join()
         completion.result()
+        self._gui_dispatcher = GUIDispatcher()
+        self._gui_presenter = GUIPresenter(self)
+        self._thread_manager = WorkerManager(
+            self._gui_dispatcher,
+            max_workers=max_workers,
+        )
 
     @Slot(Exception)
     def _http_error_handler(self, e: Exception):
@@ -572,6 +617,9 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot()
     def load_credentials(self):
+        if getattr(self, "_credential_result_handled", False):
+            return
+        self._credential_result_handled = True
         app_state.scan_status["cred_loaded"] = True
         if app_state.scan_status["scanned"]:
             self.logger.info("load existing credential")

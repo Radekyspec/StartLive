@@ -94,13 +94,22 @@ class StartLiveMenuBar(QMenuBar):
 
     @Slot()
     def delete_cookies(self):
-        if app_state.cookie_state.is_exhausted():
+        current = app_state.cookie_state.current_cookie_idx
+        expected_keys = tuple(app_state.cookie_indices)
+        removed = self._store.remove_at(current, expected_keys)
+        if removed is None:
+            self.logger.warning(
+                "Manual credential removal skipped after index reconciliation."
+            )
+            self._populate_account_menu()
             return
 
-        current = app_state.cookie_state.current_cookie_idx
-        key = self._store.load_index()[current]
-        removed = self._store.remove(key)
-        del_cache_user(removed.uid)
+        try:
+            del_cache_user(removed.uid)
+        except OSError:
+            self.logger.warning(
+                "Credential title cache cleanup failed after committed removal."
+            )
         remaining = list(removed.remaining_keys)
         target = (
             max(0, min(removed.former_index - 1, len(remaining) - 1))

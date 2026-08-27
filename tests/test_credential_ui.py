@@ -1,9 +1,10 @@
+import logging
+import unittest
 from contextlib import ExitStack
 from json import loads
-import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import unittest
+from threading import Event
 from unittest.mock import patch
 
 import keyring
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.PySide.classes import ClickableLabel
+from src.PySide.interface_adapters import GUIDispatcher
 from src.PySide.interface_adapters.credentials import (
     CredentialManagerPresenter,
 )
@@ -41,12 +43,13 @@ from src.core.constant import (
     KEYRING_SETTINGS,
 )
 from src.core.credentials import CredentialStore, CredentialTransactionError
+from src.core.workers import WorkerManager
+from src.core.workers.base import BaseWorker, Presenter
 from src.core.workers.credentials import credential_manager
 from src.core.workers.credentials.credential_manager import (
     CredentialManagerWorker,
 )
 from tests.helpers import FakeKeyring
-
 
 SERVICE = KEYRING_SERVICE_NAME
 INDEX = KEYRING_COOKIES_INDEX
@@ -303,6 +306,95 @@ class CredentialMenuTests(MenuFixtureMixin, QtStateTestCase):
         )
         self.assertEqual(app_state.cookie_state.current_cookie_idx, 1)
 
+    def test_manual_logout_invalid_indices_do_not_delete_credentials(self):
+        for current in (-1, 2):
+            with self.subTest(current=current):
+                app_state.cookie_indices.clear()
+                app_state.usernames.clear()
+                app_state.cookies_dict.clear()
+                self.seed_accounts("1", "2")
+                app_state.cookie_state.current_cookie_idx = current
+                app_state.cookies_dict.update(self.cookies("1"))
+                spy = QSignalSpy(self.menu.cookieDeleted)
+
+                result = self.menu.delete_cookies()
+
+                self.assertIsNone(result)
+                self.assertEqual(spy.count(), 0)
+                self.assertEqual(
+                    self.persisted_index(), ["cookies|1", "cookies|2"]
+                )
+                self.assertIsNotNone(
+                    self.keyring.values.get((SERVICE, "cookies|1"))
+                )
+                self.assertEqual(app_state.cookies_dict, {})
+                self.assertEqual(app_state.cookie_state.current_cookie_idx, 2)
+
+    def test_manual_logout_missing_index_does_not_delete_orphan(self):
+        self.keyring.put("cookies|1", self.cookies("1"))
+        app_state.cookie_indices[:] = ["cookies|1"]
+        app_state.usernames["cookies|1"] = "one"
+        app_state.cookies_dict.update(self.cookies("1"))
+        app_state.cookie_state.current_cookie_idx = 0
+        self.menu._populate_account_menu()
+        spy = QSignalSpy(self.menu.cookieDeleted)
+
+        result = self.menu.delete_cookies()
+
+        self.assertIsNone(result)
+        self.assertEqual(spy.count(), 0)
+        self.assertIsNotNone(
+            self.keyring.values.get((SERVICE, "cookies|1"))
+        )
+        self.assertEqual(app_state.cookie_indices, [])
+        self.assertEqual(self.account_indices_in_menu(), [])
+        self.assertEqual(app_state.cookie_state.current_cookie_idx, 0)
+
+    def test_manual_logout_cache_mismatch_reconciles_without_deleting(self):
+        self.seed_accounts("1", "2")
+        app_state.cookie_indices[:] = ["cookies|2", "cookies|1"]
+        app_state.usernames.update(
+            {"cookies|2": "two", "cookies|1": "one"}
+        )
+        app_state.cookies_dict.update(self.cookies("2"))
+        app_state.cookie_state.current_cookie_idx = 0
+        self.menu._populate_account_menu()
+        spy = QSignalSpy(self.menu.cookieDeleted)
+
+        result = self.menu.delete_cookies()
+
+        self.assertIsNone(result)
+        self.assertEqual(spy.count(), 0)
+        self.assertEqual(self.persisted_index(), ["cookies|1", "cookies|2"])
+        self.assertIsNotNone(
+            self.keyring.values.get((SERVICE, "cookies|1"))
+        )
+        self.assertIsNotNone(
+            self.keyring.values.get((SERVICE, "cookies|2"))
+        )
+        self.assertEqual(app_state.cookie_indices, ["cookies|1", "cookies|2"])
+        self.assertEqual(app_state.cookie_state.current_cookie_idx, 2)
+        self.assertEqual(self.account_indices_in_menu(), [0, 1])
+
+    def test_title_cache_failure_does_not_block_committed_logout_signal(self):
+        self.seed_accounts("1", "2")
+        app_state.cookie_state.current_cookie_idx = 1
+        app_state.cookies_dict.update(self.cookies("2"))
+        spy = QSignalSpy(self.menu.cookieDeleted)
+
+        def fail_cache_cleanup(_uid: str):
+            raise OSError("CACHE_SECRET_CANARY")
+
+        with patch.object(
+                menu_module, "del_cache_user", new=fail_cache_cleanup
+        ), self.assertLogs(self.menu.logger.logger, level="WARNING") as logs:
+            result = self.menu.delete_cookies()
+
+        self.assertEqual(result, (0, False))
+        self.assertEqual(spy.at(0), [0, False])
+        self.assertEqual(self.persisted_index(), ["cookies|1"])
+        self.assertNotIn("CACHE_SECRET_CANARY", "\n".join(logs.output))
+
     def test_clear_all_uses_store_and_preserves_existing_global_clear_policy(self):
         self.seed_accounts("1", "2")
         for key in (
@@ -393,15 +485,16 @@ class SideBarStub(QWidget):
 
 
 class SetupWindowHarness(QMainWindow):
-    def __init__(self):
+    def __init__(self, *, with_panel: bool = True):
         super().__init__()
         self.logger = logging.getLogger("SetupWindowHarness")
-        self.panel = PanelStub(self)
+        self.panel = PanelStub(self) if with_panel else None
         self.old_panel = self.panel
         self.tray_start_live_action = QAction(self)
         self.tray_stop_live_action = QAction(self)
-        self.tray_start_live_action.triggered.connect(self.panel.start_live)
-        self.tray_stop_live_action.triggered.connect(self.panel.stop_live)
+        if self.panel is not None:
+            self.tray_start_live_action.triggered.connect(self.panel.start_live)
+            self.tray_stop_live_action.triggered.connect(self.panel.stop_live)
         self._stack = QStackedWidget(self)
         self._side_bar = SideBarStub(self)
         self._log_viewer = QWidget(self)
@@ -435,6 +528,125 @@ class SetupWindowHarness(QMainWindow):
 
     def _new_version_hint(self, _version):
         return None
+
+
+class ServerSignals(QObject):
+    startLive = Signal()
+    stopLive = Signal()
+
+
+class RouteSignalStub:
+    def __init__(self, *, fail_first_disconnect: bool = False):
+        self._slots = []
+        self._fail_first_disconnect = fail_first_disconnect
+
+    def connect(self, slot):
+        self._slots.append(slot)
+
+    def disconnect(self, slot):
+        if self._fail_first_disconnect:
+            self._fail_first_disconnect = False
+            raise RuntimeError("receiver already deleted")
+        self._slots.remove(slot)
+
+    def emit(self):
+        for slot in list(self._slots):
+            slot()
+
+
+class ActionStub:
+    def __init__(self, *, fail_first_disconnect: bool = False):
+        self.triggered = RouteSignalStub(
+            fail_first_disconnect=fail_first_disconnect
+        )
+        self.enabled = True
+
+    def setEnabled(self, enabled: bool):
+        self.enabled = enabled
+
+    def trigger(self):
+        self.triggered.emit()
+
+
+class ServerStub:
+    def __init__(self):
+        self.signals = ServerSignals()
+
+
+class PassivePresenter(Presenter):
+    def prepare_success_view(self, *args, **kwargs):
+        return None
+
+    def prepare_fail_view(self, exception: Exception):
+        return None
+
+    def prepare_progress_view(self, *args, **kwargs):
+        return None
+
+
+class ImmediateWorker(BaseWorker):
+    def __init__(self, presenter: Presenter):
+        super().__init__(name="queued-old-generation", with_session=False,
+                         presenter=presenter)
+
+    def run(self, report_progress, *args, **kwargs):
+        return "old-result"
+
+
+class FollowupWorker(BaseWorker):
+    def __init__(self, deliveries: list[str]):
+        super().__init__(name="stale-followup", with_session=False)
+        self._deliveries = deliveries
+
+    def run(self, report_progress, *args, **kwargs):
+        self._deliveries.append("followup-ran")
+
+
+class StaleFollowupPresenter(Presenter):
+    def __init__(self, view, deliveries: list[str]):
+        super().__init__()
+        self._view = view
+        self._deliveries = deliveries
+
+    def prepare_success_view(self, *args, **kwargs):
+        self._deliveries.append("old-presenter-ran")
+        self._view.add_thread(FollowupWorker(self._deliveries))
+
+    def prepare_fail_view(self, exception: Exception):
+        self._deliveries.append("old-presenter-failed")
+
+    def prepare_progress_view(self, *args, **kwargs):
+        return None
+
+
+class TrackingDispatcher(GUIDispatcher):
+    def __init__(self):
+        super().__init__()
+        self.finalize_posted = Event()
+
+    def post(self, fn, *args, **kwargs):
+        super().post(fn, *args, **kwargs)
+        if getattr(fn, "__name__", "") == "finalize":
+            self.finalize_posted.set()
+
+
+class GenerationWindowHarness(SetupWindowHarness):
+    def __init__(self):
+        super().__init__()
+        self._gui_dispatcher = TrackingDispatcher()
+        self._gui_presenter = PassivePresenter()
+        self._thread_manager = WorkerManager(
+            self._gui_dispatcher, max_workers=1
+        )
+
+    def _restart_thread_manager(self):
+        MainWindow._restart_thread_manager(self)
+
+    def add_thread(self, worker, /, on_progress=False):
+        if isinstance(worker, CredentialManagerWorker):
+            self.submitted.append(worker)
+            return None
+        return MainWindow.add_thread(self, worker, on_progress=on_progress)
 
 
 class MainWindowLifecycleTests(QtStateTestCase):
@@ -475,6 +687,98 @@ class MainWindowLifecycleTests(QtStateTestCase):
         self.assertEqual(window.panel.start_count, 1)
         window.deleteLater()
 
+    def test_partial_tray_disconnect_does_not_abort_reconstruction(self):
+        app_state.cookie_indices[:] = ["cookies|1"]
+        app_state.cookie_state.current_cookie_idx = 0
+        app_state.cookies_dict.update(
+            {"DedeUserID": "1", "SESSDATA": "session-1"}
+        )
+        window = SetupWindowHarness()
+        window.tray_start_live_action = ActionStub(
+            fail_first_disconnect=True
+        )
+
+        caught = None
+        try:
+            with patch.object(
+                    main_window_module, "StreamConfigPanel", new=PanelStub
+            ):
+                MainWindow.setup_ui(window, cookie_index=0)
+        except Exception as error:
+            caught = error
+
+        self.assertIsNone(caught)
+        self.assertEqual(len(window.restart_snapshots), 1)
+        self.assertEqual(app_state.cookies_dict, {})
+        self.assertEqual(app_state.cookie_state.current_cookie_idx, 1)
+        window.tray_start_live_action.trigger()
+        self.assertEqual(window.old_panel.start_count, 0)
+        self.assertEqual(window.panel.start_count, 1)
+        window.deleteLater()
+
+    def test_existing_http_server_routes_only_to_reconstructed_panel(self):
+        app_state.cookie_indices[:] = ["cookies|1"]
+        app_state.cookie_state.current_cookie_idx = 0
+        window = SetupWindowHarness()
+        server = ServerStub()
+        window._server_thread = server
+        server.signals.startLive.connect(window.old_panel.start_live)
+        server.signals.stopLive.connect(window.old_panel.stop_live)
+
+        with patch.object(
+                main_window_module, "StreamConfigPanel", new=PanelStub
+        ):
+            MainWindow.setup_ui(window, cookie_index=0)
+
+        server.signals.startLive.emit()
+        server.signals.stopLive.emit()
+        self.assertEqual(window.old_panel.start_count, 0)
+        self.assertEqual(window.old_panel.stop_count, 0)
+        self.assertEqual(window.panel.start_count, 1)
+        self.assertEqual(window.panel.stop_count, 1)
+        window.deleteLater()
+
+    def test_first_setup_without_panel_or_server_reconstructs_once(self):
+        window = SetupWindowHarness(with_panel=False)
+
+        with patch.object(
+                main_window_module, "StreamConfigPanel", new=PanelStub
+        ):
+            MainWindow.setup_ui(window, cookie_index=0)
+
+        self.assertEqual(window.restart_snapshots, [])
+        self.assertIsInstance(window.panel, PanelStub)
+        self.assertIs(window.submitted[-1], window.credential_worker)
+        window.deleteLater()
+
+    def test_queued_old_generation_finalizer_cannot_submit_to_new_manager(self):
+        app_state.cookie_indices[:] = ["cookies|1", "cookies|2"]
+        app_state.cookie_state.current_cookie_idx = 0
+        app_state.cookies_dict.update(
+            {"DedeUserID": "1", "SESSDATA": "session-1"}
+        )
+        window = GenerationWindowHarness()
+        deliveries: list[str] = []
+        old_dispatcher = window._gui_dispatcher
+        old_manager = window._thread_manager
+        stale_presenter = StaleFollowupPresenter(window, deliveries)
+        future = old_manager.submit(ImmediateWorker(stale_presenter))
+        future.result(timeout=1)
+        self.assertTrue(old_dispatcher.finalize_posted.wait(timeout=1))
+
+        with patch.object(
+                main_window_module, "StreamConfigPanel", new=PanelStub
+        ):
+            MainWindow.setup_ui(window, cookie_index=1)
+        QApplication.processEvents()
+
+        self.assertEqual(deliveries, [])
+        self.assertIsNot(window._thread_manager, old_manager)
+        self.assertIsNot(window._gui_dispatcher, old_dispatcher)
+        window._gui_dispatcher.close()
+        window._thread_manager.shutdown(wait=True)
+        window.deleteLater()
+
 
 class LoadCredentialsHarness:
     def __init__(self, menu: StartLiveMenuBar, target: int):
@@ -486,6 +790,7 @@ class LoadCredentialsHarness:
         self.qr_fetches = 0
         self.post_scan_calls = 0
         self.retry_targets: list[tuple[int | None, bool]] = []
+        self._credential_result_handled = False
 
     def _fetch_qr(self):
         self.qr_fetches += 1
@@ -504,6 +809,16 @@ class CredentialLoadRoutingTests(MenuFixtureMixin, QtStateTestCase):
         window = LoadCredentialsHarness(self.menu, target=0)
         app_state.scan_status["is_new"] = True
 
+        MainWindow.load_credentials(window)
+
+        self.assertEqual(window.qr_fetches, 1)
+        self.assertEqual(window.post_scan_calls, 0)
+
+    def test_repeated_empty_manager_delivery_starts_qr_exactly_once(self):
+        window = LoadCredentialsHarness(self.menu, target=0)
+        app_state.scan_status["is_new"] = True
+
+        MainWindow.load_credentials(window)
         MainWindow.load_credentials(window)
 
         self.assertEqual(window.qr_fetches, 1)

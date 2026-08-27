@@ -1,6 +1,7 @@
+import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from json import dumps, loads
-import logging
 from typing import Any, Mapping
 
 import keyring
@@ -104,6 +105,22 @@ class CredentialStore:
     def remove(self, key: str) -> RemovedCredential:
         keys = self._load_index_for_transaction()
         former_index = keys.index(key)
+        return self._remove_from_index(key, keys, former_index)
+
+    def remove_at(
+            self, index: int, expected_keys: Sequence[str]
+    ) -> RemovedCredential | None:
+        """Remove a selected credential only from an unchanged collection."""
+        expected = list(expected_keys)
+        keys = self._load_index_for_transaction()
+        if index < 0 or index >= len(expected) or keys != expected:
+            self._publish_unvalidated_index(keys)
+            return None
+        return self._remove_from_index(keys[index], keys, index)
+
+    def _remove_from_index(
+            self, key: str, keys: list[str], former_index: int
+    ) -> RemovedCredential:
         old_raw = self._backend.get_password(KEYRING_SERVICE_NAME, key)
         try:
             if old_raw is not None:
@@ -275,6 +292,12 @@ class CredentialStore:
         app_state.usernames.clear()
         app_state.cookies_dict.clear()
         app_state.cookie_state.current_cookie_idx = 0
+
+    @staticmethod
+    def _publish_unvalidated_index(keys: list[str]) -> None:
+        CredentialStore._commit_index(keys)
+        app_state.cookies_dict.clear()
+        app_state.cookie_state.current_cookie_idx = len(keys)
 
     @staticmethod
     def _cleanup_removed_identity(key: str, former_index: int) -> None:

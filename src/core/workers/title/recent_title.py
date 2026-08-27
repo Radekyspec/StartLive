@@ -18,7 +18,7 @@ class LoadRecentTitleWorker(BaseWorker):
     def run(self, report_progress: Callable | None, *args, **kwargs):
         _, _title_file = get_cache_path(
             CacheType.CONFIG,
-            f"title{app_state.cookies_dict["DedeUserID"]}")
+            f"title{app_state.cookies_dict['DedeUserID']}")
         if not _title_file.exists():
             return []
         with open(_title_file, "r", encoding="utf-8") as f:

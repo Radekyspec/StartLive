@@ -1,5 +1,5 @@
-from json import dumps, loads
 import unittest
+from json import dumps, loads
 
 from src.core import app_state
 from src.core.constant import (
@@ -15,7 +15,6 @@ from src.core.credentials.store import (
     CredentialTransactionError,
 )
 from tests.helpers import FakeKeyring
-
 
 SERVICE = KEYRING_SERVICE_NAME
 INDEX = KEYRING_COOKIES_INDEX
@@ -132,6 +131,114 @@ class CredentialStoreTransactionTests(CredentialStateTestCase):
     def persisted_index(self) -> list[str]:
         raw = self.keyring.get_password(SERVICE, INDEX)
         return [] if raw is None else loads(raw)
+
+    def remove_at(self, index: int, expected_keys: tuple[str, ...]):
+        self.assertTrue(
+            hasattr(self.store, "remove_at"),
+            "CredentialStore.remove_at is required for atomic UI removal",
+        )
+        return self.store.remove_at(index, expected_keys)
+
+    def test_remove_at_rejects_negative_index_without_deleting(self):
+        self.seed_accounts("1", "2")
+        self.store.load_index()
+        app_state.cookies_dict.update(self.cookies("1"))
+        app_state.cookie_state.current_cookie_idx = -1
+
+        removed = self.remove_at(-1, tuple(app_state.cookie_indices))
+
+        self.assertIsNone(removed)
+        self.assertEqual(self.persisted_index(), ["cookies|1", "cookies|2"])
+        self.assertIsNotNone(self.keyring.get_password(SERVICE, "cookies|1"))
+        self.assertEqual(app_state.cookies_dict, {})
+        self.assertEqual(app_state.cookie_state.current_cookie_idx, 2)
+
+    def test_remove_at_rejects_out_of_range_index_without_deleting(self):
+        self.seed_accounts("1", "2")
+        self.store.load_index()
+        app_state.cookies_dict.update(self.cookies("2"))
+        app_state.cookie_state.current_cookie_idx = 2
+
+        removed = self.remove_at(2, tuple(app_state.cookie_indices))
+
+        self.assertIsNone(removed)
+        self.assertEqual(self.persisted_index(), ["cookies|1", "cookies|2"])
+        self.assertIsNotNone(self.keyring.get_password(SERVICE, "cookies|2"))
+        self.assertEqual(app_state.cookies_dict, {})
+        self.assertEqual(app_state.cookie_state.current_cookie_idx, 2)
+
+    def test_remove_at_missing_index_reconciles_without_deleting_orphan(self):
+        self.keyring.put("cookies|1", self.cookies("1"))
+        app_state.cookie_indices[:] = ["cookies|1"]
+        app_state.usernames["cookies|1"] = "one"
+        app_state.cookies_dict.update(self.cookies("1"))
+        app_state.cookie_state.current_cookie_idx = 0
+
+        removed = self.remove_at(0, ("cookies|1",))
+
+        self.assertIsNone(removed)
+        self.assertIsNotNone(self.keyring.get_password(SERVICE, "cookies|1"))
+        self.assertEqual(app_state.cookie_indices, [])
+        self.assertEqual(app_state.usernames, {})
+        self.assertEqual(app_state.cookies_dict, {})
+        self.assertEqual(app_state.cookie_state.current_cookie_idx, 0)
+
+    def test_remove_at_mismatch_reconciles_without_deleting_wrong_account(self):
+        self.seed_accounts("1", "2")
+        app_state.cookie_indices[:] = ["cookies|2", "cookies|1"]
+        app_state.usernames.update(
+            {"cookies|2": "two", "cookies|1": "one"}
+        )
+        app_state.cookies_dict.update(self.cookies("2"))
+        app_state.cookie_state.current_cookie_idx = 0
+
+        removed = self.remove_at(
+            0, ("cookies|2", "cookies|1")
+        )
+
+        self.assertIsNone(removed)
+        self.assertEqual(self.persisted_index(), ["cookies|1", "cookies|2"])
+        self.assertIsNotNone(self.keyring.get_password(SERVICE, "cookies|1"))
+        self.assertIsNotNone(self.keyring.get_password(SERVICE, "cookies|2"))
+        self.assertEqual(app_state.cookie_indices, ["cookies|1", "cookies|2"])
+        self.assertEqual(app_state.usernames,
+                         {"cookies|1": "one", "cookies|2": "two"})
+        self.assertEqual(app_state.cookies_dict, {})
+        self.assertEqual(app_state.cookie_state.current_cookie_idx, 2)
+
+    def test_remove_at_index_read_failure_preserves_published_state(self):
+        self.seed_accounts("1", "2")
+        self.store.load_index()
+        app_state.usernames.update(
+            {"cookies|1": "one", "cookies|2": "two"}
+        )
+        app_state.cookies_dict.update(self.cookies("2"))
+        app_state.cookie_state.current_cookie_idx = 1
+        expected_indices = list(app_state.cookie_indices)
+        expected_usernames = dict(app_state.usernames)
+        expected_cookies = dict(app_state.cookies_dict)
+        original_get = self.keyring.get_password
+
+        def fail_index_read(service: str, key: str):
+            if key == INDEX:
+                raise RuntimeError("index unavailable")
+            return original_get(service, key)
+
+        self.keyring.get_password = fail_index_read
+
+        with self.assertRaises(RuntimeError):
+            self.remove_at(1, tuple(expected_indices))
+
+        self.assertEqual(app_state.cookie_indices, expected_indices)
+        self.assertEqual(app_state.usernames, expected_usernames)
+        self.assertEqual(app_state.cookies_dict, expected_cookies)
+        self.assertEqual(app_state.cookie_state.current_cookie_idx, 1)
+        self.assertEqual(
+            loads(self.keyring.values[(SERVICE, INDEX)]), expected_indices
+        )
+        self.assertIsNotNone(
+            self.keyring.values.get((SERVICE, "cookies|2"))
+        )
 
     def test_remove_final_item_returns_committed_empty_collection(self):
         self.seed_accounts("1")

@@ -1,5 +1,5 @@
-from json import loads
 from enum import Enum
+from json import loads
 from typing import Any, Callable, Mapping
 
 # package import
@@ -21,18 +21,14 @@ from src.core.sign import livehime_sign
 from src.core.workers.base import BaseWorker, Presenter
 
 
-AUTH_INVALID_CODES = frozenset({-101})
-NAV_URL = "https://api.bilibili.com/x/web-interface/nav"
-
-
 class CredentialValidationError(Exception):
     """Raised when credential validation should be retried later."""
 
 
 class ValidationOutcome(Enum):
-    VALID = ("valid", "credential is valid")
-    PERMANENT_INVALID = ("permanent_invalid", "credential is invalid")
-    TEMPORARY_FAILURE = ("temporary_failure", "credential validation failed")
+    VALID = "valid"
+    PERMANENT_INVALID = "permanent_invalid"
+    TEMPORARY_FAILURE = "temporary_failure"
 
     def __init__(self, label: str, message: str):
         self.label = label
@@ -82,7 +78,7 @@ class CredentialManagerWorker(BaseWorker):
     def _request_nav(self) -> Mapping[str, Any]:
         try:
             response = self._session.get(
-                NAV_URL,
+                "https://api.bilibili.com/x/web-interface/nav",
                 params=livehime_sign(
                     {}, access_key=False, build=False, version=False
                 ),
@@ -101,13 +97,13 @@ class CredentialManagerWorker(BaseWorker):
         return payload
 
     def _classify_nav(
-        self, payload: Mapping[str, Any], expected_uid: str
+            self, payload: Mapping[str, Any], expected_uid: str
     ) -> ValidationOutcome:
         code = payload.get("code")
         if isinstance(code, bool) or not isinstance(code, int):
             outcome = ValidationOutcome.TEMPORARY_FAILURE
             log_code: int | str = "invalid"
-        elif code in AUTH_INVALID_CODES:
+        elif code == -101:
             outcome = ValidationOutcome.PERMANENT_INVALID
             log_code = code
         elif code != 0:
@@ -118,18 +114,16 @@ class CredentialManagerWorker(BaseWorker):
             data = payload.get("data")
             if not isinstance(data, Mapping):
                 outcome = ValidationOutcome.TEMPORARY_FAILURE
-            elif data.get("isLogin") is False:
+            elif not data.get("isLogin"):
                 outcome = ValidationOutcome.PERMANENT_INVALID
-            elif data.get("isLogin") is not True:
-                outcome = ValidationOutcome.TEMPORARY_FAILURE
             else:
                 mid = data.get("mid")
                 uname = data.get("uname")
                 if (
-                    isinstance(mid, bool)
-                    or not isinstance(mid, (int, str))
-                    or not str(mid)
-                    or not isinstance(uname, str)
+                        isinstance(mid, bool)
+                        or not isinstance(mid, (int, str))
+                        or not str(mid)
+                        or not isinstance(uname, str)
                 ):
                     outcome = ValidationOutcome.TEMPORARY_FAILURE
                 elif str(mid) != expected_uid:
@@ -143,17 +137,14 @@ class CredentialManagerWorker(BaseWorker):
         )
         return outcome
 
-    @staticmethod
-    def _validation_store_error(error: Exception) -> CredentialValidationError:
-        return CredentialValidationError("credential store is unavailable")
-
     def _remove_invalid(self, key: str) -> list[str]:
         try:
             return list(self._store.remove(key).remaining_keys)
         except CredentialTransactionError:
             raise
         except Exception as error:
-            raise self._validation_store_error(error) from error
+            raise CredentialValidationError(
+                "credential store is unavailable") from error
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
 
@@ -184,7 +175,8 @@ class CredentialManagerWorker(BaseWorker):
         except CredentialTransactionError:
             raise
         except Exception as error:
-            raise self._validation_store_error(error) from error
+            raise CredentialValidationError(
+                "credential store is unavailable") from error
 
         candidate = self.cookie_index
         app_state.cookie_state.current_cookie_idx = len(keys)
@@ -198,7 +190,8 @@ class CredentialManagerWorker(BaseWorker):
                 keys = self._remove_invalid(key)
                 continue
             except Exception as error:
-                raise self._validation_store_error(error) from error
+                raise CredentialValidationError(
+                    "credential store is unavailable") from error
 
             self._session.cookies.clear()
             self._session.cookies.update(baseline)
