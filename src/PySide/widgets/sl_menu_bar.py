@@ -11,7 +11,13 @@ from src.PySide.log import get_logger, get_log_path
 from src.core import app_state
 from src.core.app_state import dumps
 from src.core.cache import cache_base_dir
-from src.core.constant import *
+from src.core.constant import (
+    CacheType,
+    KEYRING_APP_SETTINGS,
+    KEYRING_COOKIES_INDEX,
+    KEYRING_SERVICE_NAME,
+    KEYRING_SETTINGS,
+)
 from src.core.workers.credentials import CredentialManagerWorker
 
 

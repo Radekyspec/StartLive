@@ -6,6 +6,9 @@ on:
       - "master"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
@@ -16,7 +19,9 @@ jobs:
 
     steps:
       - name: Check-out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Read version from _version.py
         shell: python
@@ -41,7 +46,7 @@ jobs:
           echo "APP_VERSION=${VERSION}+${SHORT_SHA}" >> "$GITHUB_ENV"
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.14.6' # Version range or exact version of a Python version to use, using SemVer's version range syntax
           architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
@@ -69,7 +74,7 @@ jobs:
           echo "$env:UPX_DIR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build Executable for Windows
-        uses: Nuitka/Nuitka-Action@main
+        uses: Nuitka/Nuitka-Action@99c9d3ab258c7008c0604617d925574101327e5d # main
         with:
           nuitka-version: main
           script-name: StartLive.py
@@ -99,7 +104,7 @@ jobs:
           mv build/StartLive.dist/* output/
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-standalone
           path: |
