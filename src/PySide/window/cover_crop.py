@@ -85,7 +85,7 @@ class CoverCropWidget(QWidget):
             704, 396, Qt.AspectRatioMode.IgnoreAspectRatio,
             Qt.TransformationMode.SmoothTransformation
         )
-        self._logger.info(f"image scale to 704x396")
+        self._logger.info("image scale to 704x396")
         ba = QByteArray()
         buf = QBuffer(ba)
         buf.open(QIODevice.OpenModeFlag.WriteOnly)

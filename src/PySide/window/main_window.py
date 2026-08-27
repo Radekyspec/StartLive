@@ -42,7 +42,19 @@ from src.PySide.widgets import StartLiveMenuBar, LogViewer, SideBar
 from src.core import app_state
 from src.core.app_state import dumps
 from src.core.cache import del_cache_user
-from src.core.constant import *
+from src.core.constant import (
+    BackgroundMode,
+    DARK_COVER_CSS,
+    DARK_CSS,
+    FaceAuthType,
+    KEYRING_APP_SETTINGS,
+    KEYRING_SERVICE_NAME,
+    KEYRING_SETTINGS,
+    LIGHT_COVER_CSS,
+    LIGHT_CSS,
+    VERSION,
+    WidgetIndex,
+)
 from src.core.workers import WorkerManager
 from src.core.workers.base import LongLiveWorker, BaseWorker
 from src.core.workers.const import ConstantUpdateWorker, VersionCheckerWorker
@@ -381,7 +393,7 @@ class MainWindow(SingleInstanceWindow):
 
     @Slot(Exception)
     def _http_error_handler(self, e: Exception):
-        QMessageBox.critical(self, f"Web服务线程错误",
+        QMessageBox.critical(self, "Web服务线程错误",
                              repr(e))
         self._stop_http_server()
 

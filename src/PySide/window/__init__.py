@@ -4,3 +4,12 @@ from .face_qr import FaceQRWidget
 from .main_window import MainWindow
 from .settings_page import SettingsPage
 from .stream_config import StreamConfigPanel
+
+__all__ = [
+    "AreaPickerPanel",
+    "CoverCropWidget",
+    "FaceQRWidget",
+    "MainWindow",
+    "SettingsPage",
+    "StreamConfigPanel",
+]

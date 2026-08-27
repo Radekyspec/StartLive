@@ -9,3 +9,17 @@ from .StartLiveError import StartLiveError
 from .StopLiveError import StopLiveError
 from .TaskCancelled import TaskCancelled
 from .TitleUpdateError import TitleUpdateError
+
+__all__ = [
+    "AnnounceUpdateError",
+    "AreaUpdateError",
+    "CoverUploadError",
+    "CredentialDuplicatedError",
+    "CredentialExpiredError",
+    "LoginError",
+    "RoomStatusError",
+    "StartLiveError",
+    "StopLiveError",
+    "TaskCancelled",
+    "TitleUpdateError",
+]
