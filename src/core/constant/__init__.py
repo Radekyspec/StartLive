@@ -1,15 +1,32 @@
-from enum import unique, IntEnum, StrEnum
+from enum import IntEnum, StrEnum, unique
 
 from ._version import __version__
 
 __all__ = [
-    "KEYRING_SERVICE_NAME", "KEYRING_COOKIES", "KEYRING_COOKIES_INDEX",
-    "KEYRING_SETTINGS", "KEYRING_ROOM_INFO", "KEYRING_APP_SETTINGS",
-    "LOCAL_SERVER_NAME", "LOGGER_NAME", "USERNAME_DISPLAY_TEMPLATE",
-    "MAX_RECENT_TITLE", "VERSION", "DARK_COVER_CSS", "DARK_CSS",
-    "LIGHT_COVER_CSS", "LIGHT_CSS", "ProxyMode", "PreferProto", "CoverStatus",
-    "WidgetIndex", "CacheType", "BackgroundMode", "HeadersType", "LoginResult",
-    "FaceAuthType"
+    "KEYRING_SERVICE_NAME",
+    "KEYRING_COOKIES",
+    "KEYRING_COOKIES_INDEX",
+    "KEYRING_SETTINGS",
+    "KEYRING_ROOM_INFO",
+    "KEYRING_APP_SETTINGS",
+    "LOCAL_SERVER_NAME",
+    "LOGGER_NAME",
+    "USERNAME_DISPLAY_TEMPLATE",
+    "MAX_RECENT_TITLE",
+    "VERSION",
+    "DARK_COVER_CSS",
+    "DARK_CSS",
+    "LIGHT_COVER_CSS",
+    "LIGHT_CSS",
+    "ProxyMode",
+    "PreferProto",
+    "CoverStatus",
+    "WidgetIndex",
+    "CacheType",
+    "BackgroundMode",
+    "HeadersType",
+    "LoginResult",
+    "FaceAuthType",
 ]
 
 
@@ -99,18 +116,18 @@ HEADERS_WEB = {
     "Connection": "keep-alive",
     "Origin": "https://live.bilibili.com",
     "Referer": "https://live.bilibili.com/",
-    "sec-ch-ua": "\"Chromium\";v=\"105\"",
+    "sec-ch-ua": '"Chromium";v="105"',
     "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-ch-ua-platform": '"Windows"',
     "Sec-Fetch-Site": "same-site",
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Dest": "empty",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/10783"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/10783",
 }
 HEADERS_APP = {
     "Accept-Encoding": "gzip,deflate",
     "Connection": "keep-alive",
-    "User-Agent": "LiveHime/7.63.0.10783 os/Windows pc_app/livehime build/10783 osVer/10.0_x86_64"
+    "User-Agent": "LiveHime/7.63.0.10783 os/Windows pc_app/livehime build/10783 osVer/10.0_x86_64",
 }
 START_LIVE_AUTH_CSRF = True
 STOP_LIVE_AUTH_CSRF = False

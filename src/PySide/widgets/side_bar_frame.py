@@ -1,16 +1,14 @@
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QEasingCurve, QVariantAnimation, QSize, Slot
+from PySide6.QtCore import QEasingCurve, QSize, Qt, QVariantAnimation, Slot
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import (
-    QVBoxLayout, QFrame, QToolButton,
-    QSizePolicy
-)
+from PySide6.QtWidgets import QFrame, QSizePolicy, QToolButton, QVBoxLayout
 
 
 class SideBar(QFrame):
-    def __init__(self, parent=None, *, icon_path: Path, expanded_width: int,
-                 collapsed_width: int):
+    def __init__(
+        self, parent=None, *, icon_path: Path, expanded_width: int, collapsed_width: int
+    ):
         super().__init__(parent)
         self._expanded_width = expanded_width
         self._collapsed_width = collapsed_width
@@ -42,15 +40,15 @@ class SideBar(QFrame):
             b.setIconSize(QSize(20, 20))
             # icon only when collapsed, icon plus text when expanded
             b.setToolButtonStyle(
-                Qt.ToolButtonStyle.ToolButtonIconOnly if not self._expanded
+                Qt.ToolButtonStyle.ToolButtonIconOnly
+                if not self._expanded
                 else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
             )
             b.setCheckable(checkable)
             b.setMinimumHeight(40)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setObjectName("MenuButton")
-            b.setSizePolicy(QSizePolicy.Policy.Expanding,
-                            QSizePolicy.Policy.Preferred)
+            b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             return b
 
         self.toggle_btn = mk_btn(" 菜单", 0, checkable=False)
@@ -76,8 +74,11 @@ class SideBar(QFrame):
         self._anim.finished.connect(self._on_anim_finished)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._menu_buttons = [
-            self.toggle_btn, self.btn_theme, self.btn_home, self.btn_log,
-            self.btn_settings
+            self.toggle_btn,
+            self.btn_theme,
+            self.btn_home,
+            self.btn_log,
+            self.btn_settings,
         ]
 
     @Slot()
@@ -96,7 +97,10 @@ class SideBar(QFrame):
             full = b.property("_fulltext")
             b.setText("" if collapsed else full)
             b.setToolButtonStyle(
-                Qt.ToolButtonStyle.ToolButtonIconOnly if collapsed else Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+                Qt.ToolButtonStyle.ToolButtonIconOnly
+                if collapsed
+                else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+            )
 
     @Slot()
     def _toggle(self):
