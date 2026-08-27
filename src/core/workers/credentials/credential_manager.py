@@ -147,15 +147,22 @@ class CredentialManagerWorker(BaseWorker):
     def _validation_store_error(error: Exception) -> CredentialValidationError:
         return CredentialValidationError("credential store is unavailable")
 
+    def _remove_invalid(self, key: str) -> list[str]:
+        try:
+            return list(self._store.remove(key).remaining_keys)
+        except CredentialTransactionError:
+            raise
+        except Exception as error:
+            raise self._validation_store_error(error) from error
+
     def run(self, report_progress: Callable | None, *args, **kwargs):
 
         if app_state.obs_settings:
-            self.logger.info(
-                f"use existing obs settings: {app_state.obs_settings.internal}")
+            self.logger.info("using existing obs settings")
         elif (saved_settings := get_password(KEYRING_SERVICE_NAME,
                                              KEYRING_SETTINGS)) is not None:
             app_state.obs_settings.update(loads(saved_settings))
-            self.logger.info(f"obs_settings loaded: {saved_settings}")
+            self.logger.info("stored obs settings loaded")
         else:
             app_state.obs_settings_default()
             self.logger.info(f"obs_default_settings loaded")
@@ -188,7 +195,7 @@ class CredentialManagerWorker(BaseWorker):
             try:
                 cookies = self._store.read(key)
             except CredentialRecordCorruptedError:
-                keys = list(self._store.remove(key).remaining_keys)
+                keys = self._remove_invalid(key)
                 continue
             except Exception as error:
                 raise self._validation_store_error(error) from error
@@ -201,7 +208,7 @@ class CredentialManagerWorker(BaseWorker):
             payload = self._request_nav()
             outcome = self._classify_nav(payload, cookies["DedeUserID"])
             if outcome is ValidationOutcome.PERMANENT_INVALID:
-                keys = list(self._store.remove(key).remaining_keys)
+                keys = self._remove_invalid(key)
                 continue
             if outcome is not ValidationOutcome.VALID:
                 raise CredentialValidationError(outcome.message)

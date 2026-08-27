@@ -1,4 +1,4 @@
-from json import loads
+from json import dumps, loads
 import unittest
 from unittest.mock import patch
 
@@ -10,6 +10,7 @@ from src.core.app_state import create_session
 from src.core.constant import (
     HeadersType,
     KEYRING_COOKIES_INDEX,
+    KEYRING_SETTINGS,
     KEYRING_SERVICE_NAME,
 )
 from src.core.credentials import (
@@ -20,15 +21,13 @@ from src.core.workers.base import BaseWorker
 from src.core.workers.credentials import credential_manager
 from src.core.workers.credentials.credential_manager import (
     CredentialManagerWorker,
+    CredentialValidationError,
 )
 from tests.helpers import FakeKeyring
 
 
 SERVICE = KEYRING_SERVICE_NAME
 INDEX = KEYRING_COOKIES_INDEX
-ValidationError = getattr(
-    credential_manager, "CredentialValidationError", Exception
-)
 
 
 def nav(code: int) -> dict[str, object]:
@@ -97,10 +96,21 @@ class FailingReadKeyring(FakeKeyring):
     def __init__(self):
         super().__init__()
         self.read_failures: dict[str, Exception] = {}
+        self.scheduled_read_failures: dict[str, tuple[int, Exception]] = {}
+        self.read_counts: dict[str, int] = {}
+
+    def fail_read_on_call(
+        self, key: str, call: int, error: Exception
+    ) -> None:
+        self.scheduled_read_failures[key] = (call, error)
 
     def get_password(self, service: str, key: str) -> str | None:
         if error := self.read_failures.pop(key, None):
             raise error
+        self.read_counts[key] = self.read_counts.get(key, 0) + 1
+        scheduled = self.scheduled_read_failures.get(key)
+        if scheduled is not None and self.read_counts[key] == scheduled[0]:
+            raise scheduled[1]
         return super().get_password(service, key)
 
 
@@ -129,7 +139,7 @@ class CredentialManagerTests(unittest.TestCase):
         self.delete_password_patch = patch.object(
             credential_manager, "delete_password", return_value=None
         )
-        self.get_password_patch.start()
+        self.get_password_mock = self.get_password_patch.start()
         self.delete_password_patch.start()
 
     def tearDown(self):
@@ -204,7 +214,7 @@ class CredentialManagerTests(unittest.TestCase):
     def test_unknown_nonzero_code_preserves_every_credential(self):
         self.seed_accounts("1", "2")
 
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(CredentialValidationError):
             self.worker(candidate=0, responses=[nav(-412)]).run(None)
 
         self.assertEqual(
@@ -214,7 +224,7 @@ class CredentialManagerTests(unittest.TestCase):
     def test_missing_code_preserves_every_credential(self):
         self.seed_accounts("1")
 
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(CredentialValidationError):
             self.worker(
                 candidate=0, responses=[{"message": "no code"}]
             ).run(None)
@@ -297,14 +307,14 @@ class CredentialManagerTests(unittest.TestCase):
             with self.subTest(response=type(response).__name__):
                 self.keyring = FailingReadKeyring()
                 self.seed_accounts("1")
-                with self.assertRaises(ValidationError):
+                with self.assertRaises(CredentialValidationError):
                     self.worker(candidate=0, responses=[response]).run(None)
                 self.assertEqual(self.persisted_index(), ["cookies|1"])
 
     def test_success_payload_schema_failure_is_temporary(self):
         self.seed_accounts("1")
 
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(CredentialValidationError):
             self.worker(
                 candidate=0,
                 responses=[{"code": 0, "data": {"isLogin": True}}],
@@ -318,7 +328,7 @@ class CredentialManagerTests(unittest.TestCase):
         app_state.cookie_state.current_cookie_idx = 0
         self.keyring.read_failures[INDEX] = RuntimeError("keyring offline")
 
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(CredentialValidationError):
             self.worker(candidate=0, responses=[]).run(None)
 
         self.assertEqual(self.persisted_index(), ["cookies|1"])
@@ -333,10 +343,59 @@ class CredentialManagerTests(unittest.TestCase):
             "keyring offline"
         )
 
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(CredentialValidationError):
             self.worker(candidate=0, responses=[]).run(None)
 
         self.assertEqual(self.persisted_index(), ["cookies|1"])
+
+    def test_removal_index_read_failure_after_permanent_nav_is_temporary(self):
+        self.seed_accounts("1")
+        self.keyring.fail_read_on_call(
+            INDEX, 3, RuntimeError("index read unavailable")
+        )
+
+        with self.assertRaises(Exception) as caught:
+            self.worker(candidate=0, responses=[nav(-101)]).run(None)
+
+        self.assertIsInstance(caught.exception, CredentialValidationError)
+        self.assertEqual(self.persisted_index(), ["cookies|1"])
+
+    def test_removal_record_read_failure_after_permanent_nav_is_temporary(self):
+        self.seed_accounts("1")
+        self.keyring.fail_read_on_call(
+            "cookies|1", 2, RuntimeError("record read unavailable")
+        )
+
+        with self.assertRaises(Exception) as caught:
+            self.worker(candidate=0, responses=[nav(-101)]).run(None)
+
+        self.assertIsInstance(caught.exception, CredentialValidationError)
+        self.assertEqual(self.persisted_index(), ["cookies|1"])
+
+    def test_obs_settings_logs_never_include_password(self):
+        canary = "OBS_PASSWORD_CANARY_7d3f"
+        cases = ("active", "persisted")
+        for source in cases:
+            with self.subTest(source=source):
+                app_state.obs_settings.reset()
+                self.get_password_mock.reset_mock(
+                    return_value=True, side_effect=True
+                )
+                if source == "active":
+                    app_state.obs_settings.update({"password": canary})
+                    self.get_password_mock.return_value = None
+                else:
+                    saved = app_state.obs_settings.as_dict()
+                    saved["password"] = canary
+                    self.get_password_mock.side_effect = (
+                        lambda service, key, payload=dumps(saved):
+                        payload if key == KEYRING_SETTINGS else None
+                    )
+
+                with self.assertLogs("StartLiveLogger", level="INFO") as logs:
+                    self.worker(candidate=0, responses=[]).run(None)
+
+                self.assertNotIn(canary, "\n".join(logs.output))
 
     def test_remove_failure_propagates_without_speculative_identity_change(self):
         self.seed_accounts("1")
