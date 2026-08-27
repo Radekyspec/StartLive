@@ -5,6 +5,13 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QFrame, QSizePolicy, QToolButton, QVBoxLayout
 
 
+def _safe_int(value: float) -> int:
+    try:
+        return int(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError("Expected a finite animation value") from exc
+
+
 class SideBar(QFrame):
     def __init__(
         self, parent=None, *, icon_path: Path, expanded_width: int, collapsed_width: int
@@ -32,32 +39,14 @@ class SideBar(QFrame):
             QIcon(str(icon_path / "dark-settings.svg")),
         ]
 
-        def mk_btn(text: str, icon_index, *, checkable: bool = True):
-            b = QToolButton()
-            b.setProperty("_fulltext", text)
-            b.setText("" if not self._expanded else text)
-            b.setIcon(self._light_icons[icon_index])
-            b.setIconSize(QSize(20, 20))
-            # icon only when collapsed, icon plus text when expanded
-            b.setToolButtonStyle(
-                Qt.ToolButtonStyle.ToolButtonIconOnly
-                if not self._expanded
-                else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-            )
-            b.setCheckable(checkable)
-            b.setMinimumHeight(40)
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setObjectName("MenuButton")
-            b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            return b
-
-        self.toggle_btn = mk_btn(" 菜单", 0, checkable=False)
+        self.toggle_btn = self._make_button(" 菜单", 0, checkable=False)
         self.toggle_btn.clicked.connect(self._toggle)
 
-        self.btn_theme = mk_btn("", 1, checkable=False)
-        self.btn_home = mk_btn(" 主界面", 2)
-        self.btn_log = mk_btn(" 日志", 3)
-        self.btn_settings = mk_btn(" 设置", 4)
+        self.btn_theme = self._make_button(
+            "", 1, checkable=False, tooltip="切换主题")
+        self.btn_home = self._make_button(" 主界面", 2)
+        self.btn_log = self._make_button(" 日志", 3)
+        self.btn_settings = self._make_button(" 设置", 4)
 
         v = QVBoxLayout(self)
         v.setContentsMargins(6, 6, 6, 6)
@@ -81,16 +70,48 @@ class SideBar(QFrame):
             self.btn_settings,
         ]
 
+    def _make_button(
+        self,
+        text: str,
+        icon_index: int,
+        *,
+        checkable: bool = True,
+        tooltip: str | None = None,
+    ) -> QToolButton:
+        button = QToolButton()
+        label = tooltip or text.strip()
+        button.setProperty("_fulltext", text)
+        button.setToolTip(label)
+        button.setAccessibleName(label)
+        button.setText("" if not self._expanded else text)
+        button.setIcon(self._light_icons[icon_index])
+        button.setIconSize(QSize(20, 20))
+        # icon only when collapsed, icon plus text when expanded
+        button.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonIconOnly
+            if not self._expanded
+            else Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+        button.setCheckable(checkable)
+        button.setMinimumHeight(40)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setObjectName("MenuButton")
+        button.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        return button
+
     @Slot()
     def _on_anim_finished(self):
         self._anim_changing = False
 
     @Slot()
     def _on_anim_value(self, val):
-        self.setFixedWidth(int(val))
+        self.setFixedWidth(_safe_int(val))
         self.updateGeometry()
-        if self.parentWidget():
-            self.parentWidget().updateGeometry()
+        parent = self.parentWidget()
+        if parent is not None:
+            parent.updateGeometry()
 
     def _apply_collapsed_ui(self, collapsed: bool):
         for b in self._menu_buttons:
