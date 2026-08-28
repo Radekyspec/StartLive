@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from src.PySide.interface_adapters.cover import CoverStateUpdatePresenter
 from src.PySide.interface_adapters.title import RecentTitlePresenter
 from src.PySide.states import LoginState
@@ -6,6 +8,9 @@ from src.core.constant import CoverStatus
 from src.core.workers.base import Presenter
 from src.core.workers.cover import CoverStateUpdateWorker
 from src.core.workers.title import LoadRecentTitleWorker
+
+if TYPE_CHECKING:
+    from src.PySide.window.stream_config import StreamConfigPanel
 
 
 class FetchPreLivePresenter(Presenter):
@@ -22,9 +27,8 @@ class FetchPreLivePresenter(Presenter):
         self._view.parent_window.add_thread(
             LoadRecentTitleWorker(RecentTitlePresenter(self._view)))
         if app_state.stream_status["live_status"]:
-            self._view.addr_input.setText(
-                app_state.stream_status["stream_addr"])
-            self._view.key_input.setText(
+            self._view.display_stream_info(
+                app_state.stream_status["stream_addr"],
                 app_state.stream_status["stream_key"])
             self._view.start_btn.setEnabled(False)
             self._view.parent_window.tray_start_live_action.setEnabled(False)
