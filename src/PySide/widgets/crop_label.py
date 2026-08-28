@@ -1,11 +1,31 @@
 from PySide6.QtCore import (
-    Qt, QRect, QPoint, QSize, QVariantAnimation, QEasingCurve, QTimer, Signal,
-    Slot
+    QEasingCurve,
+    QPoint,
+    QRect,
+    QSize,
+    Qt,
+    QTimer,
+    QVariantAnimation,
+    Signal,
+    Slot,
 )
-from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QGuiApplication
-from PySide6.QtWidgets import (
-    QLabel, QRubberBand
+from PySide6.QtGui import (
+    QColor,
+    QGuiApplication,
+    QImage,
+    QPainter,
+    QPen,
+    QPixmap,
+    QScreen,
 )
+from PySide6.QtWidgets import QLabel, QRubberBand
+
+
+def _safe_int(value: float) -> int:
+    try:
+        return int(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError("Expected a finite numeric value") from exc
 
 
 class CropLabel(QLabel):
@@ -47,6 +67,7 @@ class CropLabel(QLabel):
         self._repaint_timer.setSingleShot(True)
         self._repaint_timer.setInterval(16)
         self._pending_dirty: QRect | None = None
+        self._refresh_screen: QScreen | None = None
 
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.coverUpdated.connect(self.setPixmap)
@@ -59,18 +80,24 @@ class CropLabel(QLabel):
 
     def _apply_refresh_rate(self, *args, **kwargs):
         screen = self._current_screen()
-        rate = screen.refreshRate() or 60.0
+        rate = screen.refreshRate() if screen is not None else 60.0
+        rate = rate or 60.0
         # 以 1x 帧率节流
-        interval_ms = min(33, int(1000.0 / rate))
+        interval_ms = min(33, _safe_int(1000.0 / rate))
         self._repaint_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self._repaint_timer.setInterval(interval_ms)
 
     def showEvent(self, e):
         super().showEvent(e)
         self._apply_refresh_rate()
-        scr = self._current_screen()
-        scr.refreshRateChanged.disconnect(self._apply_refresh_rate)
-        scr.refreshRateChanged.connect(self._apply_refresh_rate)
+        screen = self._current_screen()
+        if screen is None or screen is self._refresh_screen:
+            return
+        if self._refresh_screen is not None:
+            self._refresh_screen.refreshRateChanged.disconnect(
+                self._apply_refresh_rate)
+        screen.refreshRateChanged.connect(self._apply_refresh_rate)
+        self._refresh_screen = screen
 
     def enterEvent(self, e):
         # 窗口拖到另一块屏幕后刷新
@@ -85,7 +112,7 @@ class CropLabel(QLabel):
 
         wL, hL = self.width(), self.height()
         dpr = self.devicePixelRatioF()
-        key = (wL, hL, int(dpr * 100))
+        key = (wL, hL, _safe_int(dpr * 100))
         if self._scaled_pixmap is not None and key == self._scaled_key:
             return  # 缓存有效
 
@@ -93,14 +120,14 @@ class CropLabel(QLabel):
         w0 = self._orig_pixmap.width() / dpr
         h0 = self._orig_pixmap.height() / dpr
         scale = min(wL / w0, hL / h0)
-        new_w, new_h = int(w0 * scale), int(h0 * scale)
+        new_w, new_h = _safe_int(w0 * scale), _safe_int(h0 * scale)
         x = (wL - new_w) // 2
         y = (hL - new_h) // 2
         self._disp_rect = QRect(x, y, new_w, new_h)
 
         # 只在这里缩放一次并缓存（高质量缩放成本转移到低频路径）
         self._scaled_pixmap = self._orig_pixmap.scaled(
-            int(new_w * dpr), int(new_h * dpr),
+            _safe_int(new_w * dpr), _safe_int(new_h * dpr),
             Qt.AspectRatioMode.IgnoreAspectRatio,
             Qt.TransformationMode.SmoothTransformation
         )
@@ -108,7 +135,9 @@ class CropLabel(QLabel):
         self._scaled_key = key
 
     @Slot(QPixmap)
-    def setPixmap(self, pixmap: QPixmap):
+    def setPixmap(self, pixmap: QPixmap | QImage):
+        if isinstance(pixmap, QImage):
+            pixmap = QPixmap.fromImage(pixmap)
         pixmap.setDevicePixelRatio(self.devicePixelRatioF())
         self._orig_pixmap = pixmap
         # reset state
@@ -423,7 +452,10 @@ class CropLabel(QLabel):
         else:
             dy_use = dy
             dx_use = (abs(dy) * w_ratio / h_ratio) * (1 if dx >= 0 else -1)
-        return QPoint(int(fixed_pt.x() + dx_use), int(fixed_pt.y() + dy_use))
+        return QPoint(
+            _safe_int(fixed_pt.x() + dx_use),
+            _safe_int(fixed_pt.y() + dy_use),
+        )
 
     def _clamp(self, pt: QPoint) -> QPoint:
         """
@@ -502,10 +534,10 @@ class CropLabel(QLabel):
         wr, hr = self.aspect_ratio
 
         w = bw
-        h = int(w * hr / wr)
+        h = _safe_int(w * hr / wr)
         if h > bh:
             h = bh
-            w = int(h * wr / hr)
+            w = _safe_int(h * wr / hr)
 
         if center is None:
             x = bounds.left() + (bw - w) // 2
@@ -539,10 +571,10 @@ class CropLabel(QLabel):
         # 先算满宽/满高组合
         bw, bh = dr.width(), dr.height()
         w = bw
-        h = int(w * hr / wr)
+        h = _safe_int(w * hr / wr)
         if h > bh:
             h = bh
-            w = int(h * wr / hr)
+            w = _safe_int(h * wr / hr)
 
         if corner_idx == 0:  # TL
             x, y = dr.left(), dr.top()

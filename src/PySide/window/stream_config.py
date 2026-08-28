@@ -1,39 +1,48 @@
-# -*- coding: utf-8 -*-
-from contextlib import suppress
 # module import
-from ipaddress import ip_address, IPv6Address
+from ipaddress import IPv6Address, ip_address
 from threading import Condition
 
 # package import
-from PySide6.QtCore import (Qt, Slot)
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QIntValidator
-from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
-                               QHBoxLayout,
-                               QLabel, QLineEdit, QPushButton,
-                               QVBoxLayout, QWidget,
-                               QApplication, QFrame)
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
-from src.PySide.classes import FocusAwareLineEdit, \
-    CompletionComboBox
-from src.PySide.interface_adapters.announce import AnnounceUpdatePresenter
-from src.PySide.interface_adapters.area import FetchRecentAreaPresenter, \
-    AreaUpdatePresenter
-from src.PySide.interface_adapters.cover import FetchCoverPresenter
-from src.PySide.interface_adapters.live import StartLivePresenter, \
-    StopLivePresenter
-from src.PySide.interface_adapters.obs_ws import ObsConnectorPresenter
-from src.PySide.interface_adapters.title import TitleUpdatePresenter
-from src.PySide.states import ObsBtnState, StreamState
-from src.PySide.window import AreaPickerPanel, CoverCropWidget
 # local package import
 from src.core import app_state
 from src.core.constant import CoverStatus
 from src.core.workers.announce import AnnounceUpdateWorker
-from src.core.workers.area import FetchRecentAreaWorker, AreaUpdateWorker
-from src.core.workers.cover import FetchCoverWorker
+from src.core.workers.area import AreaUpdateWorker, FetchRecentAreaWorker
+from src.core.workers.cover import CoverStateUpdateWorker, FetchCoverWorker
 from src.core.workers.live import StartLiveWorker, StopLiveWorker
-from src.core.workers.obs_ws import ObsDaemonWorker, ObsConnectorWorker
+from src.core.workers.obs_ws import ObsConnectorWorker, ObsDaemonWorker
 from src.core.workers.title import TitleUpdateWorker
+from src.PySide.classes import CompletionComboBox, FocusAwareLineEdit
+from src.PySide.interface_adapters.announce import AnnounceUpdatePresenter
+from src.PySide.interface_adapters.area import (
+    AreaUpdatePresenter,
+    FetchRecentAreaPresenter,
+)
+from src.PySide.interface_adapters.cover import (
+    CoverStateUpdatePresenter,
+    FetchCoverPresenter,
+)
+from src.PySide.interface_adapters.live import StartLivePresenter, StopLivePresenter
+from src.PySide.interface_adapters.obs_ws import ObsConnectorPresenter
+from src.PySide.interface_adapters.title import TitleUpdatePresenter
+from src.PySide.states import ObsBtnState, StreamState
+from src.PySide.window import AreaPickerPanel, CoverCropWidget
 
 
 class StreamConfigPanel(QWidget):
@@ -53,6 +62,7 @@ class StreamConfigPanel(QWidget):
         self.obs_btn_state.obsDisconnected.connect(self._obs_btn_disconnected)
         self.obs_btn_state.obsConnecting.connect(self._obs_btn_connecting)
         self.cover_crop_widget: CoverCropWidget | None = None
+        self._cover_audit_monitor_active = False
         self.main_layout = QVBoxLayout()
         self.setLayout(self.main_layout)
         self.main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -333,9 +343,9 @@ class StreamConfigPanel(QWidget):
         app_state.stream_status["stream_addr"] = None
         self.addr_input.setText("")
         self.key_input.setText("")
-        if app_state.obs_client is not None:
-            if self.obs_auto_live_checkbox.isChecked():
-                app_state.obs_req_queue.put(("StopStream", {}))
+        if (app_state.obs_client is not None
+                and self.obs_auto_live_checkbox.isChecked()):
+            app_state.obs_req_queue.put(("StopStream", {}))
         self.parent_window.add_thread(StopLiveWorker(StopLivePresenter(self)))
 
     def fill_stream_info(self, addr: str, key: str):
@@ -368,7 +378,8 @@ class StreamConfigPanel(QWidget):
                 if isinstance(ip_object, IPv6Address):
                     obs_host = f"[{obs_host}]"
             except ValueError:
-                pass
+                # Host names require no IPv6 bracket normalization.
+                obs_host = str(obs_host)
             connector = ObsConnectorWorker(
                 ObsConnectorPresenter(self, self.obs_btn_state, self._cond),
                 host=obs_host,
@@ -407,6 +418,20 @@ class StreamConfigPanel(QWidget):
                 f"审核未通过: {app_state.room_info['cover_audit_reason']}")
             self.cover_status.setStyleSheet("color: red")
 
+    def ensure_cover_audit_monitor(self) -> None:
+        if self._cover_audit_monitor_active:
+            return
+        self._cover_audit_monitor_active = True
+        try:
+            self.parent_window.add_thread(
+                CoverStateUpdateWorker(CoverStateUpdatePresenter(self)))
+        except Exception:
+            self._cover_audit_monitor_active = False
+            raise
+
+    def finish_cover_audit_monitor(self) -> None:
+        self._cover_audit_monitor_active = False
+
     @Slot()
     def _save_title(self):
         self.save_title_btn.setEnabled(False)
@@ -416,8 +441,6 @@ class StreamConfigPanel(QWidget):
 
     @Slot()
     def _edit_cover(self):
-        if app_state.room_info["cover_status"] == 0:
-            return
         self.cover_edit_btn.setEnabled(False)
         self.cover_crop_widget = CoverCropWidget(self)
         self.cover_crop_widget.destroyed.connect(self._on_cover_exit)
@@ -426,13 +449,9 @@ class StreamConfigPanel(QWidget):
         self.cover_crop_widget.show()
 
     @Slot()
-    def _on_cover_exit(self):
-        self.cover_edit_btn.setEnabled(True)
-        with suppress(RuntimeError):
-            self.cover_crop_widget.hide()
-        with suppress(RuntimeError):
-            self.cover_crop_widget.deleteLater()
+    def _on_cover_exit(self) -> None:
         self.cover_crop_widget = None
+        self.cover_edit_btn.setEnabled(True)
 
     @Slot()
     def _save_announce(self):
