@@ -33,5 +33,6 @@ class GetRoomContentAuditWorker(BaseWorker):
         if response["data"] and response["data"]["title_audit_info"] and \
                 response["data"]["title_audit_info"][
                     "audit_status"] != TitleStatus.AUDIT_PASSED:
+            app_state.room_info["title"] = response["data"]["title"]
             raise TitleStatusError(
                 response["data"]["title_audit_info"]["audit_reason"])
