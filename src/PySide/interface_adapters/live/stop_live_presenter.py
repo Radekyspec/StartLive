@@ -1,5 +1,4 @@
 from src.core.workers.base import Presenter
-from src.core.workers.room import GetRoomContentAuditWorker
 
 
 class StopLivePresenter(Presenter):
@@ -7,8 +6,7 @@ class StopLivePresenter(Presenter):
         super().__init__()
         self._view = view
 
-    def prepare_success_view(self, *args, **kwargs):
-        self._view.parent_window.add_thread(GetRoomContentAuditWorker())
+    def prepare_success_view(self, *args, **kwargs): ...
 
     def prepare_fail_view(self, exception: Exception):
         self._view.start_btn.setEnabled(False)
