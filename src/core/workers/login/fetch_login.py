@@ -14,11 +14,8 @@ from src.core.workers.base import LongLiveWorker, Presenter
 
 class FetchLoginWorker(LongLiveWorker):
     def __init__(self, presenter: Presenter):
-        super().__init__(name="登录", with_session=False,
-                         presenter=presenter)
-        self._session = app_state.create_session(
-            HeadersType.WEB, inherit_account_cookies=False
-        )
+        super().__init__(name="登录", headers_type=HeadersType.WEB,
+                         inherit_account_cookies=False, presenter=presenter)
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
