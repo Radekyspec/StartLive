@@ -3,7 +3,7 @@ from typing import Callable
 from src.PySide.log import get_logger
 from src.core import app_state
 from src.core.constant import TitleStatus
-from src.core.exceptions.TitleStatusError import TitleStatusError
+from src.core.exceptions import TitleStatusError
 from src.core.sign import livehime_sign, order_payload
 from src.core.workers.base import BaseWorker
 
