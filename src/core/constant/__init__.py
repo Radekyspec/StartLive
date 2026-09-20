@@ -35,6 +35,12 @@ class CoverStatus(IntEnum):
 
 
 @unique
+class TitleStatus(IntEnum):
+    AUDIT_PASSED = 2
+    AUDIT_FAILED = 3
+
+
+@unique
 class WidgetIndex(IntEnum):
     WIDGET_LOGIN = 0
     WIDGET_PANEL = 1
@@ -97,8 +103,8 @@ VERSION = __version__
 
 APP_KEY = "aae92bc66f3edfab"
 APP_SECRET = "af125a0d5279fd576c1b4418a3e8276d"
-LIVEHIME_BUILD = "10783"
-LIVEHIME_VERSION = "7.63.0.10783"
+LIVEHIME_BUILD = "11081"
+LIVEHIME_VERSION = "8.7.0.11081"
 HEADERS_WEB = {
     "Accept": "*/*",
     "Accept-Encoding": "gzip, deflate",
@@ -112,12 +118,12 @@ HEADERS_WEB = {
     "Sec-Fetch-Site": "same-site",
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Dest": "empty",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/10783"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 pc_app/livehime build/11081"
 }
 HEADERS_APP = {
     "Accept-Encoding": "gzip,deflate",
     "Connection": "keep-alive",
-    "User-Agent": "LiveHime/7.63.0.10783 os/Windows pc_app/livehime build/10783 osVer/10.0_x86_64"
+    "User-Agent": "LiveHime/8.7.0.11081 os/Windows pc_app/livehime build/11081 osVer/10.0_x86_64"
 }
 START_LIVE_AUTH_CSRF = True
 STOP_LIVE_AUTH_CSRF = False

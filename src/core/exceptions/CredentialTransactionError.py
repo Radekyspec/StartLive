@@ -1,4 +1,5 @@
 class CredentialTransactionError(Exception):
+    operation: str
     """Raised when a credential write cannot be durably completed."""
 
     def __init__(
@@ -14,3 +15,6 @@ class CredentialTransactionError(Exception):
         # Short aliases keep callers from having to inspect exception details.
         self.primary = primary_error
         self.rollback = rollback_error
+
+    def __repr__(self):
+        return f"{self.operation} credential transaction failed"

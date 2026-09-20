@@ -9,8 +9,9 @@ from src.core import app_state
 from src.core.constant import FaceAuthType
 from src.core.workers.base import Presenter
 from src.core.workers.face_auth import FaceCaptchaWorker
-from src.core.workers.live import ReportLiveDataWorker
 from src.core.workers.obs_ws import WaitObsConnectedWorker
+from src.core.workers.room import ReportLiveDataWorker, \
+    GetRoomContentAuditWorker
 
 
 class StartLivePresenter(Presenter):
@@ -23,6 +24,7 @@ class StartLivePresenter(Presenter):
 
     def prepare_success_view(self, live_result):
         self._view.parent_window.add_thread(ReportLiveDataWorker())
+        self._view.parent_window.add_thread(GetRoomContentAuditWorker())
         match live_result:
             case 0:
                 self._view.parent_window.add_thread(
