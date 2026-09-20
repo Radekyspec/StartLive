@@ -9,7 +9,7 @@ __all__ = [
     "MAX_RECENT_TITLE", "VERSION", "DARK_COVER_CSS", "DARK_CSS",
     "LIGHT_COVER_CSS", "LIGHT_CSS", "ProxyMode", "PreferProto", "CoverStatus",
     "WidgetIndex", "CacheType", "BackgroundMode", "HeadersType", "LoginResult",
-    "FaceAuthType", "ValidationOutcome"
+    "FaceAuthType", "ValidationOutcome", "TitleStatus"
 ]
 
 
