@@ -64,7 +64,7 @@ class PackagingStartupTests(unittest.TestCase):
         from startlive.core import runtime
 
         def check_startup():
-            with patch('src.core.cache.system', return_value='Windows'), \
+            with patch('startlive.core.cache.system', return_value='Windows'), \
                     patch.dict(os.environ, {
                         'LOCALAPPDATA': str(Path.home() / 'local-test')}), \
                     patch.dict(cache._cache_dir, {}, clear=True):
@@ -74,7 +74,7 @@ class PackagingStartupTests(unittest.TestCase):
                         Path.home() / 'local-test' / 'StartLive' / kind,
                     )
             for platform in ('Windows', 'Darwin', 'Linux'):
-                with patch('src.PySide.updater.update_worker.system',
+                with patch('startlive.PySide.updater.update_worker.system',
                            return_value=platform), \
                         patch.dict(sys.modules, {'velopack': None}):
                     worker = VelopackUpdateWorker('https://example.invalid',

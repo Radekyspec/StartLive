@@ -36,7 +36,7 @@ class LinuxStartupTests(unittest.TestCase):
         self.assertTrue(StartLive._velopack_first_run)
 
     @patch(
-        "src.PySide.updater.update_worker.system",
+        "startlive.PySide.updater.update_worker.system",
         return_value="Linux",
     )
     def test_update_worker_finishes_without_velopack(self, _system: Mock) -> None:
