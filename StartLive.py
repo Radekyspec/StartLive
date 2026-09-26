@@ -34,14 +34,14 @@ def main() -> int:
         "--web.host",
         dest="web_host",
         default=None,
-        help="Web服务绑定的主机地址",
+        help="Host address for the web server",
     )
     parser.add_argument(
         "--web.port",
         dest="web_port",
         type=int,
         default=None,
-        help="Web服务绑定的端口",
+        help="Port for the web server",
     )
 
     # 兼容旧 Squirrel 启动参数。

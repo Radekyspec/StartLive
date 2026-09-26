@@ -76,6 +76,16 @@ def main():
         run(str(python), "-m", "pip", "install", "--no-deps", "--no-index",
             str(wheel), cwd=directory, env=env)
         run(str(command), "--help", cwd=directory, env=env)
+        # Windows CI may redirect stdout using a legacy code page. Exercise
+        # this explicitly even when the machine running this check uses UTF-8.
+        for encoding in ("cp1252", "ascii", "utf-8"):
+            help_env = dict(env, PYTHONIOENCODING=f"{encoding}:strict")
+            help_result = subprocess.run(
+                [str(command), "--help"], cwd=directory, env=help_env,
+                check=True, capture_output=True, text=True, encoding=encoding,
+            )
+            if "--web.port" not in help_result.stdout:
+                raise ValueError(f"Incomplete help output with {encoding}")
         result = subprocess.run(
             [str(command), "--version"], cwd=directory, env=env,
             check=True, capture_output=True, text=True,
