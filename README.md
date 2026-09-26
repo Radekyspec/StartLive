@@ -20,37 +20,6 @@ Download / Update / Q&A QQ Group: <a href="https://qm.qq.com/q/fPBktdfdrG">10227
 - This software is open-sourced under the [GNU General Public License 3.0](https://www.gnu.org/licenses/gpl-3.0.en.html).
 - The software **logo is not licensed under GPL-3.0**. All rights are reserved by the artist [花漫酱](https://space.bilibili.com/49468802) and the software developer. You may not claim GPL-3.0 authorization to use the logo without permission, nor use it for any commercial purpose without authorization.
 
-## Install
-
-### Install from PyPI
-
-Requires Python 3.11–3.14, a desktop environment and a supported system keyring.
-
-With uv:
-
-```shell
-uv tool install startlive
-startlive
-uv tool upgrade startlive
-```
-
-With pip (inside a virtual environment):
-
-```shell
-python -m pip install startlive
-startlive
-python -m pip install --upgrade startlive
-```
-
-The `startlive` command works from any directory. Use `startlive --help` for
-options and `startlive --version` to check the installed version. Python package
-installations use uv/pip for updates. On Windows, configuration and logs are
-stored under `%LOCALAPPDATA%/StartLive`; account credentials remain in the
-system keyring.
-
-Maintainers: see
-the [PyPI publishing guide](https://github.com/Radekyspec/StartLive/blob/master/docs/publishing.md).
-
 ### Download via Releases
 
 Download link: **[Click here to download](https://github.com/Radekyspec/StartLive/releases/latest)**
@@ -68,6 +37,35 @@ winget install Radekyspec.StartLive
 ```shell
 paru -S startlive-git
 ```
+
+### Install from PyPI
+
+Requires Python 3.11–3.14, a desktop environment and a supported system keyring.
+
+With uv:
+
+```shell
+uv tool install startlive
+startlive
+uv tool upgrade startlive
+```
+
+With pip:
+
+```shell
+python -m pip install startlive
+startlive
+python -m pip install --upgrade startlive
+```
+
+The `startlive` command works from any directory. Use `startlive --help` for
+options and `startlive --version` to check the installed version. Python package
+installations use uv/pip for updates. On Windows, configuration and logs are
+stored under `%LOCALAPPDATA%/StartLive`; account credentials remain in the
+system keyring.
+
+Maintainers: see
+the [PyPI publishing guide](https://github.com/Radekyspec/StartLive/blob/master/docs/publishing.md).
 
 Supported Linux installations are managed and updated through the system
 package manager. The in-app Velopack updater is disabled on Linux, so Velopack
