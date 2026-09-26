@@ -16,35 +16,6 @@
 - 本软件使用 [GNU General Public License 3.0](https://www.gnu.org/licenses/gpl-3.0.zh-cn.html) 协议开源
 - 本软件 logo 并非使用 GPL-3.0 协议开源，画师[花漫酱](https://space.bilibili.com/49468802)及软件开发者保留所有权利。不得以 GPL-3.0 协议已授权为由在未经授权的情况下使用本软件 logo，不得在未经授权的情况下将本软件 logo 用于任何商业用途。
 
-## 安装
-
-### 从 PyPI 安装（首次发布到 PyPI 后可用）
-
-需要 Python 3.11–3.14、桌面环境以及可用的系统 keyring 后端。
-
-使用 uv 安装、启动和更新：
-
-```shell
-uv tool install startlive
-startlive
-uv tool upgrade startlive
-```
-
-也可以在虚拟环境中使用 pip：
-
-```shell
-python -m pip install startlive
-startlive
-python -m pip install --upgrade startlive
-```
-
-安装后可在任意目录执行 `startlive`；使用 `startlive --help` 查看参数，
-使用 `startlive --version` 查看版本。通过该命令启动时使用 uv/pip 更新。
-Windows 的配置和日志保存在 `%LOCALAPPDATA%/StartLive` 下，
-账号凭据继续使用系统 keyring。
-
-维护者请参阅[PyPI 发布指南](publishing.md)。
-
 ### 通过 Releases 下载
 
 下载链接：[点击这里下载](https://github.com/Radekyspec/StartLive/releases/latest)
@@ -65,6 +36,33 @@ paru -S startlive-git
 
 受支持的 Linux 安装由系统包管理器负责安装和更新。Linux 下会禁用应用内的
 Velopack 更新器，因此无需单独安装 Velopack。
+
+### 从 PyPI 安装
+
+需要 Python 3.11–3.14、桌面环境以及可用的系统 keyring 后端。
+
+使用 uv 安装、启动和更新：
+
+```shell
+uv tool install startlive
+startlive
+uv tool upgrade startlive
+```
+
+使用 pip：
+
+```shell
+python -m pip install startlive
+startlive
+python -m pip install --upgrade startlive
+```
+
+安装后可在任意目录执行 `startlive`；使用 `startlive --help` 查看参数，
+使用 `startlive --version` 查看版本。通过该命令启动时使用 uv/pip 更新。
+Windows 的配置和日志保存在 `%LOCALAPPDATA%/StartLive` 下，
+账号凭据继续使用系统 keyring。
+
+维护者请参阅[PyPI 发布指南](publishing.md)
 
 ## 软件截图
 
