@@ -4,6 +4,7 @@ from typing import Callable
 from PySide6.QtCore import QObject, Signal, Slot
 
 from src.PySide.log import get_logger
+from src.core import runtime
 
 
 class VelopackUpdateWorker(QObject):
@@ -20,6 +21,12 @@ class VelopackUpdateWorker(QObject):
     @Slot()
     def run(self) -> None:
         try:
+            if runtime.package_managed:
+                self.logger.info(
+                    "Automatic updates are disabled for Python package installs; "
+                    "use uv tool upgrade startlive or pip install --upgrade startlive."
+                )
+                return
             if system() == "Linux":
                 self.logger.info(
                     "Automatic updates are disabled on Linux; "

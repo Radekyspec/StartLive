@@ -24,27 +24,11 @@ def _run_velopack_hooks() -> None:
 
 
 def main() -> int:
-    # 将较重的应用模块放在 Velopack 启动处理之后导入，
-    # 可以避免安装/更新钩子执行时初始化完整 UI。
-    from PySide6.QtGui import QFont, QIcon
-    from PySide6.QtWidgets import QApplication
-    from qdarktheme import enable_hi_dpi
+    from src.core.constant import VERSION
 
-    from src.PySide.classes import ErrorCenter, install_exception_handlers
-    from src.PySide.window import MainWindow
-    from src.core import app_state
-
-    if MainWindow.is_another_instance_running():
-        return 0
-
-    if system() == "Windows":
-        font_size = 9
-        icon_file = "icon_left.ico"
-    else:
-        font_size = 12
-        icon_file = "icon_left_macOS.ico"
-
-    parser = ArgumentParser()
+    parser = ArgumentParser(prog="startlive")
+    parser.add_argument("--version", action="version",
+                        version=f"StartLive {VERSION}")
 
     parser.add_argument(
         "--web.host",
@@ -76,10 +60,30 @@ def main() -> int:
 
     args, qt_args = parser.parse_known_args()
 
+    # 将较重的应用模块放在 Velopack 启动处理之后导入，
+    # 可以避免安装/更新钩子执行时初始化完整 UI。
+    from PySide6.QtGui import QFont, QIcon
+    from PySide6.QtWidgets import QApplication
+    from qdarktheme import enable_hi_dpi
+
+    from src.PySide.classes import ErrorCenter, install_exception_handlers
+    from src.PySide.window import MainWindow
+    from src.core import app_state
+
+    if MainWindow.is_another_instance_running():
+        return 0
+
+    if system() == "Windows":
+        font_size = 9
+        icon_file = "icon_left.ico"
+    else:
+        font_size = 12
+        icon_file = "icon_left_macOS.ico"
+
     first_run = _velopack_first_run or args.squirrel_first_run
 
     enable_hi_dpi()
-    app = QApplication(qt_args)
+    app = QApplication([sys.argv[0], *qt_args])
     # %LocalAppData%/StartLive in velopack and squirrel.windows
     base_path = Path(__file__).resolve().parent
     app.setWindowIcon(
@@ -119,6 +123,15 @@ def main() -> int:
 
     window.show()
     return app.exec()
+
+
+def cli() -> int:
+    """Entry point for installations managed by pip or uv tool."""
+    from src.core import cache, runtime
+
+    runtime.package_managed = True
+    cache._cache_dir.clear()
+    return main()
 
 
 if __name__ == "__main__":
