@@ -57,7 +57,7 @@ jobs:
         run: python tools/check_distribution.py dist/*.whl
 
   publish:
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     needs: [ build, install ]
     runs-on: ubuntu-latest
     environment:

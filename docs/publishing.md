@@ -54,15 +54,33 @@ wheel 只包含应用代码、图标、版本资源和许可证；不包含本�
 3. 在 GitHub 仓库中创建 `pypi` environment。建议设置发布审批人，
    并将允许发布的分支或标签限制到正式发布来源。
 4. 修改版本文件并提交，创建同版本的 GitHub Release，例如版本
-   `1.2.1` 对应标签 `v1.2.1`。工作流会拒绝标签和包版本不一致的发布。
+   `1.2.1` 对应 tag `1.2.1`，Release 标题也可以填写 `1.2.1`。
+   tag 兼容可选的 `v` 前缀，因此 `v1.2.1` 同样有效。
+   工作流读取 `github.event.release.tag_name`，去掉可选的 `v` 前缀后，
+   必须与包版本完全一致；Release 标题不参与 PyPI 版本校验。
+   包版本来自该 tag 所指提交中的 `src/core/constant/_version.py`，
+   不会根据 tag 或标题自动修改。
 
-工作流在 PR、master 推送和手动触发时只构建、检查；
-仅发布 GitHub Release 时上传 PyPI。构建后在 Windows、macOS、Linux
+工作流在 PR、master 推送时只构建、检查；
+发布 GitHub Release 或手动触发工作流时上传 PyPI。构建后在 Windows、macOS、Linux
 分别验证命令安装，全部通过才发布。身份验证使用短期 OIDC 凭据，
 无需保存 PyPI API token。这里的检查不替代各平台的完整桌面功能测试。
 
 每个已发布的 PyPI 版本不可覆盖；修复后需要递增版本号。
 仓库中添加工作流不会自动创建 PyPI 账号、项目或 publisher。
+
+## 在 GitHub Actions 中手动发布
+
+1. 将工作流提交到仓库默认分支，以显示手动运行入口。
+2. 在要发布的分支中更新 `src/core/constant/_version.py` 并提交，
+   确保版本号尚未发布到 PyPI，且该分支包含支持手动发布的工作流。
+3. 打开 **Actions → Build and publish Python package → Run workflow**，
+   选择要发布的分支，然后点击 **Run workflow**。
+4. 构建和三个平台的安装检查通过后，`publish` 任务会上传 PyPI。
+   如果 `pypi` environment 配置了审批或分支限制，仍需满足这些条件。
+
+手动发布不要求创建 Release；包版本直接取所选分支中的版本文件，
+不会执行 Release tag 校验。手动运行会实际发布，不再只是构建检查。
 
 ## 手动上传
 
