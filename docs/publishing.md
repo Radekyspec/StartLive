@@ -1,7 +1,7 @@
 # 发布到 PyPI
 
 项目使用 `pyproject.toml` 和 setuptools 构建，发行名及安装后的命令均为
-`startlive`。版本唯一来源是 `src/core/constant/_version.py`，
+`startlive`。版本唯一来源是 `startlive/core/constant/_version.py`，
 依赖来源是 `requirements.txt`，无需另加 `setup.py`。
 
 ## 本地构建和验证
@@ -58,7 +58,7 @@ wheel 只包含应用代码、图标、版本资源和许可证；不包含本�
    tag 兼容可选的 `v` 前缀，因此 `v1.2.1` 同样有效。
    工作流读取 `github.event.release.tag_name`，去掉可选的 `v` 前缀后，
    必须与包版本完全一致；Release 标题不参与 PyPI 版本校验。
-   包版本来自该 tag 所指提交中的 `src/core/constant/_version.py`，
+   包版本来自该 tag 所指提交中的 `startlive/core/constant/_version.py`，
    不会根据 tag 或标题自动修改。
 
 工作流在 PR、master 推送时只构建、检查；
@@ -72,7 +72,7 @@ wheel 只包含应用代码、图标、版本资源和许可证；不包含本�
 ## 在 GitHub Actions 中手动发布
 
 1. 将工作流提交到仓库默认分支，以显示手动运行入口。
-2. 在要发布的分支中更新 `src/core/constant/_version.py` 并提交，
+2. 在要发布的分支中更新 `startlive/core/constant/_version.py` 并提交，
    确保版本号尚未发布到 PyPI，且该分支包含支持手动发布的工作流。
 3. 打开 **Actions → Build and publish Python package → Run workflow**，
    选择要发布的分支，然后点击 **Run workflow**。

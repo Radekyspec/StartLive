@@ -24,7 +24,7 @@ def _run_velopack_hooks() -> None:
 
 
 def main() -> int:
-    from src.core.constant import VERSION
+    from startlive.core.constant import VERSION
 
     parser = ArgumentParser(prog="startlive")
     parser.add_argument("--version", action="version",
@@ -66,9 +66,9 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication
     from qdarktheme import enable_hi_dpi
 
-    from src.PySide.classes import ErrorCenter, install_exception_handlers
-    from src.PySide.window import MainWindow
-    from src.core import app_state
+    from startlive.PySide.classes import ErrorCenter, install_exception_handlers
+    from startlive.PySide.window import MainWindow
+    from startlive.core import app_state
 
     if MainWindow.is_another_instance_running():
         return 0
@@ -84,8 +84,11 @@ def main() -> int:
 
     enable_hi_dpi()
     app = QApplication([sys.argv[0], *qt_args])
-    # %LocalAppData%/StartLive in velopack and squirrel.windows
+    # %LocalAppData%/StartLive/current/ in velopack and
+    # %LocalAppData%/StartLive/app-x.y.z/ in squirrel.windows
     base_path = Path(__file__).resolve().parent
+    if (base_path / "startlive").is_dir():
+        base_path = base_path / "startlive"
     app.setWindowIcon(
         QIcon(str(base_path / "resources" / icon_file))
     )
@@ -127,7 +130,7 @@ def main() -> int:
 
 def cli() -> int:
     """Entry point for installations managed by pip or uv tool."""
-    from src.core import cache, runtime
+    from startlive.core import cache, runtime
 
     runtime.package_managed = True
     cache._cache_dir.clear()

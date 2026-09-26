@@ -38,13 +38,13 @@ include-package-data = false
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src", "src.*", "resources"]
+include = ["startlive", "startlive.*"]
 exclude = ["*.__pycache__", "*.__pycache__.*"]
 namespaces = true
 
 [tool.setuptools.package-data]
-resources = ["*.ico", "*.svg", "version.json"]
+"startlive.resources" = ["*.ico", "*.svg", "version.json"]
 
 [tool.setuptools.dynamic]
-version = { attr = "src.core.constant._version.__version__" }
+version = { attr = "startlive.core.constant._version.__version__" }
 dependencies = { file = ["requirements.txt"] }
