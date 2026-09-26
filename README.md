@@ -1,7 +1,7 @@
 <!-- markdownlint-disable -->
 <div align="center">
 
-<img alt="LOGO" src="./docs/images/icon_left.png" width="256" height="256" />
+<img alt="LOGO" src="https://raw.githubusercontent.com/Radekyspec/StartLive/master/docs/images/icon_left.png" width="256" height="256" />
 
 # StartLive
 
@@ -9,7 +9,8 @@ Bypass the requirement to use Bilibili’s official "LiveHime" client to start s
 
 Download / Update / Q&A QQ Group: <a href="https://qm.qq.com/q/fPBktdfdrG">1022778201</a>
 
-<a href="./docs/README_zh.md">🇨🇳 简体中文版</a>
+<a href="https://github.com/Radekyspec/StartLive/blob/master/docs/README_zh.md">
+🇨🇳 简体中文版</a>
 
 </div>
 <!-- markdownlint-restore -->
@@ -20,6 +21,35 @@ Download / Update / Q&A QQ Group: <a href="https://qm.qq.com/q/fPBktdfdrG">10227
 - The software **logo is not licensed under GPL-3.0**. All rights are reserved by the artist [花漫酱](https://space.bilibili.com/49468802) and the software developer. You may not claim GPL-3.0 authorization to use the logo without permission, nor use it for any commercial purpose without authorization.
 
 ## Install
+
+### Install from PyPI
+
+Requires Python 3.11–3.14, a desktop environment and a supported system keyring.
+
+With uv:
+
+```shell
+uv tool install startlive
+startlive
+uv tool upgrade startlive
+```
+
+With pip (inside a virtual environment):
+
+```shell
+python -m pip install startlive
+startlive
+python -m pip install --upgrade startlive
+```
+
+The `startlive` command works from any directory. Use `startlive --help` for
+options and `startlive --version` to check the installed version. Python package
+installations use uv/pip for updates. On Windows, configuration and logs are
+stored under `%LOCALAPPDATA%/StartLive`; account credentials remain in the
+system keyring.
+
+Maintainers: see
+the [PyPI publishing guide](https://github.com/Radekyspec/StartLive/blob/master/docs/publishing.md).
 
 ### Download via Releases
 
@@ -67,13 +97,6 @@ does not need to be installed separately.
 
 ### Install & Run
 
-> [!NOTE]
-> Only CPython official python (available
-> on [Python.org](https://www.python.org)) and pip are tested and recommended.
->
-> If you encounter issues when installing dependencies, make sure to use the
-> correct package manager first.
-
 Create a virtual environment:
 
 ```shell
@@ -83,14 +106,14 @@ python -m venv venv
 - **Windows**: 
 
 ```shell
-.\venv\Script\pip.exe install -r .\requirements.txt
-.\venv\Script\python.exe .\StartLive.py
+.\venv\Scripts\pip.exe install -e .
+.\venv\Scripts\python.exe .\StartLive.py
 ```
 
 - **macOS / Linux**:
 
 ```shell
-./venv/bin/pip install -r ./requirements.txt
+./venv/bin/pip install -e .
 ./venv/bin/python ./StartLive.py
 ```
 

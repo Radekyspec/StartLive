@@ -1,0 +1,8 @@
+include README.md LICENSE LICENSE-ARTWORK requirements.txt
+include docs/README_zh.md docs/publishing.md
+recursive-include tests *.py
+include tools/check_distribution.py
+recursive-include resources *.ico *.svg
+include resources/version.json
+global-exclude *.py[cod]
+global-exclude __pycache__

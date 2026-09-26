@@ -1,7 +1,8 @@
-from os import remove
+from os import environ, remove
 from pathlib import Path
 from platform import system
 
+from .. import runtime
 from ..constant import CacheType
 
 _cache_dir: dict[CacheType, Path] = {}
@@ -11,10 +12,15 @@ def cache_base_dir(kind: CacheType) -> Path:
     if kind in _cache_dir:
         return Path(_cache_dir[kind])
     if (_arch := system()) == "Windows":
-        try:
-            _base_dir = Path(__compiled__.containing_dir).resolve()
-        except NameError:
-            _base_dir = Path.cwd().resolve()
+        if runtime.package_managed:
+            _base_dir = Path(environ.get(
+                "LOCALAPPDATA", Path.home() / "AppData" / "Local"
+            )) / "StartLive"
+        else:
+            try:
+                _base_dir = Path(__compiled__.containing_dir).resolve()
+            except NameError:
+                _base_dir = Path.cwd().resolve()
         _base_dir = _base_dir / kind
     elif _arch == "Linux":
         _base_dir = Path.home() / ".cache" / "StartLive" / kind
