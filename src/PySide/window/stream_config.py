@@ -5,7 +5,7 @@ from ipaddress import ip_address, IPv6Address
 from threading import Condition
 
 # package import
-from PySide6.QtCore import (Qt, Slot)
+from PySide6.QtCore import (Qt, QTimer, Slot)
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox,
                                QHBoxLayout,
@@ -37,6 +37,7 @@ from src.core.workers.title import TitleUpdateWorker
 
 
 class StreamConfigPanel(QWidget):
+    _COPY_FEEDBACK_MS: int = 1500
 
     def __init__(self, parent_window, *args, **kwargs):
         super().__init__(parent_window, *args, **kwargs)
@@ -148,6 +149,11 @@ class StreamConfigPanel(QWidget):
         stream_layout.addWidget(self.addr_input, 0, 1, 1, 6)
         self.copy_addr_btn = QPushButton("复制")
         self.copy_addr_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.copy_addr_btn.setToolTip("复制串流地址")
+        self.copy_addr_btn.setAccessibleName("复制串流地址")
+        self.copy_addr_btn.setEnabled(False)
+        self._copy_addr_timer = self._create_copy_timer(
+            self.copy_addr_btn, "复制串流地址")
         stream_layout.addWidget(self.copy_addr_btn, 0, 8)
 
         stream_layout.addWidget(QLabel("串流密钥:"), 1, 0, 1, 1)
@@ -156,6 +162,11 @@ class StreamConfigPanel(QWidget):
         stream_layout.addWidget(self.key_input, 1, 1, 1, 6)
         self.copy_key_btn = QPushButton("复制")
         self.copy_key_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.copy_key_btn.setToolTip("复制串流密钥")
+        self.copy_key_btn.setAccessibleName("复制串流密钥")
+        self.copy_key_btn.setEnabled(False)
+        self._copy_key_timer = self._create_copy_timer(
+            self.copy_key_btn, "复制串流密钥")
         stream_layout.addWidget(self.copy_key_btn, 1, 8)
 
         stream_group.setLayout(stream_layout)
@@ -284,11 +295,41 @@ class StreamConfigPanel(QWidget):
     def _activate_area_save(self):
         self.modify_area_btn.setEnabled(True)
 
+    def _create_copy_timer(self, button: QPushButton,
+                           tooltip: str) -> QTimer:
+        timer = QTimer(button)
+        timer.setSingleShot(True)
+        timer.timeout.connect(
+            lambda: self._reset_copy_button(button, tooltip))
+        return timer
+
+    @staticmethod
+    def _reset_copy_button(button: QPushButton, tooltip: str):
+        button.setText("复制")
+        button.setToolTip(tooltip)
+
+    def _reset_copy_feedback(self):
+        self._copy_addr_timer.stop()
+        self._copy_key_timer.stop()
+        self._reset_copy_button(self.copy_addr_btn, "复制串流地址")
+        self._reset_copy_button(self.copy_key_btn, "复制串流密钥")
+
+    def _copy_value(self, value: str, button: QPushButton, timer: QTimer,
+                    tooltip: str):
+        if not value:
+            return
+        QApplication.clipboard().setText(value)
+        button.setText("已复制")
+        button.setToolTip(tooltip)
+        timer.start(self._COPY_FEEDBACK_MS)
+
     def copy_address(self):
-        QApplication.clipboard().setText(self.addr_input.text())
+        self._copy_value(self.addr_input.text(), self.copy_addr_btn,
+                         self._copy_addr_timer, "串流地址已复制到剪贴板")
 
     def copy_key(self):
-        QApplication.clipboard().setText(self.key_input.text())
+        self._copy_value(self.key_input.text(), self.copy_key_btn,
+                         self._copy_key_timer, "串流密钥已复制到剪贴板")
 
     @Slot()
     def start_live(self):
@@ -331,20 +372,25 @@ class StreamConfigPanel(QWidget):
         # self.child_combo.setEnabled(True)
         app_state.stream_status["stream_key"] = None
         app_state.stream_status["stream_addr"] = None
-        self.addr_input.setText("")
-        self.key_input.setText("")
+        self.display_stream_info("", "")
         if app_state.obs_client is not None:
             if self.obs_auto_live_checkbox.isChecked():
                 app_state.obs_req_queue.put(("StopStream", {}))
         self.parent_window.add_thread(StopLiveWorker(StopLivePresenter(self)))
 
+    def display_stream_info(self, addr: str | None, key: str | None):
+        self._reset_copy_feedback()
+        addr_text = "" if addr is None else str(addr)
+        key_text = "" if key is None else str(key)
+        self.addr_input.setText(addr_text)
+        self.key_input.setText(key_text)
+        self.copy_addr_btn.setEnabled(bool(addr_text))
+        self.copy_key_btn.setEnabled(bool(key_text))
+
     def fill_stream_info(self, addr: str, key: str):
         if app_state.obs_connecting:
             return
-        self.addr_input.setText(
-            str(addr))
-        self.key_input.setText(
-            str(key))
+        self.display_stream_info(addr, key)
 
         if app_state.obs_client is not None:
             app_state.obs_req_queue.put(("SetStreamServiceSettings", {
