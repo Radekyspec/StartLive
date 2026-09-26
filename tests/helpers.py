@@ -1,6 +1,6 @@
 from json import dumps
 
-from src.core.constant import KEYRING_SERVICE_NAME
+from startlive.core.constant import KEYRING_SERVICE_NAME
 
 
 class FakeKeyring:

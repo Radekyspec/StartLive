@@ -3,7 +3,7 @@ name: Compile standalone for Windows
 on:
   push:
     branches:
-      - "master"
+      - "dev"
   workflow_dispatch:
 
 jobs:
@@ -83,12 +83,12 @@ jobs:
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
           file-version: ${{ env.VERSION }}
-          windows-icon-from-ico: "resources/icon_left.ico"
+          windows-icon-from-ico: "startlive/resources/icon_left.ico"
           windows-console-mode: "disable"
-          include-data-dir: "resources=resources"
           noinclude-data-files: |
-            "resources/version.json"
-            "resources/icon_left_macOS.ico"
+            "startlive/resources/version.json"
+            "startlive/resources/icon_left_macOS.ico"
+          include-data-dir: "startlive/resources=resources"
           onefile-no-compression: true
           upx-disable-cache: true
           deployment: true

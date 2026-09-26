@@ -3,7 +3,7 @@ name: Compile universal binaries
 on:
   push:
     branches:
-      - "master"
+      - "dev"
   workflow_dispatch:
 
 jobs:
@@ -127,10 +127,10 @@ jobs:
           file-description: "StartLive开播器"
           file-version: ${{ env.VERSION }}
           macos-app-version: ${{ env.VERSION }}
-          macos-app-icon: "resources/icon_left_macOS.ico"
+          macos-app-icon: "startlive/resources/icon_left_macOS.ico"
           macos-signed-app-name: "com.radekyspec.startlive"
-          include-data-dir: "resources=resources"
-          noinclude-data-files: "resources/version.json"
+          noinclude-data-files: "startlive/resources/version.json"
+          include-data-dir: "startlive/resources=resources"
           deployment: true
 
       - name: Upload Artifacts

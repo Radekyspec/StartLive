@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import StartLive
-from src.PySide.updater.update_worker import VelopackUpdateWorker
+from startlive.PySide.updater.update_worker import VelopackUpdateWorker
 
 
 class LinuxStartupTests(unittest.TestCase):

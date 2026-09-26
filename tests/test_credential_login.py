@@ -6,24 +6,25 @@ from unittest.mock import patch
 from requests.cookies import cookiejar_from_dict
 from requests.utils import dict_from_cookiejar
 
-from src.core import app_state
-from src.core.constant import (
+from startlive.PySide.interface_adapters.login import buvid_ticket_presenter
+from startlive.PySide.interface_adapters.login.buvid_ticket_presenter import (
+    TicketFetchPresenter,
+)
+from startlive.core import app_state
+from startlive.core.constant import (
     KEYRING_COOKIES_INDEX,
     KEYRING_SERVICE_NAME,
     LoginResult,
 )
-from src.core.credentials import CredentialStore, CredentialTransactionError
-from src.core.workers.login import fetch_login
-from src.core.workers.login.fetch_login import FetchLoginWorker
-from src.core.workers.login.fetch_qr import FetchQRWorker
-from src.core.workers.usernames import fetch_usernames
-from src.core.workers.usernames.fetch_usernames import FetchUsernamesWorker
-from src.PySide.interface_adapters.login import buvid_ticket_presenter
-from src.PySide.interface_adapters.login.buvid_ticket_presenter import (
-    TicketFetchPresenter,
-)
+from startlive.core.credentials import CredentialStore, \
+    CredentialTransactionError
+from startlive.core.workers.login import fetch_login
+from startlive.core.workers.login.fetch_login import FetchLoginWorker
+from startlive.core.workers.login.fetch_qr import FetchQRWorker
+from startlive.core.workers.usernames import fetch_usernames
+from startlive.core.workers.usernames.fetch_usernames import \
+    FetchUsernamesWorker
 from tests.helpers import FakeKeyring
-
 
 SERVICE = KEYRING_SERVICE_NAME
 INDEX = KEYRING_COOKIES_INDEX

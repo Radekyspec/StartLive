@@ -6,9 +6,9 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import StartLive
-from src.PySide.updater.update_worker import VelopackUpdateWorker
-from src.core import cache
-from src.core.constant import CacheType
+from startlive.PySide.updater.update_worker import VelopackUpdateWorker
+from startlive.core import cache
+from startlive.core.constant import CacheType
 
 
 class PackagingStartupTests(unittest.TestCase):
@@ -56,12 +56,12 @@ class PackagingStartupTests(unittest.TestCase):
             [sys.executable, '-c', script], capture_output=True, text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        from src.core.constant import VERSION
+        from startlive.core.constant import VERSION
         self.assertIn(VERSION, result.stdout)
 
     def test_package_entry_uses_stable_windows_paths_and_skips_updater(self):
         self.assertTrue(callable(getattr(StartLive, 'cli', None)))
-        from src.core import runtime
+        from startlive.core import runtime
 
         def check_startup():
             with patch('src.core.cache.system', return_value='Windows'), \

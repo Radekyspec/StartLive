@@ -1,14 +1,14 @@
 import unittest
 from json import dumps, loads
 
-from src.core import app_state
-from src.core.constant import (
+from startlive.core import app_state
+from startlive.core.constant import (
     KEYRING_COOKIES,
     KEYRING_COOKIES_INDEX,
     KEYRING_ROOM_INFO,
     KEYRING_SERVICE_NAME,
 )
-from src.core.credentials.store import (
+from startlive.core.credentials.store import (
     CredentialIndexCorruptedError,
     CredentialRecordCorruptedError,
     CredentialStore,

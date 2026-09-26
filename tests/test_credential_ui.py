@@ -21,19 +21,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.PySide.classes import ClickableLabel
-from src.PySide.interface_adapters import GUIDispatcher
-from src.PySide.interface_adapters.credentials import (
+from startlive.PySide.classes import ClickableLabel
+from startlive.PySide.interface_adapters import GUIDispatcher
+from startlive.PySide.interface_adapters.credentials import (
     CredentialManagerPresenter,
 )
-from src.PySide.states import LoginState
-from src.PySide.widgets import StartLiveMenuBar
-from src.PySide.widgets import sl_menu_bar as menu_module
-from src.PySide.window import main_window as main_window_module
-from src.PySide.window.main_window import MainWindow
-from src.core import app_state
-from src.core import cache as cache_module
-from src.core.constant import (
+from startlive.PySide.states import LoginState
+from startlive.PySide.widgets import StartLiveMenuBar
+from startlive.PySide.widgets import sl_menu_bar as menu_module
+from startlive.PySide.window import main_window as main_window_module
+from startlive.PySide.window.main_window import MainWindow
+from startlive.core import app_state
+from startlive.core import cache as cache_module
+from startlive.core.constant import (
     CacheType,
     KEYRING_APP_SETTINGS,
     KEYRING_COOKIES,
@@ -42,11 +42,12 @@ from src.core.constant import (
     KEYRING_SERVICE_NAME,
     KEYRING_SETTINGS,
 )
-from src.core.credentials import CredentialStore, CredentialTransactionError
-from src.core.workers import WorkerManager
-from src.core.workers.base import BaseWorker, Presenter
-from src.core.workers.credentials import credential_manager
-from src.core.workers.credentials.credential_manager import (
+from startlive.core.credentials import CredentialStore, \
+    CredentialTransactionError
+from startlive.core.workers import WorkerManager
+from startlive.core.workers.base import BaseWorker, Presenter
+from startlive.core.workers.credentials import credential_manager
+from startlive.core.workers.credentials.credential_manager import (
     CredentialManagerWorker,
 )
 from tests.helpers import FakeKeyring
