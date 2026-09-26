@@ -12,6 +12,24 @@ from src.core.constant import CacheType
 
 
 class PackagingStartupTests(unittest.TestCase):
+    def test_help_supports_legacy_output_encodings(self):
+        script = (
+            "import sys; "
+            "sys.modules['PySide6'] = None; "
+            "sys.modules['keyring'] = None; "
+            "import StartLive; sys.argv = ['startlive', '--help']; "
+            "StartLive.cli()"
+        )
+        for encoding in ('cp1252', 'ascii', 'utf-8'):
+            with self.subTest(encoding=encoding):
+                env = dict(os.environ, PYTHONIOENCODING=f'{encoding}:strict')
+                result = subprocess.run(
+                    [sys.executable, '-B', '-c', script],
+                    capture_output=True, env=env,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('--web.port', result.stdout.decode(encoding))
+
     def test_help_does_not_load_gui_or_keyring(self):
         script = (
             "import sys; "
