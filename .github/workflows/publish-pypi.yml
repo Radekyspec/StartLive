@@ -1,4 +1,4 @@
-name: Build and publish Python package
+name: Build and publish PyPI package
 
 on:
   pull_request:
