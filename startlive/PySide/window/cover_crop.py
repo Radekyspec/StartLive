@@ -1,3 +1,4 @@
+from startlive.core.constant.ui import COVER_CROP_FOOTER_BTN_H
 from PIL.ImageQt import toqpixmap
 from PySide6.QtCore import (
     Qt, QBuffer, QByteArray, QIODevice,
@@ -14,7 +15,7 @@ from startlive.core.workers.cover import CoverUploadWorker
 
 
 class CoverCropWidget(QWidget):
-    FOOTER_BTN_H = 30
+    FOOTER_BTN_H = COVER_CROP_FOOTER_BTN_H
 
     def __init__(self, parent_window: "StreamConfigPanel", *args, **kwargs):
         super().__init__(*args, **kwargs)

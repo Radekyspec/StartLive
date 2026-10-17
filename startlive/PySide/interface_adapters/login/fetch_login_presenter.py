@@ -33,6 +33,8 @@ class FetchLoginPresenter(Presenter):
                 FetchAreaWorker(FetchAreaPresenter(state)))
 
     def prepare_success_view(self, login_result: LoginResult):
+        if self._state is not self._view._login_state:
+            return
         if login_result == LoginResult.CANCELLED:
             return
         self.post_login(self._view, self._state)
@@ -47,6 +49,8 @@ class FetchLoginPresenter(Presenter):
         ...
 
     def prepare_progress_view(self, res: LoginResult):
+        if self._state is not self._view._login_state:
+            return
         if res != LoginResult.QR_NOT_CONFIRMED:
             return
         self._state.qrNotConfirmed.emit()

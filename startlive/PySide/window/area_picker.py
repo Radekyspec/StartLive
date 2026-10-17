@@ -1,3 +1,13 @@
+from startlive.core.constant.ui import (
+    AREA_PICKER_CHILD_COLS,
+    AREA_PICKER_CHILD_BTN_W,
+    AREA_PICKER_PARENT_BTN_W,
+    AREA_PICKER_CHILD_BTN_H,
+    AREA_PICKER_CHILD_H_GAP,
+    AREA_PICKER_CHILD_V_GAP,
+    AREA_PICKER_PARENT_H_GAP,
+    AREA_PICKER_FOOTER_BTN_H,
+)
 # -*- coding: utf-8 -*-
 from functools import partial
 
@@ -12,14 +22,14 @@ from startlive.core import app_state
 
 
 class AreaPickerPanel(QDialog):
-    CHILD_COLS = 4  # 每行 4 个
-    CHILD_BTN_W = 130
-    PARENT_BTN_W = 90
-    CHILD_BTN_H = 36
-    CHILD_H_GAP = 15
-    CHILD_V_GAP = 20
-    PARENT_H_GAP = 62
-    FOOTER_BTN_H = 30
+    CHILD_COLS = AREA_PICKER_CHILD_COLS
+    CHILD_BTN_W = AREA_PICKER_CHILD_BTN_W
+    PARENT_BTN_W = AREA_PICKER_PARENT_BTN_W
+    CHILD_BTN_H = AREA_PICKER_CHILD_BTN_H
+    CHILD_H_GAP = AREA_PICKER_CHILD_H_GAP
+    CHILD_V_GAP = AREA_PICKER_CHILD_V_GAP
+    PARENT_H_GAP = AREA_PICKER_PARENT_H_GAP
+    FOOTER_BTN_H = AREA_PICKER_FOOTER_BTN_H
     selectionConfirmed = Signal(str, str)  # parent, child
     historyUpdated = Signal(object)
 

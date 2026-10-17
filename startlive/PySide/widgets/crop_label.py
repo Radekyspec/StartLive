@@ -1,3 +1,8 @@
+from startlive.core.constant.ui import (
+    CROP_LABEL_HANDLE_LENGTH,
+    CROP_LABEL_HANDLE_WIDTH,
+    CROP_LABEL_SNAP_MARGIN,
+)
 from PySide6.QtCore import (
     Qt, QRect, QPoint, QSize, QVariantAnimation, QEasingCurve, QTimer, Signal,
     Slot
@@ -9,9 +14,9 @@ from PySide6.QtWidgets import (
 
 
 class CropLabel(QLabel):
-    HANDLE_LENGTH = 20
-    HANDLE_WIDTH = 8
-    SNAP_MARGIN = 10
+    HANDLE_LENGTH = CROP_LABEL_HANDLE_LENGTH
+    HANDLE_WIDTH = CROP_LABEL_HANDLE_WIDTH
+    SNAP_MARGIN = CROP_LABEL_SNAP_MARGIN
     coverUpdated = Signal(QPixmap)
 
     def __init__(self, ratio: tuple[int, int], /, *args, **kwargs):

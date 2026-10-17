@@ -21,8 +21,11 @@ class StartLivePresenter(Presenter):
         self._view = view
         self._state = state
         self._cond = cond
+        self._account_generation, _ = app_state.capture_account_context()
 
     def prepare_success_view(self, live_result):
+        if not app_state.account_is_current(self._account_generation):
+            return
         self._view.parent_window.add_thread(ReportLiveDataWorker())
         self._view.parent_window.add_thread(GetRoomContentAuditWorker())
         match live_result:
@@ -53,6 +56,8 @@ class StartLivePresenter(Presenter):
                 )
 
     def prepare_fail_view(self, exception: Exception):
+        if not app_state.account_is_current(self._account_generation):
+            return
         self._view.start_btn.setEnabled(True)
         self._view.parent_window.tray_start_live_action.setEnabled(True)
         self._view.stop_btn.setEnabled(False)

@@ -1,3 +1,4 @@
+from startlive.core.constant.captcha import MASK64
 import os
 from base64 import b64decode, b64encode
 from hashlib import sha256
@@ -7,8 +8,6 @@ from typing import Any, Dict, Optional
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from startlive.core.app_state import dumps
-
-MASK64 = 0xFFFFFFFFFFFFFFFF
 
 
 def _rotl64(x: int, r: int) -> int:

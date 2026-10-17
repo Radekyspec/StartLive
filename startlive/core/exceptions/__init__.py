@@ -14,3 +14,6 @@ from .StopLiveError import StopLiveError
 from .TaskCancelled import TaskCancelled
 from .TitleStatusError import TitleStatusError
 from .TitleUpdateError import TitleUpdateError
+from .PkErrors import *
+from .DanmakuErrors import *
+from .MissingPkPluginError import MissingPkPluginError

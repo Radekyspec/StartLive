@@ -1,6 +1,11 @@
 include README.md LICENSE LICENSE-ARTWORK requirements.txt
 include docs/README_zh.md docs/publishing.md
 recursive-include tests *.py
+include tests/pk_refactor_vectors.json
+include tools/check_pk_media.py
+include tools/pk_loopback.py
+include tools/benchmark_pk_transport.py
+recursive-include plugins/obs-startlive-pk *.cpp *.hpp *.txt *.in *.md
 include tools/check_distribution.py
 recursive-include startlive/resources *.ico *.svg
 include startlive/resources/version.json

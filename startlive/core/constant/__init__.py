@@ -105,6 +105,9 @@ APP_KEY = "aae92bc66f3edfab"
 APP_SECRET = "af125a0d5279fd576c1b4418a3e8276d"
 LIVEHIME_BUILD = "11081"
 LIVEHIME_VERSION = "8.7.0.11081"
+# Fixed client-profile strings, like HEADERS_APP; no OS/LiveHime discovery.
+DEVICE_PLATFORM = "Windows Version: 10.0 x86_64"
+PK_PUSH_OSVER = "Windows Version: 10.0 Build 26100 (release: unavailable; revision: 0; 64-bit)"
 HEADERS_WEB = {
     "Accept": "*/*",
     "Accept-Encoding": "gzip, deflate",

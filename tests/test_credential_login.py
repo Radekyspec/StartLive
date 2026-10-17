@@ -18,6 +18,8 @@ from startlive.core.constant import (
 )
 from startlive.core.credentials import CredentialStore, \
     CredentialTransactionError
+from startlive.core.exceptions import TaskCancelled
+from startlive.core.workers.login.buvid_ticket import TicketFetchWorker
 from startlive.core.workers.login import fetch_login
 from startlive.core.workers.login.fetch_login import FetchLoginWorker
 from startlive.core.workers.login.fetch_qr import FetchQRWorker
@@ -79,6 +81,7 @@ class CredentialLoginTests(unittest.TestCase):
         self.saved_cookies = dict(app_state.cookies_dict)
         self.saved_cookie_index = app_state.cookie_state.current_cookie_idx
         self.saved_scan_status = app_state.scan_status.as_dict()
+        self.saved_room_info = app_state.room_info.as_dict()
         app_state.cookie_indices.clear()
         app_state.usernames.clear()
         app_state.cookies_dict.clear()
@@ -94,6 +97,8 @@ class CredentialLoginTests(unittest.TestCase):
         app_state.cookie_state.current_cookie_idx = self.saved_cookie_index
         app_state.scan_status.reset()
         app_state.scan_status.update(self.saved_scan_status)
+        app_state.room_info.reset()
+        app_state.room_info.update(self.saved_room_info)
 
     @staticmethod
     def cookies(uid, **extra):
@@ -234,7 +239,8 @@ class CredentialLoginTests(unittest.TestCase):
         app_state.cookie_state.current_cookie_idx = 1
 
         with self.patch_stores():
-            TicketFetchPresenter().prepare_success_view()
+            generation, _ = app_state.capture_account_context()
+            TicketFetchPresenter().prepare_success_view(generation)
 
         self.assertEqual(self.persisted_index(), ["cookies|1", "cookies|2"])
         self.assertEqual(self.store.read("cookies|1")["bili_ticket"], "new")
@@ -249,10 +255,50 @@ class CredentialLoginTests(unittest.TestCase):
         )
 
         with self.patch_stores(), self.assertRaises(CredentialTransactionError):
-            TicketFetchPresenter().prepare_success_view()
+            generation, _ = app_state.capture_account_context()
+            TicketFetchPresenter().prepare_success_view(generation)
 
         self.assertEqual(self.persisted_index(), ["cookies|1", "cookies|2"])
         self.assertEqual(app_state.cookie_state.current_cookie_idx, 1)
+
+    def test_ticket_result_after_account_replacement_does_not_write_store(self):
+        self.seed_accounts("1", "2")
+        for next_uid in ("2", "1"):
+            with self.subTest(next_uid=next_uid):
+                app_state.replace_account_cookies(
+                    self.cookies("1", bili_ticket="old"))
+                generation, _ = app_state.capture_account_context()
+                app_state.replace_account_cookies(self.cookies(next_uid))
+                app_state.cookie_state.current_cookie_idx = int(next_uid) - 1
+                before = dict(self.keyring.values)
+                with self.patch_stores(), patch.object(self.store,
+                                                       "add") as add:
+                    TicketFetchPresenter().prepare_success_view(generation)
+                add.assert_not_called()
+                self.assertEqual(self.keyring.values, before)
+                self.assertEqual(app_state.cookies_dict, self.cookies(next_uid))
+                self.assertEqual(app_state.cookie_state.current_cookie_idx,
+                                 int(next_uid) - 1)
+
+    def test_ticket_response_after_account_switch_is_cancelled(self):
+        app_state.replace_account_cookies(self.cookies("1"))
+        worker = TicketFetchWorker(TicketFetchPresenter())
+
+        def switch_account(*args, **kwargs):
+            app_state.replace_account_cookies(self.cookies("2"))
+            return FakeResponse({"data": {
+                "ticket": "retired-account-ticket", "created_at": 100,
+                "ttl": 200,
+            }})
+
+        with patch.object(worker._session, "post", side_effect=switch_account), \
+                patch.object(worker._session, "get") as get, \
+                self.patch_stores(), patch.object(self.store, "add") as add:
+            with self.assertRaises(TaskCancelled):
+                worker.start(None)
+        get.assert_not_called()
+        add.assert_not_called()
+        self.assertEqual(app_state.cookies_dict, self.cookies("2"))
 
     def test_username_refresh_restores_anonymous_jar_for_every_account(self):
         self.store.add(self.cookies("1", one_only="x"))

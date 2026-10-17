@@ -22,7 +22,9 @@ class BaseWorker:
 
     def __init__(self, /, name: str, *, with_session: bool = True,
                  headers_type: HeadersType = HeadersType.APP,
+                 defer_session: bool = False,
                  inherit_account_cookies: bool = True,
+                 account_cookies: dict[str, str] | None = None,
                  presenter: Optional[Union[Presenter, list[Presenter]]] = None):
         super().__init__()
         self.name = name
@@ -32,11 +34,16 @@ class BaseWorker:
             self._presenters = [presenter]
         else:
             self._presenters = []
+        self._session_options = None
+        self._session = None
         if with_session:
-            self._session = create_session(
-                headers_type,
-                inherit_account_cookies=inherit_account_cookies,
-            )
+            options = {"inherit_account_cookies": inherit_account_cookies}
+            if account_cookies is not None:
+                options["account_cookies"] = account_cookies
+            if defer_session:
+                self._session_options = (headers_type, options)
+            else:
+                self._session = create_session(headers_type, **options)
         else:
             self._session = None
 
@@ -60,6 +67,10 @@ class BaseWorker:
     @final
     def start(self, report_progress: Callable | None, *args, **kwargs):
         try:
+            if self._session_options is not None:
+                headers_type, options = self._session_options
+                self._session_options = None
+                self._session = create_session(headers_type, **options)
             return self.run(report_progress, *args, **kwargs)
         finally:
             if self._session is not None:

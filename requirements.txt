@@ -2,6 +2,7 @@ PySide6~=6.11.0
 pillow~=12.2.0
 qrcode~=8.2
 requests[socks]~=2.32.5
+Brotli>=1.2,<2
 obsws-python
 keyring~=25.6.0
 darkdetect~=0.8.0
@@ -9,3 +10,5 @@ semver~=3.0.4
 PyQtDarkTheme-fork~=2.3.6
 velopack==1.2.0; sys_platform != "linux"
 cryptography~=49.0.0
+# Needed by PK signaling, including imports used by traditional PK mode.
+protobuf>=5.29,<7

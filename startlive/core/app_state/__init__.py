@@ -1,19 +1,33 @@
+from startlive.core.constant.settings import SettingsName, _SETTINGS_FILES, \
+    _LEGACY_SETTINGS_KEYS
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import partial
 from json import dumps, loads
+from pathlib import Path
 from platform import node
 from queue import Queue
+from tempfile import NamedTemporaryFile
+from threading import RLock
 from typing import Optional, Any, List
+import logging
 
-from keyring import get_password
+from keyring import get_password, set_password, delete_password
+from keyring.errors import KeyringError, PasswordDeleteError
 from obsws_python import ReqClient
 from requests import Session
 from requests.cookies import cookiejar_from_dict
 
-from .app_state_base import StateBase
 from .. import constant
+from ..cache import get_cache_path
 from ..constant import *
 from ..sign import gen_buvid
+from .app_state_base import StateBase
+from .observable_state import ObservableState
+from startlive.core.pk.states.encoder import VideoEncodingConfig
+from startlive.core.obs.states.output import ObsOutputStatus
+from startlive.core.credentials.states.account_snapshot import AccountSnapshot
+from startlive.core.exceptions import TaskCancelled
 
 dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))
@@ -42,6 +56,18 @@ class ObsSettings(StateBase):
     password: str = ""
     auto_live: bool = False
     auto_connect: bool = False
+
+
+@dataclass(slots=True)
+class PkEncoderSettings(StateBase):
+    config: VideoEncodingConfig = field(default_factory=VideoEncodingConfig)
+
+
+@dataclass(slots=True)
+class PkEncoderRuntime(ObservableState):
+    backend: str = ""
+    sent_bitrate_bps: int | None = None
+    fallback_reason: str = ""
 
 
 @dataclass(slots=True)
@@ -103,22 +129,11 @@ class CookieState(StateBase):
         self.current_cookie_idx = self.cookie_index_len
 
 
-@dataclass(slots=True, frozen=True)
-class StoredCredential:
-    key: str
-    index: int
-
-
-@dataclass(slots=True, frozen=True)
-class RemovedCredential:
-    key: str
-    uid: str
-    former_index: int
-    remaining_keys: tuple[str, ...]
-
-
 # Queue to communicate with OBS in a separate thread
 obs_req_queue = Queue()
+
+# Immutable local OBS observation, separate from cached platform stream data.
+obs_output_status = ObsOutputStatus()
 
 # Scan status flags for login
 scan_status = ScanStatus()
@@ -128,13 +143,123 @@ stream_status = StreamStatus()
 
 app_settings = AppSettings()
 
-if (app := get_password(KEYRING_SERVICE_NAME,
-                        KEYRING_APP_SETTINGS)) is not None:
-    app_settings.update(loads(app))
-
+# Only the four editable video preferences are persisted.
+pk_encoder_settings = PkEncoderSettings()
+pk_encoder_runtime = PkEncoderRuntime()
 # Managed by models.workers.credential_manager
 room_info = RoomInfo()
 obs_settings = ObsSettings()
+
+_SETTINGS_STATES = {
+    SettingsName.APP: app_settings,
+    SettingsName.OBS: obs_settings,
+    SettingsName.PK_ENCODER: pk_encoder_settings,
+}
+_settings_logger = logging.getLogger(__name__)
+
+
+def _write_settings(name: SettingsName, values):
+    filename = _SETTINGS_FILES[name]
+    directory, path = get_cache_path(CacheType.CONFIG, filename)
+    # Replace in the same directory so interrupted saves preserve the old file.
+    temporary = None
+    try:
+        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory,
+                                prefix=filename + ".", suffix=".tmp",
+                                delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(dumps(values))
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _delete_keyring_settings(name: SettingsName):
+    key = _LEGACY_SETTINGS_KEYS.get(name)
+    if key is None:
+        return
+    try:
+        delete_password(KEYRING_SERVICE_NAME, key)
+    except PasswordDeleteError:
+        pass
+
+
+def save_settings(name: SettingsName) -> None:
+    """Save app, obs or pk_encoder preferences; credentials stay in keyring."""
+    state = _SETTINGS_STATES[name]
+    values = (pk_encoder_settings["config"].preferences()
+              if name == SettingsName.PK_ENCODER else state.as_dict())
+    if name == SettingsName.OBS:
+        # Reuse the legacy item for the credential alone, never write it to disk.
+        password = values.pop("password")
+    _write_settings(name, values)
+    if name == SettingsName.OBS:
+        # Only trim the legacy record after its non-secret fields are on disk.
+        set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
+                     dumps({"password": password}))
+
+
+def delete_settings(name: SettingsName) -> None:
+    """Delete stored preferences (and OBS credential) and reset their state."""
+    filename = _SETTINGS_FILES[name]
+    # Remove legacy first so deleting a file cannot resurrect old preferences.
+    _delete_keyring_settings(name)
+    _, path = get_cache_path(CacheType.CONFIG, filename, is_makedir=False)
+    path.unlink(missing_ok=True)
+    _SETTINGS_STATES[name].reset()
+
+
+def _load_settings(name: SettingsName):
+    filename = _SETTINGS_FILES[name]
+    _, path = get_cache_path(CacheType.CONFIG, filename, is_makedir=False)
+    legacy = False
+    try:
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            legacy_key = _LEGACY_SETTINGS_KEYS.get(name)
+            if legacy_key is None:
+                return
+            raw = get_password(KEYRING_SERVICE_NAME, legacy_key)
+            legacy = raw is not None
+        if raw is None:
+            return
+        values = loads(raw)
+        if not isinstance(values, dict):
+            raise ValueError("settings must be a JSON object")
+        if name == SettingsName.PK_ENCODER:
+            pk_encoder_settings.update(
+                config=VideoEncodingConfig.from_preferences(values))
+        else:
+            if name == SettingsName.OBS:
+                credential = get_password(KEYRING_SERVICE_NAME,
+                                          KEYRING_SETTINGS)
+                credential_values = loads(credential) if credential else {}
+                if not isinstance(credential_values, dict):
+                    raise ValueError("OBS credential must be a JSON object")
+                values["password"] = credential_values.get("password", "")
+            state = _SETTINGS_STATES[name]
+            state.update(
+                {key: values[key] for key in state.keys() if key in values})
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError,
+            KeyringError) as error:
+        _settings_logger.warning("Could not load %s settings", name,
+                                 exc_info=True)
+        return
+    if legacy:
+        try:
+            save_settings(name)
+            if name != SettingsName.OBS:
+                _delete_keyring_settings(name)
+        except (OSError, KeyringError):
+            _settings_logger.warning("Could not migrate %s settings", name,
+                                     exc_info=True)
+
+
+for _settings_name in _SETTINGS_FILES:
+    _load_settings(_settings_name)
+
 usernames = {}
 # A cache of cookie indices
 cookie_indices = []
@@ -152,10 +277,50 @@ obs_connecting = False
 
 # Store cookies after login
 cookies_dict = {}
+account_lock = RLock()
+_account_generation = 0
+
+
+def capture_account_context() -> tuple[int, dict[str, str]]:
+    """Capture a login generation and its cookies before starting asynchronous work."""
+    with account_lock:
+        return _account_generation, dict(cookies_dict)
+
+
+def account_is_current(generation: int) -> bool:
+    with account_lock:
+        return generation == _account_generation
+
+
+@contextmanager
+def account_guard(generation: int):
+    """Check and publish together; callers must keep network I/O outside this guard."""
+    with account_lock:
+        if generation != _account_generation:
+            raise TaskCancelled()
+        yield
+
+
+def account_snapshot() -> AccountSnapshot:
+    with account_lock:
+        return AccountSnapshot.capture(cookies_dict, room_info["room_id"])
+
+
+def replace_account_cookies(cookies: dict[str, str]) -> None:
+    """Publish new credentials with an empty room and retire previous async work."""
+    global _account_generation
+    with account_lock:
+        values = dict(cookies)
+        _account_generation += 1
+        room_info.reset()
+        cookies_dict.clear()
+        cookies_dict.update(values)
+
 
 
 def create_session(h_type: HeadersType, *,
-                   inherit_account_cookies: bool = True) -> Session:
+                   inherit_account_cookies: bool = True,
+                   account_cookies: dict[str, str] | None = None) -> Session:
     session = Session()
     if h_type == HeadersType.WEB:
         session.headers.update(constant.HEADERS_WEB)
@@ -165,11 +330,13 @@ def create_session(h_type: HeadersType, *,
                         path="/")
     session.cookies.set("device_name", node().encode('utf-8').decode('latin-1'),
                         domain="bilibili.com", path="/")
-    session.cookies.set("device_platform", "Windows Version: 10.0 x86_64",
+    session.cookies.set("device_platform", constant.DEVICE_PLATFORM,
                         domain="bilibili.com", path="/")
     session.cookies.set("buvid3", app_settings.app_buvid)
-    if inherit_account_cookies:
-        cookiejar_from_dict(cookies_dict, cookiejar=session.cookies,
+    if account_cookies is not None or inherit_account_cookies:
+        if account_cookies is None:
+            _, account_cookies = capture_account_context()
+        cookiejar_from_dict(account_cookies, cookiejar=session.cookies,
                             overwrite=True)
     session.headers.update({
         "buvid": app_settings.app_buvid,
@@ -214,9 +381,8 @@ def scan_settings_default() -> None:
 
 
 def room_info_default() -> None:
-    room_info.recent_areas.clear()
-    room_info.recent_title.clear()
-    room_info.reset()
+    with account_lock:
+        room_info.reset()
 
 
 def stream_status_default() -> None:

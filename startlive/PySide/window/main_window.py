@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (QApplication,
                                QGraphicsPixmapItem
                                )
 from darkdetect import isLight
-from keyring import set_password
 from qdarktheme import setup_theme
 from qrcode.main import QRCode
 
@@ -43,8 +42,8 @@ from startlive.PySide.states import LoginState, RestartState
 from startlive.PySide.web_server import HttpServerWorker
 from startlive.PySide.widgets import StartLiveMenuBar, LogViewer, SideBar
 from startlive.core import app_state
-from startlive.core.app_state import dumps
 from startlive.core.constant import *
+from startlive.core.constant.settings import SettingsName
 from startlive.core.workers import WorkerManager
 from startlive.core.workers.base import LongLiveWorker, BaseWorker
 from startlive.core.workers.const import ConstantUpdateWorker, \
@@ -113,6 +112,7 @@ class MainWindow(SingleInstanceWindow):
         self._cred_deleted = False
         self._no_const_update = no_const_update
         self._base_path = base_path
+        self._resources_path = self._base_path / "resources"
         self._base_title = f"StartLive 开播器 {VERSION}"
         self._server_started = False
         self._new_version_str = None
@@ -127,7 +127,7 @@ class MainWindow(SingleInstanceWindow):
         self._stack = QStackedWidget(self)
         self._stack.currentChanged.connect(self._on_settings_loaded)
         self._side_bar = SideBar(self, expanded_width=100, collapsed_width=56,
-                                 icon_path=self._base_path / "resources")
+                                 icon_path=self._resources_path)
         btn_group = QButtonGroup(self)
         btn_group.setExclusive(True)
         btn_group.addButton(self._side_bar.btn_theme)
@@ -151,7 +151,7 @@ class MainWindow(SingleInstanceWindow):
                 str(app_state.app_settings["custom_tray_icon"])))
         else:
             self.tray_icon.setIcon(QIcon(
-                str(self._base_path / "resources" / "icon_left.ico")))
+                str(self._resources_path / "icon_left.ico")))
         if app_state.app_settings["custom_tray_hint"]:
             self.tray_icon.setToolTip(
                 app_state.app_settings["custom_tray_hint"])
@@ -181,7 +181,10 @@ class MainWindow(SingleInstanceWindow):
         self.tray_icon.activated.connect(self._on_tray_icon_activated)
         self.logger.info("Tray menu initialized.")
 
-        self.menu_bar = StartLiveMenuBar(self)
+        self.menu_bar = StartLiveMenuBar(self,
+                                         resources_path=self._resources_path)
+        QApplication.instance().aboutToQuit.connect(
+            self.menu_bar.shutdown_pk_window)
         self.menu_bar.cookieDeleted.connect(self._on_delete_cookies)
         self.menu_bar.obsSettingsDeleted.connect(self._on_delete_settings)
         self.menu_bar.appSettingsDeleted.connect(self._on_delete_app_settings)
@@ -220,6 +223,7 @@ class MainWindow(SingleInstanceWindow):
     @Slot()
     def setup_ui(self, *, is_new: bool = False,
                  cookie_index: int | None = None):
+        self.menu_bar.shutdown_pk_window()
         target = (app_state.cookie_state.current_cookie_idx
                   if cookie_index is None else cookie_index)
         current_panel = self.panel
@@ -248,7 +252,7 @@ class MainWindow(SingleInstanceWindow):
                 )
             self._restart_thread_manager()
 
-        app_state.cookies_dict.clear()
+        app_state.replace_account_cookies({})
         app_state.cookie_state.move_to_end()
         CredentialManagerWorker.reset_default()
         self._credential_target_idx = target
@@ -502,18 +506,19 @@ class MainWindow(SingleInstanceWindow):
     def closeEvent(self, event):
         # 关闭窗口时退出应用
         self.logger.info("closeEvent triggered. Exiting application.")
+        self.menu_bar.shutdown_pk_window()
         if self._cred_deleted:
             self.logger.info("Credentials deleted. Exiting application.")
             event.accept()
             return
+        if app_state.pk_encoder_settings:
+            app_state.save_settings(SettingsName.PK_ENCODER)
         if app_state.obs_settings:
             self.logger.info("Saving OBS connection settings.")
-            set_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS,
-                         dumps(app_state.obs_settings.internal))
+            app_state.save_settings(SettingsName.OBS)
         if app_state.app_settings:
             self.logger.info("Saving app settings.")
-            set_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS,
-                         dumps(app_state.app_settings.internal))
+            app_state.save_settings(SettingsName.APP)
         self._thread_manager.shutdown(wait=True)
         self._stop_http_server()
         self.tray_icon.hide()
@@ -556,13 +561,14 @@ class MainWindow(SingleInstanceWindow):
     def _on_delete_app_settings(self):
         self._settings_page.reset_default()
         self.tray_icon.setIcon(QIcon(
-            str(self._base_path / "resources" / "icon_left.ico")))
+            str(self._resources_path / "icon_left.ico")))
         self.tray_icon.setToolTip("你所热爱的 就是你的生活")
         QMessageBox.information(self, "设置清空", "APP设置清除成功\n"
                                                   "字体相关设置需要重启生效")
 
     @Slot(bool)
     def _on_delete_cred(self, _cred_deleted):
+        self.menu_bar.shutdown_pk_window()
         self._cred_deleted = _cred_deleted
         QMessageBox.information(self, "凭据清空",
                                 "已清空全部凭据, 程序即将退出")

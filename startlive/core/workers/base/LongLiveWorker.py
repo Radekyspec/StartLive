@@ -9,11 +9,15 @@ class LongLiveWorker(BaseWorker):
 
     def __init__(self, /, name: str, *, with_session: bool = True,
                  headers_type: HeadersType = HeadersType.APP,
+                 defer_session: bool = False,
                  inherit_account_cookies: bool = True,
+                 account_cookies: dict[str, str] | None = None,
                  presenter: Optional[Presenter] = None):
         super().__init__(name=name, with_session=with_session,
                          headers_type=headers_type, presenter=presenter,
-                         inherit_account_cookies=inherit_account_cookies)
+                         defer_session=defer_session,
+                         inherit_account_cookies=inherit_account_cookies,
+                         account_cookies=account_cookies)
         self._cancel_token = CancellationToken()
 
     def stop(self) -> None:

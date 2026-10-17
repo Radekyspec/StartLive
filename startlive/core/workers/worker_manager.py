@@ -32,20 +32,21 @@ class WorkerManager:
 
     def submit(self, worker: BaseWorker, /,
                on_progress: bool = False) -> Future:
-        if (worker_type := worker.__class__.__name__) in self._worker_typeset:
-            self.logger.warning(
-                f"Attempting to add {worker_type} but one already exists.")
-            raise RuntimeError(
-                f"Attempting to add {worker_type} but one already exists.")
-
-        future = self._executor.submit(self._run_worker, worker,
-                                       on_progress=on_progress)
-        self.logger.info(f"{worker_type} added to thread pool")
-
+        # Admission and registration are one operation. Concurrent submitters
+        # must not start two connections/probes of the same worker type.
         with self._lock:
+            worker_type = worker.__class__.__name__
+            if worker_type in self._worker_typeset:
+                self.logger.warning(
+                    f"Attempting to add {worker_type} but one already exists.")
+                raise RuntimeError(
+                    f"Attempting to add {worker_type} but one already exists.")
+            future = self._executor.submit(self._run_worker, worker,
+                                           on_progress=on_progress)
             self._worker_typeset.add(worker_type)
             self._jobs[future] = worker
             future.add_done_callback(self._handle_done)
+        self.logger.info(f"{worker_type} added to thread pool")
         return future
 
     def _run_worker(self, worker: BaseWorker | LongLiveWorker, /,
@@ -108,7 +109,9 @@ class WorkerManager:
 
     def shutdown(self, cancel_running: bool = True, wait: bool = True) -> None:
         if cancel_running:
-            for job_future in list(self._jobs.keys()):
+            with self._lock:
+                pending = list(self._jobs)
+            for job_future in pending:
                 self.cancel(job_future)
 
         self._executor.shutdown(wait=wait, cancel_futures=True)

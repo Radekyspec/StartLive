@@ -6,7 +6,7 @@ from typing import Any, Mapping
 import keyring
 
 from startlive.core import app_state
-from startlive.core.app_state import StoredCredential, RemovedCredential
+from .states.results import StoredCredential, RemovedCredential
 from startlive.core.constant import (
     KEYRING_COOKIES,
     KEYRING_COOKIES_INDEX,
@@ -261,13 +261,13 @@ class CredentialStore:
     def _clear_unusable_cache() -> None:
         app_state.cookie_indices.clear()
         app_state.usernames.clear()
-        app_state.cookies_dict.clear()
+        app_state.replace_account_cookies({})
         app_state.cookie_state.current_cookie_idx = 0
 
     @staticmethod
     def _publish_unvalidated_index(keys: list[str]) -> None:
         CredentialStore._commit_index(keys)
-        app_state.cookies_dict.clear()
+        app_state.replace_account_cookies({})
         app_state.cookie_state.current_cookie_idx = len(keys)
 
     @staticmethod
@@ -285,8 +285,9 @@ class CredentialStore:
         """
         uid = CredentialStore._uid_from_key(key)
         app_state.usernames.pop(key, None)
-        if app_state.cookies_dict.get("DedeUserID") == uid:
-            app_state.cookies_dict.clear()
+        with app_state.account_lock:
+            if app_state.cookies_dict.get("DedeUserID") == uid:
+                app_state.replace_account_cookies({})
         if not app_state.cookie_indices:
             app_state.cookie_state.current_cookie_idx = 0
         elif former_index < app_state.cookie_state.current_cookie_idx:

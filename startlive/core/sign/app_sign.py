@@ -1,12 +1,43 @@
+from collections.abc import Mapping
 from hashlib import md5
 from time import time
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from startlive.core import constant
 
 
+def encode_payload(payload, *, native_wire: bool = False) -> str:
+    """Encode an ordered mapping or ordered pairs, preserving repeated keys.
+
+    The standard Livehime signer uses ``urlencode`` defaults. Native PK and
+    danmaku requests instead preserve !'()*~ and encode spaces as %20.
+    """
+    if native_wire:
+        # JSON fixtures (and some callers) supply ordered pairs as lists;
+        # urllib.urlencode requires tuples for sequence-of-pairs input.
+        pairs = [tuple(pair) for pair in
+                 (payload.items() if isinstance(payload, Mapping) else payload)]
+        if any(not isinstance(key, str) or not isinstance(value, str)
+               for key, value in pairs):
+            raise TypeError("Native wire parameters must be explicit strings")
+        return urlencode(pairs, encoding="utf-8", errors="strict",
+                         quote_via=quote, safe="!'()*-._~")
+    return urlencode(payload, encoding="utf-8")
+
+
+def native_canonical(payload) -> str:
+    """Sorted native pc_link wire parameters, prior to adding a signature."""
+    return encode_payload(order_payload(payload), native_wire=True)
+
+
+def sign_preimage(preimage: str) -> str:
+    """Apply the shared Livehime app secret to an already encoded preimage."""
+    return md5((preimage + constant.APP_SECRET).encode("utf-8")).hexdigest()
+
+
 def livehime_sign(payload, *, access_key: bool = True, build: bool = True,
-                  platform: bool = True, ts: bool = True, version: bool = True):
+                  platform: bool = True, ts: bool = True, version: bool = True,
+                  native_wire: bool = False):
     """
     Sign request payload, not include csrf and csrf_token
     :param payload: raw payload
@@ -21,9 +52,7 @@ def livehime_sign(payload, *, access_key: bool = True, build: bool = True,
     signed.update({'appkey': constant.APP_KEY})
     signed.update(payload)
     signed = order_payload(signed)  # 按照 key 重排参数
-    sign = md5(
-        (urlencode(signed, encoding="utf-8") + constant.APP_SECRET).encode(
-            encoding="utf-8")).hexdigest()
+    sign = sign_preimage(encode_payload(signed, native_wire=native_wire))
     signed.update({'sign': sign})
     return signed
 

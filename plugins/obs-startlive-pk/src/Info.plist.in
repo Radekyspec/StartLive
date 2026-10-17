@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>obs-startlive-pk</string>
+<key>CFBundleIdentifier</key><string>org.startlive.obs-pk</string>
+<key>CFBundleName</key><string>StartLive PK</string>
+<key>CFBundlePackageType</key><string>BNDL</string>
+<key>CFBundleShortVersionString</key><string>@PROJECT_VERSION@</string>
+</dict></plist>

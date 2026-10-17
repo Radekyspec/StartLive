@@ -1,3 +1,4 @@
+from startlive.core.constant.ui import RECENT_AREA_CHILD_BTN_H
 # -*- coding: utf-8 -*-
 from functools import partial
 
@@ -7,7 +8,7 @@ from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel, \
 
 
 class RecentAreaBar(QWidget):
-    CHILD_BTN_H = 36
+    CHILD_BTN_H = RECENT_AREA_CHILD_BTN_H
     pairSelected = Signal(str, str)
 
     def __init__(self, /, parent=None):

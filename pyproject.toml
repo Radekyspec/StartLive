@@ -32,6 +32,10 @@ Issues = "https://github.com/Radekyspec/StartLive/issues"
 [project.scripts]
 startlive = "StartLive:cli"
 
+[project.optional-dependencies]
+# PK adapters use the reviewed codec catalogue, sender and relay internals.
+pk = ["aiortc==1.15.0", "aioice==0.10.2"]
+
 [tool.setuptools]
 py-modules = ["StartLive"]
 include-package-data = false

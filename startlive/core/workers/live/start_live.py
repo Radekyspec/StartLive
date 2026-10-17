@@ -11,37 +11,45 @@ from startlive.core.workers.base import BaseWorker, Presenter
 
 class StartLiveWorker(BaseWorker):
     def __init__(self, presenter: Presenter, /, area):
-        super().__init__(name="开播任务", presenter=presenter)
+        self._account_generation, self._account_cookies = app_state.capture_account_context()
+        super().__init__(name="开播任务", presenter=presenter,
+                         account_cookies=self._account_cookies)
         self.area = area
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
 
-        return self.start_live(self._session, self.area)
+        return self.start_live(self._session, self.area,
+                               account_generation=self._account_generation)
 
     @classmethod
-    def start_live(cls, session, area) -> int | None:
+    def start_live(cls, session, area, *,
+                   account_generation: int | None = None) -> int | None:
         logger = get_logger(cls.__name__)
         live_url = "https://api.live.bilibili.com/room/v1/Room/startLive"
-        # self.fetch_upstream()
+        if account_generation is None:
+            account_generation, _ = app_state.capture_account_context()
+        with app_state.account_guard(account_generation):
+            cookies = dict(app_state.cookies_dict)
+            room_id = app_state.room_info["room_id"]
         if constant.START_LIVE_AUTH_CSRF:
             logger.info("startLive sign with csrf")
             live_data = livehime_sign({
                 "area_v2": area,
-                "csrf_token": app_state.cookies_dict["bili_jct"],
-                "csrf": app_state.cookies_dict["bili_jct"],
-                "room_id": app_state.room_info["room_id"],
+                "csrf_token": cookies["bili_jct"],
+                "csrf": cookies["bili_jct"],
+                "room_id": room_id,
                 "type": 2,
             })
         else:
             logger.info("startLive sign without csrf")
             live_data = livehime_sign({
-                "room_id": app_state.room_info["room_id"],
+                "room_id": room_id,
                 "area_v2": area,
                 "type": 2,
             })
             live_data.update({
-                "csrf_token": app_state.cookies_dict["bili_jct"],
-                "csrf": app_state.cookies_dict["bili_jct"]
+                "csrf_token": cookies["bili_jct"],
+                "csrf": cookies["bili_jct"]
             })
             live_data = order_payload(live_data)
         logger.info(f"startLive Request")
@@ -49,39 +57,41 @@ class StartLiveWorker(BaseWorker):
         response.encoding = "utf-8"
         logger.info("startLive Response")
         response = response.json()
-        match response["code"]:
-            case 0:
-                result = cls.parse_live_addr(response)
-                match result:
-                    case 0:
-                        return 0
-                    case 1:
-                        logger.warning(
-                            "startLive Response no srt fallback to RTMP")
-                        return 1
-                    case -1:
-                        logger.warning(
-                            "startLive Response no srt")
-                        return -1
-            case FaceAuthType.V1:
-                logger.warning(f"startLive Response face auth: {response}")
-                app_state.stream_status.update({
-                    "required_face": True,
-                    "face_url": response["data"]["qr"],
-                    "face_message": response["message"]
-                })
-                return FaceAuthType.V1
-            case FaceAuthType.V2:
-                # face_auth v2 using v_voucher
-                app_state.stream_status.update({
-                    "required_face": True,
-                    "face_voucher": response["data"]["risk_extra"]["v_voucher"],
-                    "face_message": response["message"]
-                })
-                return FaceAuthType.V2
-            case _:
-                logger.error(f"startLive Response error: {response}")
-                raise StartLiveError(response["message"])
+        with app_state.account_guard(account_generation):
+            match response["code"]:
+                case 0:
+                    result = cls.parse_live_addr(response)
+                    match result:
+                        case 0:
+                            return 0
+                        case 1:
+                            logger.warning(
+                                "startLive Response no srt fallback to RTMP")
+                            return 1
+                        case -1:
+                            logger.warning(
+                                "startLive Response no srt")
+                            return -1
+                case FaceAuthType.V1:
+                    logger.warning(f"startLive Response face auth: {response}")
+                    app_state.stream_status.update({
+                        "required_face": True,
+                        "face_url": response["data"]["qr"],
+                        "face_message": response["message"]
+                    })
+                    return FaceAuthType.V1
+                case FaceAuthType.V2:
+                    # face_auth v2 using v_voucher
+                    app_state.stream_status.update({
+                        "required_face": True,
+                        "face_voucher": response["data"]["risk_extra"][
+                            "v_voucher"],
+                        "face_message": response["message"]
+                    })
+                    return FaceAuthType.V2
+                case _:
+                    logger.error(f"startLive Response error: {response}")
+                    raise StartLiveError(response["message"])
 
     @staticmethod
     def parse_live_addr(response):

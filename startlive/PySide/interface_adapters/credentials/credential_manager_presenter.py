@@ -11,6 +11,8 @@ class CredentialManagerPresenter(Presenter):
         self._state = state
 
     def prepare_success_view(self, cookie_index: int):
+        if self._state is not self._view._login_state:
+            return
         self._view.menu_bar._populate_account_menu()
         FetchLoginPresenter.post_login(self._view, self._state)
         if not app_state.scan_status["is_new"]:
@@ -32,6 +34,8 @@ class CredentialManagerPresenter(Presenter):
             app_state.obs_settings.get("auto_connect", False))
 
     def prepare_fail_view(self, exception: Exception):
+        if self._state is not self._view._login_state:
+            return
         self._view.menu_bar._populate_account_menu()
         self._state.credentialLoaded.emit()
         panel = self._view.panel

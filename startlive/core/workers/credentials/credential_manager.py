@@ -1,4 +1,3 @@
-from json import loads
 from typing import Any, Callable, Mapping
 
 # package import
@@ -14,7 +13,8 @@ from startlive.core.credentials import CredentialStore
 from startlive.core.exceptions import (
     CredentialRecordCorruptedError,
     CredentialTransactionError,
-    CredentialValidationError
+    CredentialValidationError,
+    TaskCancelled
 )
 from startlive.core.log import get_logger
 from startlive.core.sign import livehime_sign
@@ -26,6 +26,7 @@ class CredentialManagerWorker(BaseWorker):
                  is_new: bool = False):
         super().__init__(name="凭据管理", headers_type=HeadersType.WEB,
                          inherit_account_cookies=False, presenter=presenter)
+        self._account_generation, _ = app_state.capture_account_context()
         self.cookie_index = cookie_index
         self.is_new = is_new
         self._store = CredentialStore()
@@ -105,8 +106,12 @@ class CredentialManagerWorker(BaseWorker):
 
     def _remove_invalid(self, key: str) -> list[str]:
         try:
-            return list(self._store.remove(key).remaining_keys)
-        except CredentialTransactionError:
+            with app_state.account_guard(self._account_generation):
+                remaining = list(self._store.remove(key).remaining_keys)
+                # Removing the active invalid record can itself retire the account.
+                self._account_generation, _ = app_state.capture_account_context()
+                return remaining
+        except (CredentialTransactionError, TaskCancelled):
             raise
         except Exception as error:
             raise CredentialValidationError(
@@ -114,38 +119,34 @@ class CredentialManagerWorker(BaseWorker):
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
 
-        if app_state.obs_settings:
-            self.logger.info("using existing obs settings")
-        elif (saved_settings := get_password(KEYRING_SERVICE_NAME,
-                                             KEYRING_SETTINGS)) is not None:
-            app_state.obs_settings.update(loads(saved_settings))
-            self.logger.info("stored obs settings loaded")
-        else:
-            app_state.obs_settings_default()
-            self.logger.info(f"obs_default_settings loaded")
+        # Global OBS settings are loaded by app_state, independently of login.
         if get_password(KEYRING_SERVICE_NAME,
                         KEYRING_ROOM_INFO) is not None:
             delete_password(KEYRING_SERVICE_NAME, KEYRING_ROOM_INFO)
-        app_state.room_info_default()
+        with app_state.account_guard(self._account_generation):
+            app_state.room_info_default()
         self.logger.info(f"room_default_settings loaded")
 
         if self.is_new:
-            app_state.scan_status["is_new"] = True
-            self.logger.info(f"new credentials created, exiting")
-            app_state.cookies_dict.clear()
+            with app_state.account_guard(self._account_generation):
+                app_state.scan_status["is_new"] = True
+                app_state.replace_account_cookies({})
+            self.logger.info("new credentials created, exiting")
             return self.cookie_index
 
         try:
-            self._store.migrate_legacy()
-            keys = self._store.load_index()
-        except CredentialTransactionError:
+            with app_state.account_guard(self._account_generation):
+                self._store.migrate_legacy()
+                keys = self._store.load_index()
+        except (CredentialTransactionError, TaskCancelled):
             raise
         except Exception as error:
             raise CredentialValidationError(
                 "credential store is unavailable") from error
 
         candidate = self.cookie_index
-        app_state.cookie_state.current_cookie_idx = len(keys)
+        with app_state.account_guard(self._account_generation):
+            app_state.cookie_state.current_cookie_idx = len(keys)
         baseline = self._session.cookies.copy()
         while keys:
             candidate = min(max(candidate, 0), len(keys) - 1)
@@ -172,17 +173,18 @@ class CredentialManagerWorker(BaseWorker):
             if outcome is not ValidationOutcome.VALID:
                 raise CredentialValidationError("credential validation failed")
 
-            data = payload["data"]
-            app_state.usernames[key] = USERNAME_DISPLAY_TEMPLATE.format(
-                data["uname"], data["mid"]
-            )
-            app_state.cookies_dict.clear()
-            app_state.cookies_dict.update(cookies)
-            app_state.cookie_state.current_cookie_idx = candidate
-            app_state.scan_status["scanned"] = True
+            with app_state.account_guard(self._account_generation):
+                data = payload["data"]
+                app_state.usernames[key] = USERNAME_DISPLAY_TEMPLATE.format(
+                    data["uname"], data["mid"]
+                )
+                app_state.replace_account_cookies(cookies)
+                app_state.cookie_state.current_cookie_idx = candidate
+                app_state.scan_status["scanned"] = True
             return candidate
 
-        app_state.cookies_dict.clear()
-        app_state.cookie_state.current_cookie_idx = 0
-        app_state.scan_status["is_new"] = True
+        with app_state.account_guard(self._account_generation):
+            app_state.replace_account_cookies({})
+            app_state.cookie_state.current_cookie_idx = 0
+            app_state.scan_status["is_new"] = True
         return 0

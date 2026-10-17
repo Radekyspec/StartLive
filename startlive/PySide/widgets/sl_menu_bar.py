@@ -1,17 +1,24 @@
-from contextlib import suppress
+from pathlib import Path
+from platform import system
 from shutil import rmtree
 
-from PySide6.QtCore import Slot, QUrl, Signal
-from PySide6.QtGui import QAction, QActionGroup, QDesktopServices
+from PySide6.QtCore import QUrl, Signal
+from PySide6.QtCore import Slot
+from PySide6.QtGui import QAction
+from PySide6.QtGui import QActionGroup, QDesktopServices
 from PySide6.QtWidgets import QMenuBar, QMenu
-from keyring import delete_password
-from keyring.errors import PasswordDeleteError
+from PySide6.QtWidgets import QMessageBox
 
+from startlive.PySide.interface_adapters.pk.session_controller import \
+    PkSessionController
 from startlive.PySide.log import get_logger, get_log_path
 from startlive.core import app_state
 from startlive.core.cache import cache_base_dir, del_cache_user
 from startlive.core.constant import *
+from startlive.core.constant.settings import SettingsName
 from startlive.core.credentials import CredentialStore
+from startlive.core.exceptions import MissingPkPluginError
+from startlive.core.obs.plugin_install import install_pk_plugin
 
 
 class StartLiveMenuBar(QMenuBar):
@@ -24,15 +31,19 @@ class StartLiveMenuBar(QMenuBar):
     accountSwitch = Signal(int)
     accountAdded = Signal()
 
-    def __init__(self, parent=None, /):
+    def __init__(self, /, parent=None, *, resources_path: Path):
         super().__init__(parent)
         self.logger = get_logger(self.__class__.__name__)
         self._store = CredentialStore()
-        self._tools_menu = QMenu("文件", self)
+        self._resources_path = resources_path
+        self._files_menu = QMenu("文件", self)
         _open_log_folder_action = QAction("显示日志文件", self)
         _open_log_folder_action.triggered.connect(self._open_log_folder)
-        self._tools_menu.addAction(_open_log_folder_action)
-        self.addMenu(self._tools_menu)
+        _install_obs_plugin_action = QAction("安装 OBS PK 插件", self)
+        _install_obs_plugin_action.triggered.connect(self._install_pk_plugin)
+        self._files_menu.addAction(_open_log_folder_action)
+        self._files_menu.addAction(_install_obs_plugin_action)
+        self.addMenu(self._files_menu)
 
         self._setting_menu = QMenu("缓存设置", self)
         self.addMenu(self._setting_menu)
@@ -65,6 +76,51 @@ class StartLiveMenuBar(QMenuBar):
         self.account_group.triggered.connect(self._switch_account)
         self._populate_account_menu()
 
+        self._pk_window = None
+        self._conversion_dialog = None
+        self._tools_menu = QMenu("特殊功能", self)
+        conversion_action = QAction("配置转换", self)
+        conversion_action.triggered.connect(self._open_config_conversion)
+        self._tools_menu.addAction(conversion_action)
+        self.addMenu(self._tools_menu)
+        pk_action = QAction("PK 连线", self)
+        pk_action.triggered.connect(self._open_pk_window)
+        self._tools_menu.addAction(pk_action)
+
+    @Slot()
+    def _open_pk_window(self):
+        from startlive.PySide.window.pk_window import PkWindow
+
+        if self._pk_window is None or self._pk_window._shutdown:
+            if self._pk_window is not None:
+                self._pk_window.deleteLater()
+            self._pk_window = PkWindow(self,
+                                       session_factory=PkSessionController)
+        self._pk_window.show()
+        self._pk_window.raise_()
+        self._pk_window.activateWindow()
+
+    @Slot()
+    def _open_config_conversion(self):
+        from startlive.PySide.window.config_conversion_dialog import \
+            ConfigConversionDialog
+
+        if self._conversion_dialog is None:
+            self._conversion_dialog = ConfigConversionDialog(self)
+        self._conversion_dialog.show()
+        self._conversion_dialog.raise_()
+        self._conversion_dialog.activateWindow()
+
+    def shutdown_pk_window(self):
+        """Retire the separate PK worker pool before changing account or exiting."""
+        window = self._pk_window
+        if window is None:
+            return
+        window.shutdown()
+        window.close()
+        window.deleteLater()
+        self._pk_window = None
+
     @Slot()
     def _populate_account_menu(self):
         self.account_menu.clear()
@@ -95,6 +151,7 @@ class StartLiveMenuBar(QMenuBar):
 
     @Slot()
     def delete_cookies(self):
+        self.shutdown_pk_window()
         current = app_state.cookie_state.current_cookie_idx
         expected_keys = tuple(app_state.cookie_indices)
         removed = self._store.remove_at(current, expected_keys)
@@ -124,25 +181,26 @@ class StartLiveMenuBar(QMenuBar):
 
     @Slot()
     def _delete_settings(self):
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
+        app_state.delete_settings(SettingsName.OBS)
         self.obsSettingsDeleted.emit()
 
     @Slot()
     def _delete_app_settings(self):
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
-        app_state.app_settings_default()
+        if self._pk_window is not None:
+            self._pk_window.close_encoder_settings()
+        app_state.delete_settings(SettingsName.APP)
+        app_state.delete_settings(SettingsName.PK_ENCODER)
         self.appSettingsDeleted.emit()
 
     @Slot()
     def _delete_cred(self):
+        self.shutdown_pk_window()
         self.credentialClearRequested.emit()
         self._store.clear_all()
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_SETTINGS)
-        with suppress(PasswordDeleteError):
-            delete_password(KEYRING_SERVICE_NAME, KEYRING_APP_SETTINGS)
+        for name in (SettingsName.OBS, SettingsName.APP,
+                     SettingsName.PK_ENCODER):
+            app_state.delete_settings(name)
+        app_state.pk_encoder_runtime.reset()
         if cache_base_dir(CacheType.CONFIG).is_dir():
             rmtree(cache_base_dir(CacheType.CONFIG))
         self.credDeleted.emit(True)
@@ -156,9 +214,9 @@ class StartLiveMenuBar(QMenuBar):
         target = action.data()
         self.logger.info(f"select account index: {target}")
         if (
-            target != app_state.cookie_state.current_cookie_idx
-            and target != app_state.cookie_state.cookie_index_len
-            and self._ready_switch_account()
+                target != app_state.cookie_state.current_cookie_idx
+                and target != app_state.cookie_state.cookie_index_len
+                and self._ready_switch_account()
         ):
             self.accountSwitch.emit(target)
 
@@ -190,3 +248,27 @@ class StartLiveMenuBar(QMenuBar):
                 app_state.cookie_state.is_exhausted():
             return
         self.accountAdded.emit()
+
+    @Slot()
+    def _install_pk_plugin(self):
+        try:
+            destination = install_pk_plugin(self._resources_path)
+        except MissingPkPluginError:
+            QMessageBox.warning(
+                self.parent(), "安装 OBS PK 插件",
+                "未能找到对应平台的 OBS PK 插件\n\n"
+                "若使用 pip 或从源代码运行，请自行编译安装仓库目录下 plugins/obs-startlive-pk 插件")
+        except PermissionError as error:
+            hint = "请先关闭 OBS，并检查插件目录的写入权限。"
+            if system() == "Windows":
+                hint += "必要时请以管理员身份运行开播器后重试。"
+            QMessageBox.critical(self.parent(), "安装 OBS PK 插件失败",
+                                 f"无法写入 OBS 插件目录。{hint}\n\n{error}")
+        except OSError as error:
+            QMessageBox.critical(self.parent(), "安装 OBS PK 插件失败",
+                                 f"复制 OBS PK 插件失败，请关闭 OBS 后重试。\n\n{error}")
+        else:
+            QMessageBox.information(
+                self.parent(), "安装 OBS PK 插件",
+                f"OBS PK 插件已安装到：\n{destination}\n\n"
+                "请重启 OBS，然后在“工具”菜单中开启 StartLive PK 采集。")

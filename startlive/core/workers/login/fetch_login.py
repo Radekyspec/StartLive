@@ -16,12 +16,15 @@ class FetchLoginWorker(LongLiveWorker):
     def __init__(self, presenter: Presenter):
         super().__init__(name="登录", headers_type=HeadersType.WEB,
                          inherit_account_cookies=False, presenter=presenter)
+        self._account_generation, _ = app_state.capture_account_context()
         self.logger = get_logger(self.__class__.__name__)
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
 
         check_url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
         while app_state.scan_status["qr_key"] is None and self.is_running:
+            with app_state.account_guard(self._account_generation):
+                pass
             sleep(0.1)
         params = {
             "qrcode_key": app_state.scan_status["qr_key"],
@@ -29,6 +32,8 @@ class FetchLoginWorker(LongLiveWorker):
             "web_location": "0.0"
         }
         while not app_state.scan_status["scanned"] and self.is_running:
+            with app_state.account_guard(self._account_generation):
+                self.raise_if_cancelled()
             self.logger.info("QR poll Request")
             response = self._session.get(check_url, params=params)
             response.encoding = "utf-8"
@@ -39,23 +44,25 @@ class FetchLoginWorker(LongLiveWorker):
                     sleep(1)
                     continue
                 case 86038:  # QR expired
-                    app_state.scan_status["timeout"] = True
+                    with app_state.account_guard(self._account_generation):
+                        self.raise_if_cancelled()
+                        app_state.scan_status["timeout"] = True
                     return LoginResult.QR_EXPIRED
                 case 86090:  # Scanned but not confirmed
-                    app_state.scan_status["wait_for_confirm"] = True
+                    with app_state.account_guard(self._account_generation):
+                        self.raise_if_cancelled()
+                        app_state.scan_status["wait_for_confirm"] = True
                     report_progress(LoginResult.QR_NOT_CONFIRMED)
                     sleep(1)
                     continue
                 case 0:  # Login successful
                     new_cookies = response.cookies.get_dict()
-                    stored = CredentialStore().add(new_cookies)
-                    app_state.cookies_dict.clear()
-                    app_state.cookies_dict.update(new_cookies)
-                    # config.cookies_dict["refresh_token"] = result["data"][
-                    #     "refresh_token"]
-
-                    app_state.cookie_state.current_cookie_idx = stored.index
-                    app_state.scan_status["scanned"] = True
+                    with app_state.account_guard(self._account_generation):
+                        self.raise_if_cancelled()
+                        stored = CredentialStore().add(new_cookies)
+                        app_state.replace_account_cookies(new_cookies)
+                        app_state.cookie_state.current_cookie_idx = stored.index
+                        app_state.scan_status["scanned"] = True
                     return LoginResult.SUCCESS
                 case _:
                     raise LoginError(result["message"])

@@ -14,7 +14,9 @@ class FetchPreLivePresenter(Presenter):
         self._view = view
         self._state = state
 
-    def prepare_success_view(self):
+    def prepare_success_view(self, account_generation: int):
+        if not app_state.account_is_current(account_generation):
+            return
         title_text = app_state.room_info["title"]
         app_state.room_info["recent_title"].insert(0, title_text)
         self._view.title_input.currentTextChanged.connect(

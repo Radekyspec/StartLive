@@ -138,6 +138,12 @@ def cli() -> int:
 
 
 if __name__ == "__main__":
+    # 编码器检测子进程，不执行 Velopack 钩子，不初始化 Qt
+    if len(sys.argv) > 1 and sys.argv[1] == "--pk-encoder-probe":
+        from startlive.core.pk.encoder_probe_child import probe_main
+
+        sys.exit(probe_main(sys.argv[2:]))
+
     # 必须在单实例检查、Qt 初始化和其他正常启动逻辑之前运行。
     # 安装、更新或卸载期间，Velopack 可能在这里直接终止进程。
     _run_velopack_hooks()
