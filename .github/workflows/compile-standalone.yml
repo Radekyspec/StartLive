@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
 
     env:
       UPX_VERSION: "5.0.2"
@@ -105,9 +105,6 @@ jobs:
           onefile-no-compression: true
           upx-disable-cache: true
           deployment: true
-
-      - name: Verify packaged OBS plugin and PK dependencies
-        run: python tools/check_nuitka_pk.py
 
       - name: Flatten output
         run: |

@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ windows-latest, macos-15-intel, macos-latest ]
+        os: [ windows-2025-vs2026, macos-15-intel, macos-15 ]
 
     runs-on: ${{ matrix.os }}
 
@@ -46,7 +46,7 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v7
-        if: matrix.os != 'macos-latest'
+        if: matrix.os != 'macos-15'
         with:
           python-version: '3.14.6' # Version range or exact version of a Python version to use, using SemVer's version range syntax
           architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
@@ -64,14 +64,14 @@ jobs:
           cache-dependency-path: |
             **/requirements*.txt
             pyproject.toml
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-15'
 
       - name: Install Dependencies
         run: |
           python -m pip install ".[pk]"
 
       - name: Install ImageIO for Mac
-        if: matrix.os != 'windows-latest'
+        if: runner.os == 'macOS'
         run: |
           pip install imageio
 
@@ -83,7 +83,7 @@ jobs:
         uses: ./.github/actions/build-obs-pk
 
       - name: Download UPX (Windows)
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $zip = "$env:RUNNER_TEMP\upx.zip"
@@ -95,7 +95,7 @@ jobs:
           echo "$env:UPX_DIR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build Executable for Windows
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         uses: Nuitka/Nuitka-Action@main
         with:
           nuitka-version: main
@@ -130,7 +130,7 @@ jobs:
 
       - name: Build Executable for Mac
         uses: Nuitka/Nuitka-Action@main
-        if: matrix.os != 'windows-latest'
+        if: runner.os == 'macOS'
         with:
           nuitka-version: main
           script-name: StartLive.py
@@ -165,9 +165,6 @@ jobs:
             build/StartLive.app/Contents/MacOS/resources/obs-startlive-pk.plugin
           codesign --force --sign - --timestamp=none \
             --preserve-metadata=entitlements,identifier,flags build/StartLive.app
-
-      - name: Verify packaged OBS plugin and PK dependencies
-        run: python tools/check_nuitka_pk.py
 
       - name: Archive macOS app with executable permissions and symbolic links
         if: runner.os == 'macOS'

@@ -7,6 +7,7 @@ include tools/pk_loopback.py
 include tools/benchmark_pk_transport.py
 recursive-include plugins/obs-startlive-pk *.cpp *.hpp *.txt *.in *.md
 include tools/check_distribution.py
+include tools/prepare_obs_pk_deps.py
 recursive-include startlive/resources *.ico *.svg
 include startlive/resources/version.json
 global-exclude *.py[cod]

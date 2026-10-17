@@ -16,19 +16,22 @@ if(STARTLIVE_PK_BUILD_PLUGIN)
     message(FATAL_ERROR "VideoEncodingConfig.frame_rate is missing from ${pk_video_config}")
   endif()
   string(REGEX REPLACE "^    frame_rate: int = ([0-9]+).*" "\\1" pk_max_fps "${pk_max_fps_line}")
-  find_package(libobs CONFIG REQUIRED)
-  find_package(obs-frontend-api CONFIG REQUIRED)
-  find_package(Qt6 REQUIRED COMPONENTS Widgets)
-  # OBS 31's Qt helper links AGL, removed from the macOS 26 SDK. find_library
-  # can still report an empty AGL.framework directory as found, so remove both
-  # the framework path and the fallback flag. AGL is unused on 64-bit macOS.
-  if(APPLE AND TARGET WrapOpenGL::WrapOpenGL)
-    get_target_property(pk_opengl_libraries WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
-    if(pk_opengl_libraries)
-      list(FILTER pk_opengl_libraries EXCLUDE REGEX "(^-framework AGL$|(^|/)AGL[.]framework(/.*)?$)")
-      set_property(TARGET WrapOpenGL::WrapOpenGL PROPERTY INTERFACE_LINK_LIBRARIES "${pk_opengl_libraries}")
-      message(STATUS "OBS PK OpenGL link dependencies: ${pk_opengl_libraries}")
-    endif()
+  # Release binaries use one fixed SDK baseline; Linux uses its native SDK.
+  if(WIN32 OR APPLE)
+    find_package(libobs 28.0.0 EXACT CONFIG REQUIRED)
+    find_package(obs-frontend-api 28.0.0 EXACT CONFIG REQUIRED)
+    find_package(Qt6 6.3.1 EXACT REQUIRED COMPONENTS Widgets)
+  else()
+    find_package(libobs CONFIG REQUIRED)
+    find_package(obs-frontend-api CONFIG REQUIRED)
+    find_package(Qt6 REQUIRED COMPONENTS Widgets)
+  endif()
+  # Qt 6.3.1 assumes OpenGL's IMPORTED_LOCATION names a binary; CMake 4.2
+  # names the framework directory, so Qt mistakenly links its parent folder.
+  # Use CMake's target directly. This also omits AGL, a no-op on 64-bit macOS
+  # that was removed from the macOS 26 SDK, while retaining OpenGL itself.
+  if(APPLE)
+    set_property(TARGET WrapOpenGL::WrapOpenGL PROPERTY INTERFACE_LINK_LIBRARIES OpenGL::GL)
   endif()
   add_library(obs-startlive-pk MODULE src/plugin.cpp src/media_transport.cpp src/shared_video.cpp)
   target_compile_features(obs-startlive-pk PRIVATE cxx_std_17)
@@ -38,7 +41,10 @@ if(STARTLIVE_PK_BUILD_PLUGIN)
     target_compile_options(obs-startlive-pk PRIVATE /utf-8)
   endif()
   if(WIN32)
-    target_compile_definitions(obs-startlive-pk PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    # OBS 28 requires Windows 10. A newer build SDK does not change the
+    # Windows API level requested by this plugin.
+    target_compile_definitions(obs-startlive-pk PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX
+      WINVER=0x0A00 _WIN32_WINNT=0x0A00 NTDDI_VERSION=0x0A000000)
     target_link_libraries(obs-startlive-pk PRIVATE advapi32)
   endif()
   set_target_properties(obs-startlive-pk PROPERTIES PREFIX "")

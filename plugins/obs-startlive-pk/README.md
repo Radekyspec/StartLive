@@ -76,231 +76,118 @@ on Windows. Source-build dependencies are listed in the platform recipes below.
 
 ### Preparing the OBS SDK
 
-The SDK includes `libobsConfig.cmake`, `obs-frontend-apiConfig.cmake` and the
-headers and
-libraries referenced by those packages.
+Release builds use **OBS 28.0.0**, **Qt 6.3.1** and the official
+**obs-deps 2022-08-02** archives. See the pinned
+[OBS 28 workflow](https://github.com/obsproject/obs-studio/blob/28.0.0/.github/workflows/main.yml)
+and [dependency release](https://github.com/obsproject/obs-deps/releases/tag/2022-08-02).
+Downloads are checked against SHA256 before extraction.
 
-#### Download locations
+The goal is compatibility with OBS 28 and newer on the same architecture.
+Building with the oldest supported public OBS/Qt APIs avoids requiring newer
+symbols. This is not a guarantee for every future OBS version: test loading,
+menu updates, audio/video capture and reconnection on each supported release.
+OBS 27 and Qt 5 builds are outside this baseline.
 
-| Platform / content                           | Download location                                                                                                                | What to use                                                                                                                                        |
-|----------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
-| OBS source for Windows / macOS               | [Official OBS Releases](https://github.com/obsproject/obs-studio/releases)                                                       | Open the matching OBS version, expand **Assets**, download `OBS-Studio-<version>-Sources.tar.gz`, then build and export the SDK as described below |
-| Third-party dependencies for Windows / macOS | [Official obs-deps Releases](https://github.com/obsproject/obs-deps/releases)                                                    | Select the dependency version specified by that OBS source tree's `buildspec.json` and the target architecture for building OBS                    |
-| Debian / Ubuntu development packages         | [Debian libobs-dev](https://packages.debian.org/trixie/libobs-dev) / [Ubuntu libobs-dev](https://packages.ubuntu.com/libobs-dev) | Install development files from the same distribution repositories as the OBS runtime                                                               |
-| Fedora development package                   | [Fedora obs-studio-devel](https://packages.fedoraproject.org/pkgs/obs-studio/obs-studio-devel/)                                  | Install the matching development package through the distribution package manager                                                                  |
+| Platform            | CI runner / tools                                                                            | Plugin runtime minimum                              |
+|---------------------|----------------------------------------------------------------------------------------------|-----------------------------------------------------|
+| Windows x64         | `windows-2025-vs2026`, VS 2026 generator, **v142 14.29.30133**, Windows SDK **10.0.26100.0** | Windows 10; OBS 28+ x64 and compatible VC++ runtime |
+| macOS Intel         | `macos-15-intel`, **Xcode 16.4**, macOS SDK **15.5**                                         | macOS **10.15**, OBS 28+ x86_64                     |
+| macOS Apple Silicon | `macos-15`, **Xcode 16.4**, macOS SDK **15.5**                                               | macOS **11.0**, OBS 28+ arm64                       |
 
-For example, for **OBS 31.1.2**, open
-its [release page](https://github.com/obsproject/obs-studio/releases/tag/31.1.2)
-or download
-the [official source archive](https://github.com/obsproject/obs-studio/releases/download/31.1.2/OBS-Studio-31.1.2-Sources.tar.gz).
-The source-build recipes below fetch this release and its submodules with Git,
-then export the SDK.
+CMake is pinned to **4.2.3**. These runners already contain the specified
+MSVC toolset / Windows SDK or Xcode; CI does not install another VS or Xcode.
+The latest MSVC cannot compile Qt 6.3.1's `stdext` references, so the plugin
+explicitly selects v142. Nuitka continues to use the runner's current MSVC.
+These are plugin requirements; StartLive's Python/PySide dependencies can
+require a newer operating system.
+The Windows API target is Windows 10; Qt 6.3's officially tested Windows 10
+configuration is 21H2 or later, so support for every earlier Windows 10 build
+is not implied.
 
-For native Linux distribution packages:
-
-```sh
-# Debian / Ubuntu
-sudo apt update
-sudo apt install libobs-dev
-
-# Fedora
-sudo dnf install obs-studio-devel
-```
-
-Choose the commands for your distribution and development packages from the
-same source and version as the OBS runtime. Both `libobs` and `obs-frontend-api`
-CMake packages are required. The source-build recipes below export both
-packages.
-
-#### Building an SDK from source
-
-The following commands target **OBS 31.1.2** and export the SDK.
-Use an OBS 31.1.2 runtime of the same architecture for installation and testing.
-Other OBS releases can change presets, dependencies and export paths; check
-their tagged source before adapting these commands.
-
-Start in the **StartLive repository root**. Each recipe clones OBS into a new
-`build/obs-sdk-src-31.1.2` directory. Use a separate build directory for each
-OBS version, architecture and generator.
-
-These commands disable the OBS UI, application frontend, bundled plugins,
-scripting and browser source. In this release, `ENABLE_FRONTEND=OFF` still
-builds the frontend API. Building `libobs` and `obs-frontend-api`, then
-installing
-the `Development` component, exports the headers, libraries and CMake packages
-needed by this plugin.
-
-##### Windows x64
-
-Install **Visual Studio 2022 Build Tools**, the **v143 C++ toolchain**, **ATL**,
-**Windows SDK 10.0.22621**, **CMake 3.28+** and Git. On a Windows machine with
-[WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/),
-run the following in PowerShell and allow installer elevation when requested:
-
-```powershell
-winget install --id Git.Git -e --source winget
-winget install --id Kitware.CMake -e --source winget
-winget install --id Microsoft.VisualStudio.2022.BuildTools -e --source winget --override "--wait --passive --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --add Microsoft.VisualStudio.Component.VC.ATL --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
-```
-
-After installation, restart PowerShell so Git and CMake are on `PATH`, return
-to the StartLive repository root, and run the entire block below. The official
-preset downloads its pinned dependency archives into the OBS source tree's
-`.deps` directory, including obs-deps and Qt. Keep network access available
-during configuration.
-
-```powershell
-$ErrorActionPreference = "Stop"
-$RepoRoot = (Get-Location).Path
-$ObsVersion = "31.1.2"
-$ObsSource = Join-Path $RepoRoot "build/obs-sdk-src-$ObsVersion"
-$ObsSdk = Join-Path $RepoRoot "build/obs-sdk-$ObsVersion-windows-x64"
-New-Item -ItemType Directory -Force (Join-Path $RepoRoot "build") | Out-Null
-
-git clone --branch $ObsVersion --recursive https://github.com/obsproject/obs-studio.git $ObsSource
-if ($LASTEXITCODE -ne 0) { throw "OBS checkout failed" }
-
-Push-Location $ObsSource
-try {
-    cmake --preset windows-x64 -DENABLE_UI=OFF -DENABLE_FRONTEND=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF -DENABLE_BROWSER=OFF "-DCMAKE_INSTALL_PREFIX=$ObsSdk"
-    if ($LASTEXITCODE -ne 0) { throw "OBS configure failed" }
-    cmake --build build_x64 --config Release --target libobs obs-frontend-api --parallel
-    if ($LASTEXITCODE -ne 0) { throw "OBS SDK build failed" }
-    cmake --install build_x64 --config Release --component Development --prefix $ObsSdk
-    if ($LASTEXITCODE -ne 0) { throw "OBS SDK install failed" }
-} finally {
-    Pop-Location
-}
-
-foreach ($Package in @("libobs", "obs-frontend-api", "w32-pthreads")) {
-    if (-not (Test-Path "$ObsSdk/cmake/${Package}Config.cmake")) {
-        throw "Missing SDK package: $Package"
-    }
-}
-```
-
-The SDK is exported to `build/obs-sdk-31.1.2-windows-x64`. Its `cmake`
-directory contains all three package configurations checked above.
-
-##### macOS arm64 / x86_64
-
-Install **full Xcode 16 or newer with macOS SDK 15 or newer** from
-[Apple's Xcode downloads](https://developer.apple.com/xcode/resources/), and
-install [Homebrew](https://brew.sh/). With Xcode installed at
-`/Applications/Xcode.app`, initialize it and install CMake 3.28+ and Git:
+Run from the StartLive repository root, using fresh build directories:
 
 ```sh
-sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
-sudo xcodebuild -runFirstLaunch
-xcodebuild -version
-xcrun --sdk macosx --show-sdk-platform-version
-brew install cmake git
+python -m pip install cmake==4.2.3
+git clone --branch 28.0.0 --depth 1 https://github.com/obsproject/obs-studio.git build/obs-sdk-source
 ```
 
-Run the next block from the StartLive repository root in a native Terminal
-session. It selects the machine's architecture (`arm64` or `x86_64`); use an
-OBS runtime with the same architecture. The official preset downloads its
-pinned obs-deps and Qt archives into `.deps`. The deployment target is macOS
-12.0, while the build machine must support the Xcode and SDK versions above.
-`OBS_CODESIGN_IDENTITY=-` selects ad hoc signing for the local SDK build.
+#### Windows SDK
+
+Locally, install VS 2026 with the v142 x64 tools and Windows SDK 10.0.26100.0.
+Set `VsRoot` to your installation; the example matches the CI Enterprise path.
+
+```powershell
+python tools/prepare_obs_pk_deps.py --os Windows --arch X64
+$ObsSource = "$PWD/build/obs-sdk-source"
+$ObsBuild = "$PWD/build/obs-sdk-build"
+$ObsSdk = "$PWD/build/obs-sdk"
+$ObsDeps = "$PWD/build/obs-pk-deps"
+$VsRoot = "$env:ProgramFiles/Microsoft Visual Studio/18/Enterprise"
+$VsArgs = @('-G', 'Visual Studio 18 2026', '-A', 'x64,version=10.0.26100.0',
+            '-T', 'v142,version=14.29.30133,host=x64', "-DCMAKE_GENERATOR_INSTANCE=$VsRoot")
+python -m cmake -S $ObsSource -B $ObsBuild @VsArgs `
+  "-DOBS_VERSION_OVERRIDE=28.0.0" "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
+  -DENABLE_UI=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF `
+  "-DCMAKE_PREFIX_PATH=$ObsDeps" "-DCMAKE_INSTALL_PREFIX=$ObsSdk"
+if ($LASTEXITCODE -ne 0) { throw 'OBS configure failed' }
+python -m cmake --build $ObsBuild --config Release --target libobs obs-frontend-api --parallel
+if ($LASTEXITCODE -ne 0) { throw 'OBS build failed' }
+python -m cmake --install $ObsBuild --config Release --component obs_libraries --prefix $ObsSdk
+if ($LASTEXITCODE -ne 0) { throw 'OBS install failed' }
+```
+
+#### macOS SDK
+
+Install full Xcode 16.4. The example selects Apple Silicon; on Intel change
+all three architecture/target values as indicated. OBS 28 exports the
+`obs_libraries` component, and its macOS export omits the public frontend
+header; the final command copies that exact header from the pinned source.
 
 ```sh
 set -eu
-REPO_ROOT="$PWD"
-OBS_VERSION="31.1.2"
-PK_ARCH="$(uname -m)"
-OBS_SRC="$REPO_ROOT/build/obs-sdk-src-$OBS_VERSION"
-OBS_SDK="$REPO_ROOT/build/obs-sdk-$OBS_VERSION-macos-$PK_ARCH"
-mkdir -p "$REPO_ROOT/build"
-
-git clone --branch "$OBS_VERSION" --recursive \
-  https://github.com/obsproject/obs-studio.git "$OBS_SRC"
-
-(
-  cd "$OBS_SRC"
-  cmake --preset macos "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" \
-    -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DOBS_CODESIGN_IDENTITY=- \
-    -DENABLE_UI=OFF -DENABLE_FRONTEND=OFF -DENABLE_PLUGINS=OFF \
-    -DENABLE_SCRIPTING=OFF -DENABLE_BROWSER=OFF \
-    "-DCMAKE_INSTALL_PREFIX=$OBS_SDK"
-)
-cmake --build "$OBS_SRC/build_macos" --config Release \
-  --target libobs obs-frontend-api --parallel
-cmake --install "$OBS_SRC/build_macos" --config Release \
-  --component Development --prefix "$OBS_SDK"
-
-test -f "$OBS_SDK/Frameworks/libobs.framework/Resources/cmake/libobsConfig.cmake"
-test -f "$OBS_SDK/lib/cmake/obs-frontend-api/obs-frontend-apiConfig.cmake"
+export DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer
+# Intel: X64 / x86_64 / 10.15; Apple Silicon: ARM64 / arm64 / 11.0
+python tools/prepare_obs_pk_deps.py --os macOS --arch ARM64
+PK_ARCH=arm64
+PK_MACOS_TARGET=11.0
+OBS_SRC="$PWD/build/obs-sdk-source"
+OBS_BUILD="$PWD/build/obs-sdk-build"
+OBS_SDK="$PWD/build/obs-sdk"
+OBS_DEPS="$PWD/build/obs-pk-deps"
+python -m cmake -S "$OBS_SRC" -B "$OBS_BUILD" -G Xcode \
+  -DOBS_VERSION_OVERRIDE=28.0.0 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" "-DCMAKE_OSX_DEPLOYMENT_TARGET=$PK_MACOS_TARGET" \
+  -DCMAKE_OSX_SYSROOT=macosx15.5 -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+  -DOBS_CODESIGN_LINKER=OFF \
+  -DENABLE_UI=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF \
+  "-DCMAKE_PREFIX_PATH=$OBS_DEPS" "-DCMAKE_INSTALL_PREFIX=$OBS_SDK"
+python -m cmake --build "$OBS_BUILD" --config Release --target libobs obs-frontend-api --parallel
+python -m cmake --install "$OBS_BUILD" --config Release --component obs_libraries --prefix "$OBS_SDK"
+install -m 644 "$OBS_SRC/UI/obs-frontend-api/obs-frontend-api.h" "$OBS_SDK/include/obs/obs-frontend-api.h"
 ```
 
-The SDK is exported to `build/obs-sdk-31.1.2-macos-arm64` or
-`build/obs-sdk-31.1.2-macos-x86_64`. The explicit package paths above account
-for libobs being exported as a framework and the frontend API as a library.
+The SDK lives in `build/obs-sdk`; Qt and native build dependencies live in
+`build/obs-pk-deps`. Neither the rebuilt OBS libraries nor this Qt runtime is
+shipped with the plugin: it links to the host OBS's libraries at runtime.
+The complete CI steps are maintained in the
+[shared build action](../../.github/actions/build-obs-pk/action.yml).
 
-##### Linux — Ubuntu 24.04 LTS
+On macOS, the deployment target controls the minimum runtime OS; the selected
+SDK controls compilation. Intermediate SDK/plugin signing is disabled, then
+the packaged plugin and app receive ad hoc signatures. The `.plugin` bundle
+layout and OBS framework RPATH remain in place. Qt 6.3.1's OpenGL wrapper is
+linked through `OpenGL::GL` to fix its handling of modern CMake framework paths
+and omit the unused 64-bit AGL framework; OpenGL functionality is retained.
 
-The following package names and commands target **Ubuntu 24.04 LTS**. They
-install CMake 3.28+, GCC, Ninja, FFmpeg 6.1 development files, and dependencies
-for libobs, X11, Wayland, OpenGL/EGL and PulseAudio. Other distributions need
-equivalent packages with FFmpeg 6.1 or newer.
+#### Linux SDK
 
-```sh
-sudo apt update
-sudo apt install --no-install-recommends \
-  git ca-certificates build-essential cmake ninja-build pkg-config extra-cmake-modules \
-  libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev \
-  libjansson-dev uthash-dev zlib1g-dev uuid-dev libglib2.0-dev \
-  libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xinput-dev \
-  libwayland-dev libxkbcommon-dev libdrm-dev libegl-dev libgl-dev libpulse-dev qt6-base-dev
-cmake --version
-pkg-config --modversion libavformat
-```
-
-Return to the StartLive repository root and run:
-
-```sh
-set -eu
-REPO_ROOT="$PWD"
-OBS_VERSION="31.1.2"
-OBS_SRC="$REPO_ROOT/build/obs-sdk-src-$OBS_VERSION"
-OBS_BUILD="$OBS_SRC/build_sdk"
-OBS_SDK="$REPO_ROOT/build/obs-sdk-$OBS_VERSION-linux"
-mkdir -p "$REPO_ROOT/build"
-
-git clone --branch "$OBS_VERSION" --recursive \
-  https://github.com/obsproject/obs-studio.git "$OBS_SRC"
-
-cmake -S "$OBS_SRC" -B "$OBS_BUILD" -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_LIBDIR=lib \
-  "-DCMAKE_INSTALL_PREFIX=$OBS_SDK" \
-  -DENABLE_UI=OFF -DENABLE_FRONTEND=OFF -DENABLE_PLUGINS=OFF \
-  -DENABLE_SCRIPTING=OFF -DENABLE_BROWSER=OFF
-cmake --build "$OBS_BUILD" --target libobs obs-frontend-api --parallel
-cmake --install "$OBS_BUILD" --config Release \
-  --component Development --prefix "$OBS_SDK"
-
-test -f "$OBS_SDK/lib/cmake/libobs/libobsConfig.cmake"
-test -f "$OBS_SDK/lib/cmake/obs-frontend-api/obs-frontend-apiConfig.cmake"
-```
-
-The SDK is exported to `build/obs-sdk-31.1.2-linux`, with both CMake packages
-under `lib/cmake`. Run the SDK build and export commands as your regular user.
-
-##### Using the generated SDK
-
-Continue with the plugin build and installation section for your platform.
-The commands use the SDK paths generated above. For an SDK installed elsewhere,
-set `ObsSdk` / `OBS_SDK` to its installation prefix.
-
-Keep the OBS source, build directory and downloaded dependencies available
-during development. The `Development` component provides compilation files.
-Install OBS separately to supply the application, runtime libraries and graphics
-modules used for plugin loading and capture.
-
-The version-specific details above follow the OBS 31.1.2
-[build presets](https://github.com/obsproject/obs-studio/blob/31.1.2/CMakePresets.json),
-[frontend API configuration](https://github.com/obsproject/obs-studio/blob/31.1.2/frontend/CMakeLists.txt)
-and [SDK export rules](https://github.com/obsproject/obs-studio/blob/31.1.2/cmake/common/helpers_common.cmake).
+Linux is not in the release CI matrix. For a local build, install the OBS 28+
+development packages and Qt 6 development files matching the native OBS
+installation (for example `libobs-dev` and `qt6-base-dev` on Debian/Ubuntu,
+or `obs-studio-devel` and `qt6-qtbase-devel` on Fedora). Both `libobs` and
+`obs-frontend-api` CMake packages are required. Distribution builds are tied
+to their own library versions; they do not inherit the Windows/macOS binary
+compatibility baseline.
 
 ### StartLive runtime dependencies
 
@@ -335,16 +222,17 @@ built.
 
 ## Windows: build and install
 
-In PowerShell, configure and build with Visual Studio 2022 and the exported SDK.
-For another compatible Visual Studio version, select its CMake generator.
+In PowerShell, configure and build with Visual Studio 2026 + v142 and the
+exported SDK.
+Reuse `VsArgs` from the Windows SDK commands above.
 
 ```powershell
-$ObsSdk = Join-Path $PWD "build/obs-sdk-31.1.2-windows-x64"
-$QtSdk = Join-Path $PWD "build/obs-sdk-src-31.1.2/.deps/obs-deps-qt6-2025-07-11-x64"
+$ObsSdk = Join-Path $PWD "build/obs-sdk"
+$QtSdk = Join-Path $PWD "build/obs-pk-deps"
 
-cmake -S plugins/obs-startlive-pk -B build/obs-pk-windows -G "Visual Studio 17 2022" -A x64 "-DCMAKE_PREFIX_PATH=$ObsSdk;$QtSdk"
+python -m cmake -S plugins/obs-startlive-pk -B build/obs-pk-windows @VsArgs "-DCMAKE_PREFIX_PATH=$ObsSdk;$QtSdk"
 if ($LASTEXITCODE -ne 0) { throw "Plugin configure failed" }
-cmake --build build/obs-pk-windows --config Release --parallel
+python -m cmake --build build/obs-pk-windows --config Release --parallel
 if ($LASTEXITCODE -ne 0) { throw "Plugin build failed" }
 ```
 
@@ -354,7 +242,7 @@ when installing into Program Files, starting from the StartLive repository root.
 
 ```powershell
 $ObsRoot = "C:/Program Files/obs-studio"
-cmake --install build/obs-pk-windows --config Release --prefix "$ObsRoot"
+python -m cmake --install build/obs-pk-windows --config Release --prefix "$ObsRoot"
 ```
 
 Installed plugin: `$ObsRoot/obs-plugins/64bit/obs-startlive-pk.dll`.
@@ -365,27 +253,34 @@ Continue with **Start and verify** below.
 With Xcode initialized, run the following in Terminal. Set `PK_ARCH` to the
 OBS runtime architecture (`arm64` or `x86_64`) and `OBS_SDK` to the matching
 SDK.
-The commands use the SDK exported above and a macOS 12.0 deployment target.
+The commands use the SDK exported above and a macOS 11.0 deployment target (
+Intel: 10.15).
 
 ```sh
 set -eu
-PK_ARCH="$(uname -m)"
-OBS_SDK="$PWD/build/obs-sdk-31.1.2-macos-$PK_ARCH"
-QT_SDK="$PWD/build/obs-sdk-src-31.1.2/.deps/obs-deps-qt6-2025-07-11-universal"
+PK_ARCH=arm64
+PK_MACOS_TARGET=11.0
+export DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer
+OBS_SDK="$PWD/build/obs-sdk"
+QT_SDK="$PWD/build/obs-pk-deps"
 
-cmake -S plugins/obs-startlive-pk -B build/obs-pk-macos -G Xcode \
+python -m cmake -S plugins/obs-startlive-pk -B build/obs-pk-macos -G Xcode \
+  -DCMAKE_OSX_SYSROOT=macosx15.5 \
+  -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
   "-DCMAKE_PREFIX_PATH=$OBS_SDK;$OBS_SDK/Frameworks;$QT_SDK" \
   "-Dlibobs_DIR=$OBS_SDK/Frameworks/libobs.framework/Resources/cmake" \
   "-Dobs-frontend-api_DIR=$OBS_SDK/lib/cmake/obs-frontend-api" \
-  "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
-cmake --build build/obs-pk-macos --config Release --parallel
+  "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" "-DCMAKE_OSX_DEPLOYMENT_TARGET=$PK_MACOS_TARGET"
+python -m cmake --build build/obs-pk-macos --config Release --parallel
 ```
 
 Close OBS and install the plugin bundle:
 
 ```sh
-cmake --install build/obs-pk-macos --config Release \
+python -m cmake --install build/obs-pk-macos --config Release \
   --prefix "$HOME/Library/Application Support/obs-studio/plugins"
+codesign --force --sign - --timestamp=none \
+  "$HOME/Library/Application Support/obs-studio/plugins/obs-startlive-pk.plugin"
 ```
 
 Installed plugin:
@@ -394,15 +289,14 @@ Continue with **Start and verify** below.
 
 ## Linux: build and install
 
-For a native OBS installation, configure and build with Ninja and the exported
-SDK:
+For a native OBS installation, configure and build with Ninja and the
+distribution's OBS/Qt development packages:
 
 ```sh
 set -eu
-OBS_SDK="$PWD/build/obs-sdk-31.1.2-linux"
 
 cmake -S plugins/obs-startlive-pk -B build/obs-pk-linux -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$OBS_SDK" \
+  -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_LIBDIR=lib
 cmake --build build/obs-pk-linux --parallel
 ```

@@ -56,219 +56,119 @@ Linux/macOS 使用 POSIX 共享内存与信号量。读写冲突时丢弃新帧�
 
 ### 准备 OBS SDK
 
-SDK 应包含 `libobsConfig.cmake`、`obs-frontend-apiConfig.cmake` 及其引用的头文件和库。
+发布构建固定使用 **OBS 28.0.0**、**Qt 6.3.1** 和官方
+**obs-deps 2022-08-02** 依赖包，依据是
+[OBS 28 官方工作流](https://github.com/obsproject/obs-studio/blob/28.0.0/.github/workflows/main.yml)
+及[对应依赖发布页](https://github.com/obsproject/obs-deps/releases/tag/2022-08-02)。
+下载后校验 SHA256，再解压使用。
 
-#### 下载入口
+目标是兼容相同架构的 **OBS 28 及以上版本**。使用较低版本的公开 OBS/Qt API，
+可避免引用新版才提供的符号，但不能保证所有未来版本都兼容。
+每个支持版本仍需验证加载、菜单文字更新、音视频采集和断线重连；OBS 27 / Qt 5 不在范围内。
 
-| 平台 / 内容                  | 下载位置                                                                                                                             | 如何使用                                                                           |
-|--------------------------|----------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------|
-| Windows / macOS 的 OBS 源码 | [OBS 官方 Releases](https://github.com/obsproject/obs-studio/releases)                                                             | 打开与目标 OBS 一致的版本，展开 **Assets**，下载 `OBS-Studio-<版本>-Sources.tar.gz`，按下文编译并导出 SDK |
-| Windows / macOS 的第三方依赖   | [obs-deps 官方 Releases](https://github.com/obsproject/obs-deps/releases)                                                          | 选择对应 OBS 源码 `buildspec.json` 指定的依赖版本及目标架构，用于构建 OBS                             |
-| Debian / Ubuntu 开发包      | [Debian libobs-dev](https://packages.debian.org/trixie/libobs-dev) / [Ubuntu libobs-dev](https://packages.ubuntu.com/libobs-dev) | 从与已安装 OBS 相同的发行版软件源安装开发包                                                       |
-| Fedora 开发包               | [Fedora obs-studio-devel](https://packages.fedoraproject.org/pkgs/obs-studio/obs-studio-devel/)                                  | 通过发行版包管理器安装与运行时匹配的开发包                                                          |
+| 平台                  | 固定 CI runner / 编译工具                                                                 | 插件运行下限                              |
+|---------------------|-------------------------------------------------------------------------------------|-------------------------------------|
+| Windows x64         | `windows-2025-vs2026`、VS 2026 生成器、**v142 14.29.30133**、Windows SDK **10.0.26100.0** | Windows 10、OBS 28+ x64、兼容的 VC++ 运行库 |
+| macOS Intel         | `macos-15-intel`、**Xcode 16.4**、macOS SDK **15.5**                                  | macOS **10.15**、OBS 28+ x86_64      |
+| macOS Apple Silicon | `macos-15`、**Xcode 16.4**、macOS SDK **15.5**                                        | macOS **11.0**、OBS 28+ arm64        |
 
-例如，目标 OBS 为 **31.1.2**
-时，可从 [31.1.2 发布页](https://github.com/obsproject/obs-studio/releases/tag/31.1.2)
-下载 [官方源码包](https://github.com/obsproject/obs-studio/releases/download/31.1.2/OBS-Studio-31.1.2-Sources.tar.gz)
-。下方源码构建步骤使用 Git 获取此版本及子模块，再导出 SDK。
+CMake 固定为 **4.2.3**。这些 runner 已预装对应 MSVC 工具集、Windows SDK 或 Xcode，
+CI 无需再安装另一套 VS / Xcode。最新 MSVC 已移除 Qt 6.3.1 使用的 `stdext` 接口，
+因此插件明确选择 v142；Nuitka 仍使用 runner 的当前 MSVC。
+这里的系统下限只针对插件，开播器本身还受 Python/PySide 等依赖的要求限制。
+Windows API 目标设为 Windows 10；Qt 6.3 官方测试的 Windows 10 配置为 21H2 及以上，
+不据此承诺所有更早的 Windows 10 系统构建均受支持。
 
-Linux 原生软件源安装示例：
-
-```sh
-# Debian / Ubuntu
-sudo apt update
-sudo apt install libobs-dev
-
-# Fedora
-sudo dnf install obs-studio-devel
-```
-
-选择适用于本机发行版的命令，开发包与 OBS 运行环境使用相同来源和版本。SDK 需要提供
-`libobs` 和 `obs-frontend-api` 两个 CMake 包；下方源码构建步骤会导出这两个包。
-
-#### 从源码生成 SDK
-
-以下命令固定使用 **OBS 31.1.2**，并完成 SDK 的构建与导出。
-安装和测试时，请使用相同架构的 OBS 31.1.2 运行环境。
-其他 OBS 版本的构建预设、依赖和导出路径可能不同，修改版本前应核对对应标签的源码。
-
-从 **StartLive 仓库根目录**开始执行。各平台步骤将源码克隆到新建的
-`build/obs-sdk-src-31.1.2` 目录。每组 OBS 版本、架构和生成器使用独立的构建目录。
-
-这些命令关闭 OBS 的 UI、应用程序前端、内置插件、脚本和浏览器源。
-在此版本中，`ENABLE_FRONTEND=OFF` 仍会保留 frontend API 的构建。
-编译 `libobs` 和 `obs-frontend-api` 后，安装 `Development` 组件，
-即可导出本插件需要的头文件、链接库和 CMake 包。
-
-##### Windows x64
-
-安装 **Visual Studio 2022 Build Tools**、**v143 C++ 工具链**、**ATL**、
-**Windows SDK 10.0.22621**、**CMake 3.28+** 和 Git。
-已安装 [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/)
-的 Windows 机器可在 PowerShell 中执行以下命令，并在安装程序提示时允许提权：
-
-```powershell
-winget install --id Git.Git -e --source winget
-winget install --id Kitware.CMake -e --source winget
-winget install --id Microsoft.VisualStudio.2022.BuildTools -e --source winget --override "--wait --passive --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --add Microsoft.VisualStudio.Component.VC.ATL --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
-```
-
-安装后重新打开 PowerShell，使 Git 和 CMake 加入 `PATH`，回到 StartLive 仓库根目录，
-完整执行下面的命令块。官方预设会将固定版本的依赖包下载到 OBS 源码目录下的
-`.deps`，其中包括 obs-deps 和 Qt。配置过程中需要联网。
-
-```powershell
-$ErrorActionPreference = "Stop"
-$RepoRoot = (Get-Location).Path
-$ObsVersion = "31.1.2"
-$ObsSource = Join-Path $RepoRoot "build/obs-sdk-src-$ObsVersion"
-$ObsSdk = Join-Path $RepoRoot "build/obs-sdk-$ObsVersion-windows-x64"
-New-Item -ItemType Directory -Force (Join-Path $RepoRoot "build") | Out-Null
-
-git clone --branch $ObsVersion --recursive https://github.com/obsproject/obs-studio.git $ObsSource
-if ($LASTEXITCODE -ne 0) { throw "OBS checkout failed" }
-
-Push-Location $ObsSource
-try {
-    cmake --preset windows-x64 -DENABLE_UI=OFF -DENABLE_FRONTEND=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF -DENABLE_BROWSER=OFF "-DCMAKE_INSTALL_PREFIX=$ObsSdk"
-    if ($LASTEXITCODE -ne 0) { throw "OBS configure failed" }
-    cmake --build build_x64 --config Release --target libobs obs-frontend-api --parallel
-    if ($LASTEXITCODE -ne 0) { throw "OBS SDK build failed" }
-    cmake --install build_x64 --config Release --component Development --prefix $ObsSdk
-    if ($LASTEXITCODE -ne 0) { throw "OBS SDK install failed" }
-} finally {
-    Pop-Location
-}
-
-foreach ($Package in @("libobs", "obs-frontend-api", "w32-pthreads")) {
-    if (-not (Test-Path "$ObsSdk/cmake/${Package}Config.cmake")) {
-        throw "Missing SDK package: $Package"
-    }
-}
-```
-
-SDK 导出到 `build/obs-sdk-31.1.2-windows-x64`，
-其中的 `cmake` 目录包含上面检查的三个包配置文件。
-
-##### macOS arm64 / x86_64
-
-从 [Apple Xcode 下载入口](https://developer.apple.com/xcode/resources/)
-安装 **Xcode 16 或更新版本的完整 Xcode，包含 macOS SDK 15 或更新版本**，
-并安装 [Homebrew](https://brew.sh/)。
-假设 Xcode 位于 `/Applications/Xcode.app`，执行以下初始化操作，
-并安装 CMake 3.28+ 和 Git：
+从 StartLive 仓库根目录开始，使用全新的构建目录：
 
 ```sh
-sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
-sudo xcodebuild -runFirstLaunch
-xcodebuild -version
-xcrun --sdk macosx --show-sdk-platform-version
-brew install cmake git
+python -m pip install cmake==4.2.3
+git clone --branch 28.0.0 --depth 1 https://github.com/obsproject/obs-studio.git build/obs-sdk-source
 ```
 
-在本机架构的终端会话中，回到 StartLive 仓库根目录执行下面的命令。
-命令会选择当前机器架构（`arm64` 或 `x86_64`），OBS 运行环境也必须使用相同架构。
-官方预设会将固定版本的 obs-deps 和 Qt 依赖包下载到 `.deps`。
-部署目标为 macOS 12.0，但构建机器必须能够运行上述版本的 Xcode 和 SDK。
-`OBS_CODESIGN_IDENTITY=-` 为本地 SDK 构建使用临时签名（ad hoc）。
+#### Windows SDK
+
+本机构建需安装 VS 2026 的 v142 x64 工具集和 Windows SDK 10.0.26100.0。
+`VsRoot` 改为实际安装目录；示例与 CI 的 Enterprise 路径一致。
+
+```powershell
+python tools/prepare_obs_pk_deps.py --os Windows --arch X64
+$ObsSource = "$PWD/build/obs-sdk-source"
+$ObsBuild = "$PWD/build/obs-sdk-build"
+$ObsSdk = "$PWD/build/obs-sdk"
+$ObsDeps = "$PWD/build/obs-pk-deps"
+$VsRoot = "$env:ProgramFiles/Microsoft Visual Studio/18/Enterprise"
+$VsArgs = @('-G', 'Visual Studio 18 2026', '-A', 'x64,version=10.0.26100.0',
+            '-T', 'v142,version=14.29.30133,host=x64', "-DCMAKE_GENERATOR_INSTANCE=$VsRoot")
+python -m cmake -S $ObsSource -B $ObsBuild @VsArgs `
+  "-DOBS_VERSION_OVERRIDE=28.0.0" "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
+  -DENABLE_UI=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF `
+  "-DCMAKE_PREFIX_PATH=$ObsDeps" "-DCMAKE_INSTALL_PREFIX=$ObsSdk"
+if ($LASTEXITCODE -ne 0) { throw 'OBS configure failed' }
+python -m cmake --build $ObsBuild --config Release --target libobs obs-frontend-api --parallel
+if ($LASTEXITCODE -ne 0) { throw 'OBS build failed' }
+python -m cmake --install $ObsBuild --config Release --component obs_libraries --prefix $ObsSdk
+if ($LASTEXITCODE -ne 0) { throw 'OBS install failed' }
+```
+
+#### macOS SDK
+
+安装完整 Xcode 16.4。以下示例选择 Apple Silicon；Intel 请按注释同时修改
+依赖架构、`PK_ARCH` 和部署目标。OBS 28 的 SDK 安装组件名为 `obs_libraries`，
+其 macOS 导出会漏掉公开 frontend 头文件，因此最后一行从固定版本源码补齐该文件。
 
 ```sh
 set -eu
-REPO_ROOT="$PWD"
-OBS_VERSION="31.1.2"
-PK_ARCH="$(uname -m)"
-OBS_SRC="$REPO_ROOT/build/obs-sdk-src-$OBS_VERSION"
-OBS_SDK="$REPO_ROOT/build/obs-sdk-$OBS_VERSION-macos-$PK_ARCH"
-mkdir -p "$REPO_ROOT/build"
-
-git clone --branch "$OBS_VERSION" --recursive \
-  https://github.com/obsproject/obs-studio.git "$OBS_SRC"
-
-(
-  cd "$OBS_SRC"
-  cmake --preset macos "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" \
-    -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DOBS_CODESIGN_IDENTITY=- \
-    -DENABLE_UI=OFF -DENABLE_FRONTEND=OFF -DENABLE_PLUGINS=OFF \
-    -DENABLE_SCRIPTING=OFF -DENABLE_BROWSER=OFF \
-    "-DCMAKE_INSTALL_PREFIX=$OBS_SDK"
-)
-cmake --build "$OBS_SRC/build_macos" --config Release \
-  --target libobs obs-frontend-api --parallel
-cmake --install "$OBS_SRC/build_macos" --config Release \
-  --component Development --prefix "$OBS_SDK"
-
-test -f "$OBS_SDK/Frameworks/libobs.framework/Resources/cmake/libobsConfig.cmake"
-test -f "$OBS_SDK/lib/cmake/obs-frontend-api/obs-frontend-apiConfig.cmake"
+export DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer
+# Intel: X64 / x86_64 / 10.15; Apple Silicon: ARM64 / arm64 / 11.0
+python tools/prepare_obs_pk_deps.py --os macOS --arch ARM64
+PK_ARCH=arm64
+PK_MACOS_TARGET=11.0
+OBS_SRC="$PWD/build/obs-sdk-source"
+OBS_BUILD="$PWD/build/obs-sdk-build"
+OBS_SDK="$PWD/build/obs-sdk"
+OBS_DEPS="$PWD/build/obs-pk-deps"
+python -m cmake -S "$OBS_SRC" -B "$OBS_BUILD" -G Xcode \
+  -DOBS_VERSION_OVERRIDE=28.0.0 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" "-DCMAKE_OSX_DEPLOYMENT_TARGET=$PK_MACOS_TARGET" \
+  -DCMAKE_OSX_SYSROOT=macosx15.5 -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+  -DOBS_CODESIGN_LINKER=OFF \
+  -DENABLE_UI=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF \
+  "-DCMAKE_PREFIX_PATH=$OBS_DEPS" "-DCMAKE_INSTALL_PREFIX=$OBS_SDK"
+python -m cmake --build "$OBS_BUILD" --config Release --target libobs obs-frontend-api --parallel
+python -m cmake --install "$OBS_BUILD" --config Release --component obs_libraries --prefix "$OBS_SDK"
+install -m 644 "$OBS_SRC/UI/obs-frontend-api/obs-frontend-api.h" "$OBS_SDK/include/obs/obs-frontend-api.h"
 ```
 
-SDK 导出到 `build/obs-sdk-31.1.2-macos-arm64` 或
-`build/obs-sdk-31.1.2-macos-x86_64`。
-libobs 以 framework 形式导出，frontend API 以库形式导出，
-所以上面显式指定了两者各自的 CMake 包路径。
+SDK 位于 `build/obs-sdk`，Qt 及原生构建依赖位于 `build/obs-pk-deps`。
+重新编译的 OBS 库和这套 Qt 运行库都不会随插件分发，插件运行时使用宿主 OBS 的库。
+完整 CI 步骤见[共享构建动作](../../.github/actions/build-obs-pk/action.yml)。
 
-##### Linux — Ubuntu 24.04 LTS
+macOS 参数说明：
 
-以下包名和命令适用于 **Ubuntu 24.04 LTS**，会安装 CMake 3.28+、GCC、
-Ninja、FFmpeg 6.1 开发文件，以及 libobs、X11、Wayland、OpenGL/EGL 和
-PulseAudio 所需的依赖。其他发行版请安装对应开发包，并使用 FFmpeg 6.1 或更新版本。
+- `CMAKE_OSX_DEPLOYMENT_TARGET` 决定插件最低系统版本，Intel 为 10.15，ARM64 为
+  11.0。
+- `CMAKE_OSX_SYSROOT=macosx15.5` 选择编译用 SDK，不等于要求用户系统为 15.5。
+- `CODE_SIGNING_ALLOWED=NO` 和 `OBS_CODESIGN_LINKER=OFF` 关闭中间构建的签名；
+  Nuitka 打包后仍对插件和 `.app` 执行 ad hoc 签名。正式分发时仍需按发布流程处理签名、公证。
+- `BUNDLE=TRUE`、`.plugin` 扩展名、`LIBRARY DESTINATION .` 保证 OBS 可识别的目录布局；
+  `MODULE` 插件安装时必须使用 `LIBRARY`，不能用只适用于应用程序的 `BUNDLE` 安装类别。
+- `INSTALL_RPATH=@executable_path/../Frameworks` 让插件找到 OBS 自带的库。
+- 去掉 Qt 添加的 `AGL` 链接不影响旧版 64 位 macOS；AGL 在 64 位上无实际功能。
+  改用 `OpenGL::GL` 保留 OpenGL 链接，并修正 Qt 6.3.1 对新版 CMake framework
+  路径的误读。
+- 旧的 `OBS_CODESIGN_IDENTITY`、`ENABLE_FRONTEND` 和 `--preset` 不适用于此 OBS 28
+  构建流程，
+  已改为它实际支持的参数；关闭 OBS UI 仍会构建 frontend API，不会关闭插件的 OBS
+  菜单功能。
 
-```sh
-sudo apt update
-sudo apt install --no-install-recommends \
-  git ca-certificates build-essential cmake ninja-build pkg-config extra-cmake-modules \
-  libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev \
-  libjansson-dev uthash-dev zlib1g-dev uuid-dev libglib2.0-dev \
-  libx11-dev libx11-xcb-dev libxcb1-dev libxcb-xinput-dev \
-  libwayland-dev libxkbcommon-dev libdrm-dev libegl-dev libgl-dev libpulse-dev qt6-base-dev
-cmake --version
-pkg-config --modversion libavformat
-```
+#### Linux SDK
 
-回到 StartLive 仓库根目录执行：
-
-```sh
-set -eu
-REPO_ROOT="$PWD"
-OBS_VERSION="31.1.2"
-OBS_SRC="$REPO_ROOT/build/obs-sdk-src-$OBS_VERSION"
-OBS_BUILD="$OBS_SRC/build_sdk"
-OBS_SDK="$REPO_ROOT/build/obs-sdk-$OBS_VERSION-linux"
-mkdir -p "$REPO_ROOT/build"
-
-git clone --branch "$OBS_VERSION" --recursive \
-  https://github.com/obsproject/obs-studio.git "$OBS_SRC"
-
-cmake -S "$OBS_SRC" -B "$OBS_BUILD" -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_LIBDIR=lib \
-  "-DCMAKE_INSTALL_PREFIX=$OBS_SDK" \
-  -DENABLE_UI=OFF -DENABLE_FRONTEND=OFF -DENABLE_PLUGINS=OFF \
-  -DENABLE_SCRIPTING=OFF -DENABLE_BROWSER=OFF
-cmake --build "$OBS_BUILD" --target libobs obs-frontend-api --parallel
-cmake --install "$OBS_BUILD" --config Release \
-  --component Development --prefix "$OBS_SDK"
-
-test -f "$OBS_SDK/lib/cmake/libobs/libobsConfig.cmake"
-test -f "$OBS_SDK/lib/cmake/obs-frontend-api/obs-frontend-apiConfig.cmake"
-```
-
-SDK 导出到 `build/obs-sdk-31.1.2-linux`，两个 CMake 包都位于 `lib/cmake` 下。
-SDK 构建和导出命令使用当前用户权限运行。
-
-##### 使用生成的 SDK
-
-接下来执行下方对应平台的插件编译和安装步骤。
-命令默认使用上面生成的 SDK 路径；使用其他位置的 SDK 时，
-将 `ObsSdk` / `OBS_SDK` 设为其安装前缀。
-
-开发期间保留 OBS 源码、构建目录和下载的依赖。
-`Development` 组件提供编译所需的文件；单独安装 OBS，
-为插件加载和捕获测试提供应用程序、运行库和图形模块。
-
-以上版本相关细节以 OBS 31.1.2 的
-[构建预设](https://github.com/obsproject/obs-studio/blob/31.1.2/CMakePresets.json)、
-[frontend API 配置](https://github.com/obsproject/obs-studio/blob/31.1.2/frontend/CMakeLists.txt)
-和 [SDK 导出规则](https://github.com/obsproject/obs-studio/blob/31.1.2/cmake/common/helpers_common.cmake)
-为依据。
+Linux 不在发布 CI 矩阵中。本机构建请安装与原生 OBS 28+ 匹配的 OBS 开发包和 Qt 6
+开发文件，
+例如 Debian/Ubuntu 的 `libobs-dev`、`qt6-base-dev`，或 Fedora 的
+`obs-studio-devel`、`qt6-qtbase-devel`。SDK 必须提供 `libobs`、`obs-frontend-api`
+两个 CMake 包。发行版构建受当地依赖版本约束，不自动获得 Windows/macOS 的二进制兼容范围。
 
 ### StartLive 运行依赖
 
@@ -299,16 +199,16 @@ StartLive/
 
 ## Windows：编译与安装
 
-在 PowerShell 中使用 Visual Studio 2022 和导出的 SDK 配置并编译。
-使用其他兼容的 Visual Studio 版本时，选择对应的 CMake 生成器。
+在 PowerShell 中使用 Visual Studio 2026 + v142 和导出的 SDK 配置并编译。
+复用上方 Windows SDK 步骤中已设置的 `VsArgs`。
 
 ```powershell
-$ObsSdk = Join-Path $PWD "build/obs-sdk-31.1.2-windows-x64"
-$QtSdk = Join-Path $PWD "build/obs-sdk-src-31.1.2/.deps/obs-deps-qt6-2025-07-11-x64"
+$ObsSdk = Join-Path $PWD "build/obs-sdk"
+$QtSdk = Join-Path $PWD "build/obs-pk-deps"
 
-cmake -S plugins/obs-startlive-pk -B build/obs-pk-windows -G "Visual Studio 17 2022" -A x64 "-DCMAKE_PREFIX_PATH=$ObsSdk;$QtSdk"
+python -m cmake -S plugins/obs-startlive-pk -B build/obs-pk-windows @VsArgs "-DCMAKE_PREFIX_PATH=$ObsSdk;$QtSdk"
 if ($LASTEXITCODE -ne 0) { throw "Plugin configure failed" }
-cmake --build build/obs-pk-windows --config Release --parallel
+python -m cmake --build build/obs-pk-windows --config Release --parallel
 if ($LASTEXITCODE -ne 0) { throw "Plugin build failed" }
 ```
 
@@ -317,7 +217,7 @@ if ($LASTEXITCODE -ne 0) { throw "Plugin build failed" }
 
 ```powershell
 $ObsRoot = "C:/Program Files/obs-studio"
-cmake --install build/obs-pk-windows --config Release --prefix "$ObsRoot"
+python -m cmake --install build/obs-pk-windows --config Release --prefix "$ObsRoot"
 ```
 
 安装位置：`$ObsRoot/obs-plugins/64bit/obs-startlive-pk.dll`。
@@ -327,27 +227,33 @@ cmake --install build/obs-pk-windows --config Release --prefix "$ObsRoot"
 
 完成 Xcode 初始化后，在终端中执行。`PK_ARCH` 使用 OBS 运行环境的架构
 （`arm64` 或 `x86_64`），`OBS_SDK` 指向对应架构的 SDK。
-以下命令使用上方导出的 SDK，部署目标为 macOS 12.0。
+以下命令选择 ARM64 / macOS 11.0；Intel 请改为 x86_64 / 10.15。
 
 ```sh
 set -eu
-PK_ARCH="$(uname -m)"
-OBS_SDK="$PWD/build/obs-sdk-31.1.2-macos-$PK_ARCH"
-QT_SDK="$PWD/build/obs-sdk-src-31.1.2/.deps/obs-deps-qt6-2025-07-11-universal"
+PK_ARCH=arm64
+PK_MACOS_TARGET=11.0
+export DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer
+OBS_SDK="$PWD/build/obs-sdk"
+QT_SDK="$PWD/build/obs-pk-deps"
 
-cmake -S plugins/obs-startlive-pk -B build/obs-pk-macos -G Xcode \
+python -m cmake -S plugins/obs-startlive-pk -B build/obs-pk-macos -G Xcode \
+  -DCMAKE_OSX_SYSROOT=macosx15.5 \
+  -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
   "-DCMAKE_PREFIX_PATH=$OBS_SDK;$OBS_SDK/Frameworks;$QT_SDK" \
   "-Dlibobs_DIR=$OBS_SDK/Frameworks/libobs.framework/Resources/cmake" \
   "-Dobs-frontend-api_DIR=$OBS_SDK/lib/cmake/obs-frontend-api" \
-  "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
-cmake --build build/obs-pk-macos --config Release --parallel
+  "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" "-DCMAKE_OSX_DEPLOYMENT_TARGET=$PK_MACOS_TARGET"
+python -m cmake --build build/obs-pk-macos --config Release --parallel
 ```
 
 关闭 OBS，安装完整插件包：
 
 ```sh
-cmake --install build/obs-pk-macos --config Release \
+python -m cmake --install build/obs-pk-macos --config Release \
   --prefix "$HOME/Library/Application Support/obs-studio/plugins"
+codesign --force --sign - --timestamp=none \
+  "$HOME/Library/Application Support/obs-studio/plugins/obs-startlive-pk.plugin"
 ```
 
 安装位置：
@@ -356,14 +262,13 @@ cmake --install build/obs-pk-macos --config Release \
 
 ## Linux：编译与安装
 
-面向原生安装的 OBS，使用 Ninja 和导出的 SDK 配置并编译：
+面向原生安装的 OBS，使用 Ninja 和发行版提供的 OBS/Qt 开发包配置并编译：
 
 ```sh
 set -eu
-OBS_SDK="$PWD/build/obs-sdk-31.1.2-linux"
 
 cmake -S plugins/obs-startlive-pk -B build/obs-pk-linux -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$OBS_SDK" \
+  -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_LIBDIR=lib
 cmake --build build/obs-pk-linux --parallel
 ```
