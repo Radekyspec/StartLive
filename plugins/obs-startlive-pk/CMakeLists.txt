@@ -19,12 +19,16 @@ if(STARTLIVE_PK_BUILD_PLUGIN)
   find_package(libobs CONFIG REQUIRED)
   find_package(obs-frontend-api CONFIG REQUIRED)
   find_package(Qt6 REQUIRED COMPONENTS Widgets)
-  # OBS 31's Qt helper adds this fallback even when AGL is absent from the SDK.
-  # macOS 26 removed AGL; keep OpenGL and all other transitive dependencies.
-  if(APPLE AND TARGET WrapOpenGL::WrapOpenGL AND NOT WrapOpenGL_AGL)
+  # OBS 31's Qt helper links AGL, removed from the macOS 26 SDK. find_library
+  # can still report an empty AGL.framework directory as found, so remove both
+  # the framework path and the fallback flag. AGL is unused on 64-bit macOS.
+  if(APPLE AND TARGET WrapOpenGL::WrapOpenGL)
     get_target_property(pk_opengl_libraries WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
-    list(REMOVE_ITEM pk_opengl_libraries "-framework AGL")
-    set_property(TARGET WrapOpenGL::WrapOpenGL PROPERTY INTERFACE_LINK_LIBRARIES "${pk_opengl_libraries}")
+    if(pk_opengl_libraries)
+      list(FILTER pk_opengl_libraries EXCLUDE REGEX "(^-framework AGL$|(^|/)AGL[.]framework(/.*)?$)")
+      set_property(TARGET WrapOpenGL::WrapOpenGL PROPERTY INTERFACE_LINK_LIBRARIES "${pk_opengl_libraries}")
+      message(STATUS "OBS PK OpenGL link dependencies: ${pk_opengl_libraries}")
+    endif()
   endif()
   add_library(obs-startlive-pk MODULE src/plugin.cpp src/media_transport.cpp src/shared_video.cpp)
   target_compile_features(obs-startlive-pk PRIVATE cxx_std_17)
