@@ -24,6 +24,27 @@ runs:
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
+        # CMake 4.2 adds the VS 2026 generator. Use this Python installation's
+        # CMake explicitly so an older runner copy on PATH cannot take precedence.
+        python -m pip install "cmake>=4.2,<5"
+        if ($LASTEXITCODE -ne 0) { throw 'CMake installation failed' }
+
+        $VsWhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+        if (-not (Test-Path -LiteralPath $VsWhere)) { throw 'vswhere was not found' }
+        $VsJson = & $VsWhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json
+        if ($LASTEXITCODE -ne 0) { throw 'Visual Studio discovery failed' }
+        $VsInstance = $VsJson | ConvertFrom-Json | Select-Object -First 1
+        if (-not $VsInstance) { throw 'No Visual Studio installation with x64 C++ tools was found' }
+        $VsMajor = ([version]$VsInstance.installationVersion).Major
+        $CmakeJson = python -m cmake -E capabilities
+        if ($LASTEXITCODE -ne 0) { throw 'CMake generator discovery failed' }
+        $VsGenerator = (($CmakeJson | ConvertFrom-Json).generators |
+          Where-Object { $_.name -match "^Visual Studio $VsMajor " } |
+          Select-Object -First 1).name
+        if (-not $VsGenerator) { throw "CMake does not support installed Visual Studio $VsMajor" }
+        $VsConfigureArgs = @('-G', $VsGenerator, '-A', 'x64', "-DCMAKE_GENERATOR_INSTANCE=$($VsInstance.installationPath)")
+        Write-Host "Using $VsGenerator at $($VsInstance.installationPath)"
+
         $ObsSource = "$env:GITHUB_WORKSPACE/build/obs-sdk-source"
         $ObsSdk = "$env:GITHUB_WORKSPACE/build/obs-sdk"
         $PluginBuild = "$env:GITHUB_WORKSPACE/build/obs-pk"
@@ -31,12 +52,12 @@ runs:
 
         Push-Location $ObsSource
         try {
-          # Override the preset's pinned Windows SDK; use the runner's installed SDK.
-          cmake --preset windows-x64 -A x64 -DENABLE_UI=OFF -DENABLE_FRONTEND=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF -DENABLE_BROWSER=OFF "-DCMAKE_INSTALL_PREFIX=$ObsSdk"
+          # Override both the preset's VS 2022 generator and pinned Windows SDK.
+          python -m cmake --preset windows-x64 @VsConfigureArgs -DENABLE_UI=OFF -DENABLE_FRONTEND=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF -DENABLE_BROWSER=OFF "-DCMAKE_INSTALL_PREFIX=$ObsSdk"
           if ($LASTEXITCODE -ne 0) { throw 'OBS SDK configure failed' }
-          cmake --build build_x64 --config Release --target libobs obs-frontend-api --parallel
+          python -m cmake --build build_x64 --config Release --target libobs obs-frontend-api --parallel
           if ($LASTEXITCODE -ne 0) { throw 'OBS SDK build failed' }
-          cmake --install build_x64 --config Release --component Development --prefix $ObsSdk
+          python -m cmake --install build_x64 --config Release --component Development --prefix $ObsSdk
           if ($LASTEXITCODE -ne 0) { throw 'OBS SDK install failed' }
         } finally {
           Pop-Location
@@ -44,11 +65,11 @@ runs:
 
         $QtVersion = (Get-Content "$ObsSource/buildspec.json" -Raw | ConvertFrom-Json).dependencies.qt6.version
         $QtSdk = "$ObsSource/.deps/obs-deps-qt6-$QtVersion-x64"
-        cmake -S plugins/obs-startlive-pk -B $PluginBuild -G 'Visual Studio 17 2022' -A x64 "-DCMAKE_PREFIX_PATH=$ObsSdk;$QtSdk"
+        python -m cmake -S plugins/obs-startlive-pk -B $PluginBuild @VsConfigureArgs "-DCMAKE_PREFIX_PATH=$ObsSdk;$QtSdk"
         if ($LASTEXITCODE -ne 0) { throw 'OBS PK configure failed' }
-        cmake --build $PluginBuild --config Release --parallel
+        python -m cmake --build $PluginBuild --config Release --parallel
         if ($LASTEXITCODE -ne 0) { throw 'OBS PK build failed' }
-        cmake --install $PluginBuild --config Release --prefix $PluginStage
+        python -m cmake --install $PluginBuild --config Release --prefix $PluginStage
         if ($LASTEXITCODE -ne 0) { throw 'OBS PK install failed' }
         Copy-Item -LiteralPath "$PluginStage/obs-plugins/64bit/obs-startlive-pk.dll" -Destination startlive/resources/obs-startlive-pk.dll -Force
 

@@ -36,7 +36,8 @@ if(STARTLIVE_PK_BUILD_PLUGIN)
       # Resolve OBS/Qt frameworks inside the host OBS.app after installation.
       INSTALL_RPATH "@executable_path/../Frameworks"
       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist.in")
-    install(TARGETS obs-startlive-pk BUNDLE DESTINATION .)
+    # MODULE bundles use the LIBRARY artifact kind; BUNDLE is for .app executables.
+    install(TARGETS obs-startlive-pk LIBRARY DESTINATION .)
   elseif(WIN32)
     install(TARGETS obs-startlive-pk RUNTIME DESTINATION obs-plugins/64bit
             LIBRARY DESTINATION obs-plugins/64bit)
