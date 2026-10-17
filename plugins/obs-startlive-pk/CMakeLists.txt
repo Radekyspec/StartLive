@@ -19,6 +19,13 @@ if(STARTLIVE_PK_BUILD_PLUGIN)
   find_package(libobs CONFIG REQUIRED)
   find_package(obs-frontend-api CONFIG REQUIRED)
   find_package(Qt6 REQUIRED COMPONENTS Widgets)
+  # OBS 31's Qt helper adds this fallback even when AGL is absent from the SDK.
+  # macOS 26 removed AGL; keep OpenGL and all other transitive dependencies.
+  if(APPLE AND TARGET WrapOpenGL::WrapOpenGL AND NOT WrapOpenGL_AGL)
+    get_target_property(pk_opengl_libraries WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+    list(REMOVE_ITEM pk_opengl_libraries "-framework AGL")
+    set_property(TARGET WrapOpenGL::WrapOpenGL PROPERTY INTERFACE_LINK_LIBRARIES "${pk_opengl_libraries}")
+  endif()
   add_library(obs-startlive-pk MODULE src/plugin.cpp src/media_transport.cpp src/shared_video.cpp)
   target_compile_features(obs-startlive-pk PRIVATE cxx_std_17)
   target_compile_definitions(obs-startlive-pk PRIVATE STARTLIVE_PK_MAX_FPS=${pk_max_fps})
@@ -33,6 +40,7 @@ if(STARTLIVE_PK_BUILD_PLUGIN)
   set_target_properties(obs-startlive-pk PROPERTIES PREFIX "")
   if(APPLE)
     set_target_properties(obs-startlive-pk PROPERTIES BUNDLE TRUE BUNDLE_EXTENSION plugin SUFFIX ""
+      XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "org.startlive.obs-pk"
       # Resolve OBS/Qt frameworks inside the host OBS.app after installation.
       INSTALL_RPATH "@executable_path/../Frameworks"
       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist.in")

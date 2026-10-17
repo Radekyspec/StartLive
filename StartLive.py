@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 
+# PK version checks require distribution metadata in compiled builds.
+# nuitka-project: --include-distribution-metadata=aiortc
+# nuitka-project: --include-distribution-metadata=aioice
+
 import sys
 from argparse import ArgumentParser, SUPPRESS
 from pathlib import Path

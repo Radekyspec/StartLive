@@ -112,9 +112,7 @@ jobs:
             aiortc
             aioice
             av
-          include-distribution-metadata: |
-            aiortc
-            aioice
+          # Distribution metadata options are declared in StartLive.py.
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
@@ -145,9 +143,7 @@ jobs:
             aiortc
             aioice
             av
-          include-distribution-metadata: |
-            aiortc
-            aioice
+          # Distribution metadata options are declared in StartLive.py.
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
