@@ -53,6 +53,7 @@ jobs:
           cache: 'pip'
           cache-dependency-path: |
             **/requirements*.txt
+            pyproject.toml
 
       - name: Setup Python for ARM
         uses: actions/setup-python@v7
@@ -62,11 +63,12 @@ jobs:
           cache: 'pip'
           cache-dependency-path: |
             **/requirements*.txt
+            pyproject.toml
         if: matrix.os == 'macos-latest'
 
       - name: Install Dependencies
         run: |
-          pip install -r requirements.txt
+          python -m pip install ".[pk]"
 
       - name: Install ImageIO for Mac
         if: matrix.os != 'windows-latest'
@@ -76,6 +78,9 @@ jobs:
       - name: Generate _version.py
         run: |
           python tools/write_version.py
+
+      - name: Build OBS PK plugin
+        uses: ./.github/actions/build-obs-pk
 
       - name: Download UPX (Windows)
         if: matrix.os == 'windows-latest'
@@ -98,8 +103,18 @@ jobs:
           # mingw64: true
           msvc: latest
           mode: app
+          output-dir: build
+          report: build/nuitka-report.xml
           # enable-plugins: pyside6,upx
           enable-plugins: pyside6
+          include-package: |
+            startlive.core.pk
+            aiortc
+            aioice
+            av
+          include-distribution-metadata: |
+            aiortc
+            aioice
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
@@ -107,9 +122,10 @@ jobs:
           windows-icon-from-ico: "startlive/resources/icon_left.ico"
           windows-console-mode: "disable"
           noinclude-data-files: |
-            "startlive/resources/version.json"
-            "startlive/resources/icon_left_macOS.ico"
-          include-data-dir: "startlive/resources=resources"
+            resources/version.json
+            resources/icon_left_macOS.ico
+          # Keep the DLL inside the onefile payload, beside the other resources.
+          include-raw-dir: startlive/resources=resources
           # onefile-no-compression: true
           # upx-disable-cache: true
           deployment: true
@@ -121,7 +137,17 @@ jobs:
           nuitka-version: main
           script-name: StartLive.py
           mode: app
+          output-dir: build
+          report: build/nuitka-report.xml
           enable-plugins: pyside6
+          include-package: |
+            startlive.core.pk
+            aiortc
+            aioice
+            av
+          include-distribution-metadata: |
+            aiortc
+            aioice
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
@@ -129,16 +155,46 @@ jobs:
           macos-app-version: ${{ env.VERSION }}
           macos-app-icon: "startlive/resources/icon_left_macOS.ico"
           macos-signed-app-name: "com.radekyspec.startlive"
-          noinclude-data-files: "startlive/resources/version.json"
-          include-data-dir: "startlive/resources=resources"
+          noinclude-data-files: resources/version.json
+          # Preserve the whole OBS bundle without relocating its OBS/Qt dependencies.
+          include-raw-dir: startlive/resources=resources
           deployment: true
 
-      - name: Upload Artifacts
+      - name: Sign the bundled OBS plugin and refresh the app signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          codesign --force --sign - --timestamp=none \
+            build/StartLive.app/Contents/MacOS/resources/obs-startlive-pk.plugin
+          codesign --force --sign - --timestamp=none \
+            --preserve-metadata=entitlements,identifier,flags build/StartLive.app
+
+      - name: Verify packaged OBS plugin and PK dependencies
+        run: python tools/check_nuitka_pk.py
+
+      - name: Archive macOS app with executable permissions and symbolic links
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          ARTIFACT_NAME: StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+        run: ditto -c -k --sequesterRsrc --keepParent build/StartLive.app "build/$ARTIFACT_NAME.zip"
+
+      - name: Upload macOS Artifacts
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          # With archive disabled, the filename determines the artifact name.
+          path: build/StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-${{ runner.arch }}.zip
+          archive: false
+          if-no-files-found: error
+
+      - name: Upload Windows Artifacts
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
           name: StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-${{ runner.arch }}
           path: |
             build/*.exe
             build/*.bin
-            build/*.app/**/*
           include-hidden-files: true

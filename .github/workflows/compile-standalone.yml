@@ -48,14 +48,18 @@ jobs:
           cache: 'pip'
           cache-dependency-path: |
             **/requirements*.txt
+            pyproject.toml
 
       - name: Install Dependencies
         run: |
-          pip install -r requirements.txt
+          python -m pip install ".[pk]"
 
       - name: Generate _version.py
         run: |
           python tools/write_version.py
+
+      - name: Build OBS PK plugin
+        uses: ./.github/actions/build-obs-pk
 
       - name: Download UPX (Windows)
         shell: pwsh
@@ -78,7 +82,17 @@ jobs:
           # Wait for update in future
           msvc: latest
           mode: standalone
+          output-dir: build
+          report: build/nuitka-report.xml
           enable-plugins: pyside6,upx
+          include-package: |
+            startlive.core.pk
+            aiortc
+            aioice
+            av
+          include-distribution-metadata: |
+            aiortc
+            aioice
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
@@ -86,12 +100,16 @@ jobs:
           windows-icon-from-ico: "startlive/resources/icon_left.ico"
           windows-console-mode: "disable"
           noinclude-data-files: |
-            "startlive/resources/version.json"
-            "startlive/resources/icon_left_macOS.ico"
-          include-data-dir: "startlive/resources=resources"
+            resources/version.json
+            resources/icon_left_macOS.ico
+          # Regular data directories filter DLLs; the OBS payload must stay intact.
+          include-raw-dir: startlive/resources=resources
           onefile-no-compression: true
           upx-disable-cache: true
           deployment: true
+
+      - name: Verify packaged OBS plugin and PK dependencies
+        run: python tools/check_nuitka_pk.py
 
       - name: Flatten output
         run: |

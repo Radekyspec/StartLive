@@ -32,7 +32,9 @@ if(STARTLIVE_PK_BUILD_PLUGIN)
   endif()
   set_target_properties(obs-startlive-pk PROPERTIES PREFIX "")
   if(APPLE)
-    set_target_properties(obs-startlive-pk PROPERTIES BUNDLE TRUE BUNDLE_EXTENSION plugin
+    set_target_properties(obs-startlive-pk PROPERTIES BUNDLE TRUE BUNDLE_EXTENSION plugin SUFFIX ""
+      # Resolve OBS/Qt frameworks inside the host OBS.app after installation.
+      INSTALL_RPATH "@executable_path/../Frameworks"
       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/Info.plist.in")
     install(TARGETS obs-startlive-pk BUNDLE DESTINATION .)
   elseif(WIN32)
