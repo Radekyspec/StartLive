@@ -1,0 +1,90 @@
+name: Build OBS PK plugin
+description: Build against the OBS 31.1.2 SDK and stage the installable plugin in startlive/resources
+
+runs:
+  using: composite
+  steps:
+    - name: Check out pinned OBS SDK source
+      uses: actions/checkout@v7
+      with:
+        repository: obsproject/obs-studio
+        ref: '31.1.2'
+        submodules: recursive
+        persist-credentials: false
+        path: build/obs-sdk-source
+
+    - name: Cache OBS dependency downloads
+      uses: actions/cache@v4
+      with:
+        path: build/obs-sdk-source/.deps
+        key: obs-sdk-31.1.2-${{ runner.os }}-${{ runner.arch }}-v1
+
+    - name: Build and stage Windows plugin
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $ObsSource = "$env:GITHUB_WORKSPACE/build/obs-sdk-source"
+        $ObsSdk = "$env:GITHUB_WORKSPACE/build/obs-sdk"
+        $PluginBuild = "$env:GITHUB_WORKSPACE/build/obs-pk"
+        $PluginStage = "$env:GITHUB_WORKSPACE/build/obs-pk-install"
+
+        Push-Location $ObsSource
+        try {
+          # Override the preset's pinned Windows SDK; use the runner's installed SDK.
+          cmake --preset windows-x64 -A x64 -DENABLE_UI=OFF -DENABLE_FRONTEND=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF -DENABLE_BROWSER=OFF "-DCMAKE_INSTALL_PREFIX=$ObsSdk"
+          if ($LASTEXITCODE -ne 0) { throw 'OBS SDK configure failed' }
+          cmake --build build_x64 --config Release --target libobs obs-frontend-api --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'OBS SDK build failed' }
+          cmake --install build_x64 --config Release --component Development --prefix $ObsSdk
+          if ($LASTEXITCODE -ne 0) { throw 'OBS SDK install failed' }
+        } finally {
+          Pop-Location
+        }
+
+        $QtVersion = (Get-Content "$ObsSource/buildspec.json" -Raw | ConvertFrom-Json).dependencies.qt6.version
+        $QtSdk = "$ObsSource/.deps/obs-deps-qt6-$QtVersion-x64"
+        cmake -S plugins/obs-startlive-pk -B $PluginBuild -G 'Visual Studio 17 2022' -A x64 "-DCMAKE_PREFIX_PATH=$ObsSdk;$QtSdk"
+        if ($LASTEXITCODE -ne 0) { throw 'OBS PK configure failed' }
+        cmake --build $PluginBuild --config Release --parallel
+        if ($LASTEXITCODE -ne 0) { throw 'OBS PK build failed' }
+        cmake --install $PluginBuild --config Release --prefix $PluginStage
+        if ($LASTEXITCODE -ne 0) { throw 'OBS PK install failed' }
+        Copy-Item -LiteralPath "$PluginStage/obs-plugins/64bit/obs-startlive-pk.dll" -Destination startlive/resources/obs-startlive-pk.dll -Force
+
+    - name: Build and stage macOS plugin
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        OBS_SRC="$GITHUB_WORKSPACE/build/obs-sdk-source"
+        OBS_SDK="$GITHUB_WORKSPACE/build/obs-sdk"
+        PK_BUILD="$GITHUB_WORKSPACE/build/obs-pk"
+        PK_ARCH="$(uname -m)"
+        (
+          cd "$OBS_SRC"
+          cmake --preset macos "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DOBS_CODESIGN_IDENTITY=- \
+            -DENABLE_UI=OFF -DENABLE_FRONTEND=OFF -DENABLE_PLUGINS=OFF \
+            -DENABLE_SCRIPTING=OFF -DENABLE_BROWSER=OFF \
+            "-DCMAKE_INSTALL_PREFIX=$OBS_SDK"
+        )
+        cmake --build "$OBS_SRC/build_macos" --config Release \
+          --target libobs obs-frontend-api --parallel
+        cmake --install "$OBS_SRC/build_macos" --config Release \
+          --component Development --prefix "$OBS_SDK"
+
+        QT_VERSION="$(python -c 'import json, sys; print(json.load(open(sys.argv[1]))["dependencies"]["qt6"]["version"])' "$OBS_SRC/buildspec.json")"
+        QT_SDK="$OBS_SRC/.deps/obs-deps-qt6-$QT_VERSION-universal"
+        cmake -S plugins/obs-startlive-pk -B "$PK_BUILD" -G Xcode \
+          "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+          -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+          "-DCMAKE_PREFIX_PATH=$OBS_SDK;$OBS_SDK/Frameworks;$QT_SDK" \
+          "-Dlibobs_DIR=$OBS_SDK/Frameworks/libobs.framework/Resources/cmake" \
+          "-Dobs-frontend-api_DIR=$OBS_SDK/lib/cmake/obs-frontend-api"
+        cmake --build "$PK_BUILD" --config Release --parallel
+        cmake --install "$PK_BUILD" --config Release --prefix "$GITHUB_WORKSPACE/startlive/resources"
+        PK_BUNDLE="$GITHUB_WORKSPACE/startlive/resources/obs-startlive-pk.plugin"
+        test -f "$PK_BUNDLE/Contents/Info.plist"
+        test -f "$PK_BUNDLE/Contents/MacOS/obs-startlive-pk"
+        lipo "$PK_BUNDLE/Contents/MacOS/obs-startlive-pk" -verify_arch "$PK_ARCH"
