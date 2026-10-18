@@ -4,24 +4,30 @@ Only advertise an encoder after encoding and decoding actual frames,
 including an independently decodable refresh frame.
 No global aiortc codec registry or OBS setting is changed.
 """
+import json
+import sys
 from fractions import Fraction
 from os import environ, name as os_name, pathsep
 from pathlib import Path
 from subprocess import DEVNULL, Popen, TimeoutExpired
+from tempfile import TemporaryDirectory
 from threading import Lock
 from time import monotonic, sleep
-import sys
 
-from startlive.core.constant.pk_encoder import ENCODERS_BY_NAME
-from startlive.core.pk.states.encoder import VideoEncodingConfig, \
-    translate_preset, platform_candidates
 from startlive.core.constant.pk_encoder import (
     AMF_PRESETS,
     QSV_PRESETS,
     SVT_PRESETS,
     PROBE_TIMEOUT_SECONDS,
+    PROBE_DIAGNOSTIC_ENV,
+    PROBE_DIAGNOSTIC_MAX_BYTES,
+    PROBE_DIAGNOSTIC_MAX_CHARS,
 )
+from startlive.core.constant.pk_encoder import ENCODERS_BY_NAME
 from startlive.core.exceptions import PkError
+from startlive.core.pk.states.encoder import VideoEncodingConfig, \
+    translate_preset, platform_candidates
+from .trace import pk_trace
 
 
 def codec_options(name, config, *, level, frame_rate, bitrate_bps):
@@ -169,6 +175,16 @@ def _av1_probe_stream(payloads):
     return bytes(result)
 
 
+def _pace_probe_frame(deadline, interval):
+    """Space actual submissions; a late frame starts a new schedule."""
+    while True:
+        now = monotonic()
+        remaining = deadline - now
+        if remaining <= 0:
+            return now + interval
+        sleep(remaining)
+
+
 def probe_encoder(name):
     """Exercise the live sender contract, including a delayed refresh request.
 
@@ -211,6 +227,8 @@ def probe_encoder(name):
     output_count = 0
     last_timestamp = -1 if is_av1 else None
     refresh_timestamp = None
+    interval = 1 / plan.frame_rate
+    next_submission = monotonic()
     for index in range(3 * (encoder_delay_budget(plan.frame_rate) + 1)):
         frame = av.VideoFrame(plan.width, plan.height, "yuv420p")
         for plane_index, plane in enumerate(frame.planes):
@@ -221,6 +239,7 @@ def probe_encoder(name):
         force = output_count >= 2 and refresh_timestamp is None
         if force:
             refresh_timestamp = index * 90000 // plan.frame_rate
+        next_submission = _pace_probe_frame(next_submission, interval)
         payloads, timestamp = encoder.encode(frame, force_keyframe=force)
         if not payloads:
             continue
@@ -278,57 +297,109 @@ def probe_process_command(name):
     return [sys.executable, "-m", "startlive.core.pk.encoder_probe_child", name]
 
 
+def _probe_failure(name, status, diagnostic, code=None, error=None):
+    """Only the parent writes to the application's configured log."""
+    fields = {"backend": name, "status": status, "exit_code": code,
+              "reason": status}
+    if error is not None:
+        fields.update(reason=type(error).__name__,
+                      detail=str(error)[:PROBE_DIAGNOSTIC_MAX_CHARS])
+    elif status == "failed":
+        fields["detail"] = "Probe child exited without a valid diagnostic"
+        try:
+            with diagnostic.open("rb") as stream:
+                raw = stream.read(PROBE_DIAGNOSTIC_MAX_BYTES + 1)
+            if len(raw) > PROBE_DIAGNOSTIC_MAX_BYTES:
+                raise ValueError("oversized diagnostic")
+            result = json.loads(raw)
+            if not isinstance(result, dict):
+                raise ValueError("invalid diagnostic")
+            for key in ("reason", "detail"):
+                value = result.get(key)
+                if isinstance(value, str):
+                    fields[key] = value[:PROBE_DIAGNOSTIC_MAX_CHARS]
+        except (OSError, ValueError):
+            pass
+    elif status == "timeout":
+        fields["detail"] = "Probe child exceeded its deadline"
+    # Exception text may contain filesystem surrogate escapes. Keep the main
+    # UTF-8 file handler writable even when a native error contains them.
+    for key in ("reason", "detail"):
+        if key in fields:
+            fields[key] = fields[key].encode("utf-8", errors="replace").decode(
+                "utf-8")
+    pk_trace("rtc.video.encoder_probe_failed", **fields)
+
+
 def probe_encoder_isolated(name, *, timeout=PROBE_TIMEOUT_SECONDS,
                            cancel_event=None):
-    """Return 'ok', 'failed', 'timeout', 'cancelled' or 'start-error'.
+    """Bounded probe with a private diagnostic file, independent of stdout.
 
-    Child signals success solely with exit code 0 (stdout is never required,
-    including Nuitka Windows GUI executables without a console). Run this
-    helper off the Qt thread; all native codec operations occur in the child.
+    Exit code 0 alone signals success. The file carries failure details only;
+    the parent logs them after reaping the child, then removes the directory.
     """
     command = probe_process_command(name)
-    env = None
+    if cancel_event is not None and cancel_event.is_set():
+        return "cancelled"
+    env = dict(environ)
     if len(command) > 1 and command[1] == "-m":
-        # `python /path/to/StartLive.py` also works when launched with a CWD
-        # other than the repository, without requiring `pip install -e .`.
         project_root = str(Path(__file__).resolve().parents[3])
-        env = dict(environ)
         previous = environ.get("PYTHONPATH")
         env["PYTHONPATH"] = project_root + (
             pathsep + previous if previous else "")
     try:
-        # On Windows avoid showing a console and run below normal priority;
-        # POSIX workers lower their own priority in encoder_probe_child.py.
-        windows_flags = 0x08000000 | 0x00004000  # CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS
-        proc = Popen(command, stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL,
-                     env=env,
-                     creationflags=windows_flags if os_name == "nt" else 0)
-    except OSError:
+        directory = TemporaryDirectory(prefix="startlive-encoder-probe-")
+    except OSError as error:
+        if cancel_event is not None and cancel_event.is_set():
+            return "cancelled"
+        _probe_failure(name, "start-error", None, error=error)
         return "start-error"
-    deadline = monotonic() + max(0.01, timeout)
-    try:
-        while True:
+    with directory:
+        diagnostic = Path(directory.name) / "failure.json"
+        env[PROBE_DIAGNOSTIC_ENV] = str(diagnostic)
+        try:
+            # No pipes: native driver output cannot fill a pipe or require a
+            # console in a Nuitka GUI build. Diagnostics use the private file.
+            windows_flags = 0x08000000 | 0x00004000
+            proc = Popen(command, stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL,
+                         env=env,
+                         creationflags=windows_flags if os_name == "nt" else 0)
+        except OSError as error:
             if cancel_event is not None and cancel_event.is_set():
                 return "cancelled"
-            code = proc.poll()
-            if code is not None:
-                return "ok" if code == 0 else "failed"
-            remaining = deadline - monotonic()
-            if remaining <= 0:
-                return "timeout"
-            pause = min(0.1, remaining)
-            if cancel_event is None:
-                sleep(pause)
-            else:
-                cancel_event.wait(pause)
-    finally:
-        if proc.poll() is None:
-            proc.kill()
-            # Do not make an unresponsive driver turn into an unbounded wait.
-            try:
-                proc.wait(timeout=1)
-            except TimeoutExpired:
-                pass
+            _probe_failure(name, "start-error", diagnostic, error=error)
+            return "start-error"
+        deadline = monotonic() + max(0.01, timeout)
+        status = "failed"
+        try:
+            while True:
+                if cancel_event is not None and cancel_event.is_set():
+                    status = "cancelled"
+                    break
+                code = proc.poll()
+                if code is not None:
+                    status = "ok" if code == 0 else "failed"
+                    break
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    status = "timeout"
+                    break
+                pause = min(0.1, remaining)
+                if cancel_event is None:
+                    sleep(pause)
+                else:
+                    cancel_event.wait(pause)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                # Preserve the existing bounded reap even if a driver hangs.
+                try:
+                    proc.wait(timeout=1)
+                except TimeoutExpired:
+                    pass
+        if status not in ("ok", "cancelled"):
+            _probe_failure(name, status, diagnostic, code=proc.returncode)
+        return status
 
 
 def scan_encoders(*, progress=None, cancel_event=None):

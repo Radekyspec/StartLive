@@ -40,6 +40,10 @@ QSV_PRESETS = {"performance": "veryfast", "balanced": "medium",
 SVT_PRESETS = {"performance": "12", "balanced": "10", "quality": "8"}
 
 PROBE_TIMEOUT_SECONDS = 12.0
+PROBE_DIAGNOSTIC_ENV = "STARTLIVE_ENCODER_PROBE_DIAGNOSTIC"
+# Two bounded strings, including worst-case JSON Unicode escaping.
+PROBE_DIAGNOSTIC_MAX_BYTES = 65536
+PROBE_DIAGNOSTIC_MAX_CHARS = 2048
 
 ENCODERS = tuple(EncoderChoice(*values) for values in ENCODER_DEFINITIONS)
 
