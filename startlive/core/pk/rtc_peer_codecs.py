@@ -2,8 +2,10 @@
 
 Only the codec catalogue lookup differs from the upstream methods, besides
 explicit private attribute names needed outside RTCPeerConnection's class.
-Keep these methods in sync when upgrading aiortc; the source parity test checks
-that contract. Ordinary functions work in both CPython and Nuitka builds.
+Compare both methods with upstream when upgrading the pinned aiortc version.
+Ordinary functions work in both CPython and Nuitka builds. aiortc 1.15 has no
+per-connection catalogue hook; copying these methods avoids shared global
+catalogue changes during concurrent negotiation.
 
 Upstream: https://github.com/aiortc/aiortc/blob/1.15.0/src/aiortc/rtcpeerconnection.py
 
@@ -355,7 +357,8 @@ async def set_remote_description(
     ]
     await asyncio.gather(*coros)
 
-    # FIXME: in aiortc 2.0.0 emit RTCTrackEvent directly
+    # Upstream plans to emit RTCTrackEvent in aiortc 2.0. Keep the 1.15
+    # MediaStreamTrack payload expected by our track callback.
     for event in trackEvents:
         self.emit("track", event.track)
 

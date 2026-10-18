@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 from startlive.core.constant.pk_encoder import (
-    ENCODERS, PROBE_DIAGNOSTIC_ENV, PROBE_DIAGNOSTIC_MAX_CHARS,
+    ENCODERS_BY_NAME, PROBE_DIAGNOSTIC_ENV, PROBE_DIAGNOSTIC_MAX_CHARS,
 )
 
 
@@ -33,7 +33,7 @@ def _write_failure(reason, detail):
 def probe_main(argv=None):
     import sys
     args = list(sys.argv[1:] if argv is None else argv)
-    if len(args) != 1 or args[0] not in {choice.name for choice in ENCODERS}:
+    if len(args) != 1 or args[0] not in ENCODERS_BY_NAME:
         return 2
     # Probing is best-effort and must not starve OBS or the Qt render loop.
     if os.name != "nt":
