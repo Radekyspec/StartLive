@@ -240,7 +240,7 @@ class PkSessionController:
                 or self.options.continuous):
             raise PkError("等待邀请仅用于未指定对手的视频 PK")
         if self.options.mode == PkMode.TRADITIONAL and self.options.peer_search is not None:
-            raise PkError("传统 PK 仅支持随机匹配")
+            raise PkError("经典 PK 仅支持随机匹配")
         if self.kind == NativePkType.DOUBLE_INVITE:
             if self.options.candidate is None or self.options.candidate.uid != self.options.peer_search:
                 raise PkError("请搜索并选择视频 PK 对手")

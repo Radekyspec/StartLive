@@ -93,7 +93,7 @@ class PkWindow(QDialog):
         layout.setSpacing(8)
         controls = QHBoxLayout()
         self.mode = QComboBox()
-        self.mode.addItem("传统 PK", PkMode.TRADITIONAL)
+        self.mode.addItem("经典 PK", PkMode.TRADITIONAL)
         self.mode.addItem("视频 PK", PkMode.VIDEO)
         self.peer_search = QLineEdit()
         self.peer_search.setPlaceholderText("主播名称 / 房间号")
@@ -861,7 +861,7 @@ class PkWindow(QDialog):
                 self._stop_preview()
                 self.close_encoder_settings()
         if not video:
-            self.set_status("选择传统 PK 开始。")
+            self.set_status("选择经典 PK 开始。")
         self._fit_to_screen()
         if self.isVisible():
             self._center_on_screen()

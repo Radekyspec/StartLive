@@ -1,17 +1,17 @@
 from time import monotonic
 
-from .pk_presenter import PkPresenter
-from startlive.core.pk.states.events import PkInfoEvent, PkMatchTimeoutEvent
-from startlive.core.pk.states.info import PkClassicInfoResult
 from startlive.core.constant.pk import NativePkType
 from startlive.core.constant.pk_api import PK_CLASSIC_INFO_UNAVAILABLE
 from startlive.core.constant.pk_info import NativePkState, PkInfoAction
 from startlive.core.exceptions import PkError
 from startlive.core.pk.identity import require_current_identity
 from startlive.core.pk.pk_info import classic_pk_info, queried_pk_info
+from startlive.core.pk.states.events import PkInfoEvent, PkMatchTimeoutEvent
+from startlive.core.pk.states.info import PkClassicInfoResult
 from startlive.core.pk.trace import pk_trace
 from startlive.core.workers.pk.fetch_classic_info import PkClassicInfoWorker
 from startlive.core.workers.pk.fetch_info import PkInfoWorker
+from .pk_presenter import PkPresenter
 
 
 class PkRoundController:
@@ -153,7 +153,7 @@ class PkRoundController:
         if self.state.kind != NativePkType.DOUBLE_CLASSIC:
             raise PkError("此模式尚未接入状态查询")
         if type(pk_id) is not int or pk_id <= 0:
-            raise PkError("传统 PK 回合查询需要有效的回合 ID")
+            raise PkError("经典 PK 回合查询需要有效的回合 ID")
         return self._query(pk_id, classic=True, replace=replace)
 
     def query_classic_current(self, *, replace=False):
@@ -161,7 +161,7 @@ class PkRoundController:
         if self._closed:
             return False
         if self.state.kind != NativePkType.DOUBLE_CLASSIC:
-            raise PkError("此模式尚未接入传统 PK 当前状态查询")
+            raise PkError("此模式尚未接入经典 PK 当前状态查询")
         return self._query(0, classic=True, replace=replace)
 
     def query_current(self, pk_id, *, replace=False):
@@ -248,7 +248,7 @@ class PkRoundController:
             if classic:
                 response = result.data
                 if not isinstance(response, PkClassicInfoResult):
-                    raise PkError("传统 PK 查询响应无效")
+                    raise PkError("经典 PK 查询响应无效")
                 if response.code == PK_CLASSIC_INFO_UNAVAILABLE:
                     self._trace("round.classic.recovery", code=response.code,
                                 auto_match_status=response.auto_match_status)

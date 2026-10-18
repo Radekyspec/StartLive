@@ -1,9 +1,9 @@
 """StartLive output facts. These are local equivalents, not LiveHime provider flags."""
 from time import monotonic
 
-from startlive.core.pk.states.output import PkOutputReadiness
 from startlive.core.constant.pk import PkMode
 from startlive.core.exceptions import PkError
+from startlive.core.pk.states.output import PkOutputReadiness
 
 
 def output_readiness(status, mode, *, now=None, status_max_age=3):
@@ -17,7 +17,7 @@ def output_readiness(status, mode, *, now=None, status_max_age=3):
     if mode == PkMode.TRADITIONAL:
         # Traditional PK uses the existing broadcast. StartLive has no separate
         # LiveHime voice-microphone service to initialize or invent a flag for.
-        return PkOutputReadiness(True, True, True, "OBS 正在推流（传统 PK）")
+        return PkOutputReadiness(True, True, True, "OBS 正在推流（经典 PK）")
     # StartLive has no voice-microphone service conflict to gate here. Capture
     # availability is checked separately against the JOIN publication selection.
     return PkOutputReadiness(True, True, True, "OBS 正在推流",

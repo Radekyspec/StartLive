@@ -48,7 +48,7 @@ OPERATIONS = {
         csrf=True),
     'classic_info': PkOperation(
         'GET', '/xlive/general-interface/v1/battle/getInfoById',
-        '查询传统 PK 信息'),
+        '查询经典 PK 信息'),
     'universal_info': PkOperation(
         'GET', '/xlive/app-blink/v2/universalInteract/UniversalInfo',
         '查询连线房间', csrf=True),

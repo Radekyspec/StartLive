@@ -102,7 +102,7 @@ class PkMatchController:
     def observe_server_matching(self):
         """Classic current-info confirms server matching; send no new join."""
         if self.kind != NativePkType.DOUBLE_CLASSIC:
-            raise PkError("此状态同步仅适用于传统 PK")
+            raise PkError("此状态同步仅适用于经典 PK")
         if self.phase in (PkPhase.MATCHING,
                           PkPhase.STOPPING) or self.attempt.cancel_requested:
             return

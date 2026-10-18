@@ -3,6 +3,9 @@ from copy import deepcopy
 from dataclasses import replace
 from math import isfinite
 
+from startlive.core.constant.pk_api import PK_SUCCESS, \
+    PK_CLASSIC_INFO_UNAVAILABLE
+from startlive.core.exceptions import PkProtocolError
 from startlive.core.pk.states.info import (
     PkBasicInfo,
     PkClassicInfoResult,
@@ -10,9 +13,6 @@ from startlive.core.pk.states.info import (
     PkMatchInfo,
     PkMemberInfo,
 )
-from startlive.core.constant.pk_api import PK_SUCCESS, \
-    PK_CLASSIC_INFO_UNAVAILABLE
-from startlive.core.exceptions import PkProtocolError
 
 
 def _number(data, key, *, bits=64):
@@ -113,7 +113,7 @@ def classic_info_result(code, data):
     """Contract44 keeps the classic callback code and separate auto status."""
     if code not in (PK_SUCCESS, PK_CLASSIC_INFO_UNAVAILABLE) or not isinstance(
             data, dict):
-        raise PkProtocolError("传统 PK 查询缺少有效的状态响应")
+        raise PkProtocolError("经典 PK 查询缺少有效的状态响应")
     return PkClassicInfoResult(code,
                                _number(data, "auto_match_status", bits=32),
                                deepcopy(data))
@@ -122,7 +122,7 @@ def classic_info_result(code, data):
 def classic_pk_info(data, *, auto_matching=False, cached_timestamp=0):
     """Convert actual fields; auto_matching requires Contract44's6204 gate."""
     if not isinstance(data, dict):
-        raise PkProtocolError("传统 PK 查询缺少状态信息")
+        raise PkProtocolError("经典 PK 查询缺少状态信息")
     timestamp = _number(data, "timestamp")
     if auto_matching:
         timestamp = timestamp or cached_timestamp + 1
