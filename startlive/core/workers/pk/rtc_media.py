@@ -1,12 +1,12 @@
-from queue import Empty, Full, Queue
 import asyncio
+from queue import Empty, Full, Queue
 
-from startlive.core.pk.states.mute import RtcMuteRequest, RtcMuteUpdate
-from startlive.core.pk.states.peers import RtcSubscription
 from startlive.core.constant.pk_session import RtcMediaStage
 from startlive.core.exceptions import PkError
 from startlive.core.pk.identity import require_current_identity
 from startlive.core.pk.room_info import business_message
+from startlive.core.pk.states.mute import RtcMuteRequest, RtcMuteUpdate
+from startlive.core.pk.states.peers import RtcSubscription
 from startlive.core.workers.base import LongLiveWorker
 
 
@@ -72,7 +72,13 @@ class RtcMediaWorker(LongLiveWorker):
 
     def run(self, report_progress, *args, **kwargs):
         self.identity_guard(self.identity)
-        return asyncio.run(self._run(report_progress))
+        from startlive.core.pk.trace import rtc_loop_exception_handler
+
+        # This worker owns its event loop. Capture aiortc background failures
+        # even when they occur between ICE completion and DTLS.start().
+        with asyncio.Runner() as runner:
+            runner.get_loop().set_exception_handler(rtc_loop_exception_handler)
+            return runner.run(self._run(report_progress))
 
     async def _run(self, report_progress):
         media_class = self.media_factory

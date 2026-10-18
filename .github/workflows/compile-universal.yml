@@ -75,6 +75,25 @@ jobs:
         run: |
           pip install imageio
 
+      - name: Record dependency versions
+        shell: bash
+        run: |
+          mkdir -p build
+          python -m pip freeze > build/rtc-dependencies.txt
+
+      - name: Test source RTC on macOS
+        if: runner.os == 'macOS'
+        shell: python
+        run: |
+          import subprocess
+          import sys
+          from pathlib import Path
+          with Path('build/rtc-source-test.log').open('w') as output:
+              result = subprocess.run([sys.executable, 'StartLive.py', '--pk-rtc-self-test'],
+                                      stdout=output, stderr=subprocess.STDOUT, timeout=30)
+          print(f'Source RTC self-test exit code: {result.returncode}')
+          result.check_returncode()
+
       - name: Generate _version.py
         run: |
           python tools/write_version.py
@@ -165,6 +184,24 @@ jobs:
             build/StartLive.app/Contents/MacOS/resources/obs-startlive-pk.plugin
           codesign --force --sign - --timestamp=none \
             --preserve-metadata=entitlements,identifier,flags build/StartLive.app
+
+      - name: Test packaged RTC on macOS
+        if: runner.os == 'macOS'
+        shell: python
+        run: |
+          import os
+          import subprocess
+          from pathlib import Path
+          executable = Path('build/StartLive.app/Contents/MacOS/StartLive').resolve()
+          # Run away from the checkout without build-environment trust paths.
+          env = {key: value for key, value in os.environ.items()
+                 if key not in ('PYTHONPATH', 'PYTHONHOME', 'SSL_CERT_FILE', 'SSL_CERT_DIR')}
+          with Path('build/rtc-packaged-test.log').open('w') as output:
+              result = subprocess.run([str(executable), '--pk-rtc-self-test'],
+                                      cwd=os.environ['RUNNER_TEMP'], env=env,
+                                      stdout=output, stderr=subprocess.STDOUT, timeout=30)
+          print(f'Packaged RTC self-test exit code: {result.returncode}')
+          result.check_returncode()
 
       - name: Archive macOS app with executable permissions and symbolic links
         if: runner.os == 'macOS'

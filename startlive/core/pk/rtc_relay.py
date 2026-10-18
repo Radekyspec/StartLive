@@ -6,8 +6,10 @@ capability or change token parsing, SDP, signaling or the dependency versions.
 """
 import asyncio
 import socket
+import ssl
 from importlib.metadata import version
 
+import certifi
 from aioice import stun, turn
 from aioice.candidate import Candidate, candidate_foundation, candidate_priority
 from aioice.ice import Connection, StunProtocol, TransportPolicy
@@ -39,9 +41,12 @@ async def _create_endpoint(inner, connection):
     """Use the library's TURN protocol/auth, with explicit endpoint ownership."""
     loop = asyncio.get_running_loop()
     if connection.turn_transport == "tcp":
+        # A standalone app cannot rely on the build machine's OpenSSL CA path.
+        # Retain system trust and add the CA bundle shipped with the app.
+        context = create_turn_ssl_context() if connection.turn_ssl else None
         transport, _ = await loop.create_connection(
             lambda: inner, host=connection.turn_server[0],
-            port=connection.turn_server[1], ssl=connection.turn_ssl)
+            port=connection.turn_server[1], ssl=context)
     else:
         transport, _ = await loop.create_datagram_endpoint(
             lambda: inner, remote_addr=connection.turn_server)
@@ -60,6 +65,12 @@ async def _create_endpoint(inner, connection):
             transport.close()
             raise
     return transport
+
+
+def create_turn_ssl_context():
+    context = ssl.create_default_context()
+    context.load_verify_locations(cafile=certifi.where())
+    return context
 
 
 class _RelayTransport(turn.TurnTransport):

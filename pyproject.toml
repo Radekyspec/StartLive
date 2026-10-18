@@ -34,7 +34,7 @@ startlive = "StartLive:cli"
 
 [project.optional-dependencies]
 # PK adapters use the reviewed codec catalogue, sender and relay internals.
-pk = ["aiortc==1.15.0", "aioice==0.10.2"]
+pk = ["aiortc==1.15.0", "aioice==0.10.2", "certifi"]
 
 [tool.setuptools]
 py-modules = ["StartLive"]

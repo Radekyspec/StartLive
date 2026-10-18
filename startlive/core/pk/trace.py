@@ -1,8 +1,10 @@
 """PK diagnostics in the existing StartLive log, without affecting the flow."""
 import json
 import logging
+import traceback
 from dataclasses import asdict, is_dataclass
 from enum import Enum
+from pathlib import Path
 from threading import Lock
 
 from startlive.core.constant.pk_trace import _DESCRIPTIONS, _OPERATIONS, \
@@ -35,6 +37,18 @@ class _DtlsFailureHandler(logging.Handler):
 
 
 _dtls_trace_lock = Lock()
+
+
+def rtc_loop_exception_handler(loop, context):
+    """Record detached provider failures without task reprs, locals or SDP."""
+    error = context.get("exception")
+    frames = (traceback.extract_tb(error.__traceback__)
+              if isinstance(error, BaseException) else [])
+    pk_trace("rtc.background.failed", error_type=type(error).__name__,
+             stack=[{"file": Path(frame.filename).name,
+                     "line": frame.lineno, "function": frame.name}
+                    for frame in frames])
+    loop.default_exception_handler(context)
 
 
 def enable_dtls_failure_trace():

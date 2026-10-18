@@ -1,6 +1,10 @@
 from .pk_api import OPERATIONS
 
 _DESCRIPTIONS = {
+    "rtc.runtime": "RTC 运行环境和依赖版本",
+    "rtc.dtls.start": "ICE 已交接，开始启动 DTLS 安全连接",
+    "rtc.dtls.start.failed": "DTLS 安全连接启动异常",
+    "rtc.background.failed": "RTC 后台任务异常，连接可能无法继续",
     "http.response": "请求响应 Response",
     "http.parsed": "响应解析 Result",
     "http.error": "请求或解析失败",

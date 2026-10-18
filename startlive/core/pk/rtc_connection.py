@@ -24,7 +24,8 @@ from startlive.core.constant.pk_transport import VERIFIED_RELAY_TRANSPORTS
 from startlive.core.exceptions import PkError, PkProtocolError
 from startlive.core.pk.states.session import RtcTicket
 from startlive.core.pk.states.transport import RtcTransportPolicy
-from .rtc_dtls import configure_pk_dtls
+from .rtc_diagnostics import runtime_details
+from .rtc_dtls import configure_pk_dtls, observe_pk_dtls
 from .rtc_relay import configure_relay, prepare_relay
 from .rtc_signaling import RtcSignaling
 from .rtc_users import RtcUserRegistry
@@ -179,6 +180,7 @@ class RtcConnection:
                  leave_timeout=3, peer_connection_factory=RTCPeerConnection,
                  transport_policy: RtcTransportPolicy | None = None):
         enable_dtls_failure_trace()
+        pk_trace("rtc.runtime", **runtime_details())
         pk_trace("rtc.connection.create", uid=ticket.uid,
                  channel_id=ticket.channel_id,
                  transport_policy=transport_policy, thread_id=get_ident())
@@ -223,22 +225,36 @@ class RtcConnection:
             "sctp_data_channel_102", id=102, ordered=False, maxRetransmits=0,
             negotiated=False)
         self._opened = asyncio.Event()
+        self._dtls_start_error = None
+
+        peer = self.pc
+
+        def dtls_start_failed(error):
+            if self.pc is peer:
+                self._dtls_start_error = error
+                self._opened.set()
+
+        observe_pk_dtls(peer, dtls_start_failed)
+
+        def on_current(emitter, event, callback):
+            # A provider task may emit its final state after close() returns.
+            # Retired peers must not wake or misreport the replacement peer.
+            emitter.on(event, lambda: callback() if self.pc is peer else None)
+
         for channel in (self.channel, self.unreliable_channel):
-            channel.on("open",
-                       lambda channel=channel: self._channel_state(channel,
-                                                                   "open"))
-            channel.on("close",
-                       lambda channel=channel: self._channel_state(channel,
-                                                                   "close"))
-        self.pc.on("connectionstatechange", self._state_changed)
+            on_current(channel, "open", lambda channel=channel:
+            self._channel_state(channel, "open"))
+            on_current(channel, "close", lambda channel=channel:
+            self._channel_state(channel, "close"))
+        on_current(self.pc, "connectionstatechange", self._state_changed)
         dtls = getattr(getattr(self.pc, "sctp", None), "transport", None)
         if dtls is not None:
-            dtls.on("statechange", self._trace_dtls_state)
+            on_current(dtls, "statechange", self._trace_dtls_state)
         for event, attribute in (
                 ("iceconnectionstatechange", "iceConnectionState"),
                 ("icegatheringstatechange", "iceGatheringState"),
                 ("signalingstatechange", "signalingState")):
-            self.pc.on(event, lambda attribute=attribute: self._trace(
+            on_current(self.pc, event, lambda attribute=attribute: self._trace(
                 "rtc.pc.state", state_type=attribute,
                 state=getattr(self.pc, attribute, None)))
 
@@ -379,11 +395,11 @@ class RtcConnection:
         addresses = await _resolve_addresses(self.ticket["addr"])
         self._trace("rtc.connection.resolved", addresses=addresses)
         for index, configuration in enumerate(self._configurations):
-            if index:
-                self._create_peer(configuration)
             remaining = deadline - loop.time()
             if remaining <= 0:
                 raise asyncio.TimeoutError
+            if index:
+                self._create_peer(configuration)
             # Reserve time for the other advertised paths instead of letting
             # a blackholed UDP path consume the entire connection deadline.
             attempt_timeout = remaining / (len(self._configurations) - index)
@@ -396,12 +412,13 @@ class RtcConnection:
                                None)
                 if (index + 1 == len(self._configurations)
                         or isinstance(error, PkProtocolError)
+                        or self._dtls_start_error is not None
                         or getattr(dtls, "state", None) == "failed"):
                     raise
+                next_configuration = self._configurations[index + 1]
                 self._trace("rtc.connection.retry", attempt=index + 1,
                             error_type=type(error).__name__,
-                            next_turn_url=
-                            self._configurations[index + 1].iceServers[0].urls[
+                            next_turn_url=next_configuration.iceServers[0].urls[
                                 0],
                             **self._connection_diagnostics())
                 # Retire all sockets, TURN allocations and callbacks before
@@ -444,6 +461,9 @@ class RtcConnection:
                     sdp=sdp_for_trace(self.pc.remoteDescription.sdp))
         self._stage = "transport"
         await self._opened.wait()
+        if self._dtls_start_error is not None:
+            raise PkError(
+                "RTC 安全连接启动失败（DTLS），详细原因已记录到日志") from self._dtls_start_error
         if self.channel.readyState != "open":
             dtls = getattr(getattr(self.pc, "sctp", None), "transport", None)
             if getattr(dtls, "state", None) == "failed":
