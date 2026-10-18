@@ -53,6 +53,7 @@ uv tool upgrade startlive
 
 ```shell
 python -m pip install startlive
+python -m pip install startlive[pk]  # 如果需要使用pk功能
 startlive
 python -m pip install --upgrade startlive
 ```
@@ -71,45 +72,6 @@ Windows 的配置和日志保存在 `%LOCALAPPDATA%/StartLive` 下，
 ## 使用方法
 
 [点我查看教程（腾讯文档）](https://docs.qq.com/doc/DTHVMdkhtUWJjRFhv?scene=4edcd4a61e4d506148e0f879bN4Lu1)
-
-## 直播姬配置转换
-
-在菜单栏选择 **特殊功能 → 配置转换**，选择直播姬配置，点击“分析并预览”，检查转换提示后导出
-JSON。
-然后在 OBS 中选择 **场景集合 → 导入**，选择导出的文件。
-
-可勾选“过滤以 Vertical、wDouble、xDouble 开头的场景”。此选项默认关闭，按名称开头区分大小写匹配，
-仅移除场景及其列表项、引用，保留图片、音频等素材和分组。当前场景被过滤时切换到第一个保留场景；
-如果全部场景都被过滤，则提示取消过滤。切换选项后需重新分析预览才能导出。
-
-直播姬的场景数据与安装目录分开保存。Windows 默认配置目录是
-`%LOCALAPPDATA%\bililive\User Data\<B站UID>\`：
-
-| 文件                                               | 内容                                 |
-|--------------------------------------------------|------------------------------------|
-| `Scene Collection\support_group_collection.json` | 支持分组的场景配置；在本机直播姬 8.7 中找到，自动查找时优先列出 |
-| `untitledv2.json` / `untitled.json`              | 其他或旧版场景配置，内容可能与分组版本不同              |
-| `Preferences`                                    | 应用、视频等偏好设置，不是场景文件                  |
-
-支持自动查找多个账号，也可选择账号目录、`Scene Collection` 目录、JSON 文件或
-`.json.bak` 备份。
-建议退出直播姬后再读取，以获得已保存的最新配置。
-
-- 保留 OBS 支持的场景、分组、嵌套场景、图层顺序、位置、缩放、裁剪、旋转、可见性，以及音频和转场。
-- 桌面音频和麦克风字段转换为 OBS 全局音频设备字段；仅保留 OBS 的六条音轨。
-- 直播姬专用源、滤镜和转场按兼容名单跳过，同时移除对已跳过素材的引用；转换预览中列出具体项目。
-- 不同尺寸的嵌套场景会保留，但横竖屏同时输出、双屏模式、美颜、连麦等直播姬专属功能不迁移。
-- 参考画布从场景坐标推断；不能确定时可填写原始宽高。导入后需核对 OBS
-  基础画布、音频/摄像头设备和素材路径。
-- 素材文件不打包。导出使用新文件名，不覆盖直播姬或 OBS 原配置；不迁移账号、推流地址或编码器配置。
-
-转换规则依据本机配置与 OBS 官方的
-[场景集合加载代码](https://github.com/obsproject/obs-studio/blob/master/frontend/widgets/OBSBasic_SceneCollections.cpp)、
-[场景项目序列化代码](https://github.com/obsproject/obs-studio/blob/master/libobs/obs-scene.c)
-核对。
-未引入第三方转换依赖。
-
-## 从源代码运行/开发
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Radekyspec/StartLive)
 
@@ -135,6 +97,7 @@ python -m venv venv
 
 ```shell
 .\venv\Scripts\pip.exe install -e .
+.\venv\Scripts\pip.exe install -e ".[pk]"  # 如果需要使用pk功能
 .\venv\Scripts\python.exe .\StartLive.py
 ```
 
@@ -142,6 +105,7 @@ python -m venv venv
 
 ```shell
 ./venv/bin/pip install -e .
+./venv/bin/pip install -e ".[pk]"  # 如果需要使用pk功能
 ./venv/bin/python ./StartLive.py
 ```
 
