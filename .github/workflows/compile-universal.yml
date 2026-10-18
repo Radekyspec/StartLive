@@ -100,6 +100,7 @@ jobs:
         with:
           # 4.3.1 breaks OpenSSL private-key conversion in compiled RTC.
           nuitka-version: '4.2.2'
+          update-check: never
           script-name: StartLive.py
           # mingw64: true
           msvc: latest
@@ -135,6 +136,7 @@ jobs:
         with:
           # Keep Windows and macOS on the same verified RTC compiler.
           nuitka-version: '4.2.2'
+          update-check: never
           script-name: StartLive.py
           mode: app
           output-dir: build
