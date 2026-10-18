@@ -283,17 +283,18 @@ _cached_encoders = None
 def probe_process_command(name):
     """Launch a child without Qt; Nuitka's executable cannot accept `-m`.
 
-    Nuitka sets __compiled__ on the entry module rather than sys.frozen. Its
-    process_exe points at the unpacked child executable for onefile builds.
+    StartLive supports source Python and Nuitka executables. Nuitka exposes
+    __compiled__ on the entry module and sets argv[0] to the executable path
+    (the outer launcher in onefile mode). Avoid sys.executable: in a macOS
+    app it can name the bundled Python shared library instead.
     """
     if name not in ENCODERS_BY_NAME:
         raise ValueError("unsupported probe encoder")
-    compiled = getattr(sys.modules.get("__main__"), "__compiled__", None)
-    if compiled is not None:
-        return [getattr(compiled, "process_exe", None) or sys.executable,
-                "--pk-encoder-probe", name]
-    if getattr(sys, "frozen", False):
-        return [sys.executable, "--pk-encoder-probe", name]
+    if hasattr(sys.modules.get("__main__"), "__compiled__"):
+        if not sys.argv or not sys.argv[0]:
+            raise OSError(
+                "Nuitka application executable path is missing from argv[0]")
+        return [str(Path(sys.argv[0]).resolve()), "--pk-encoder-probe", name]
     return [sys.executable, "-m", "startlive.core.pk.encoder_probe_child", name]
 
 
@@ -338,9 +339,13 @@ def probe_encoder_isolated(name, *, timeout=PROBE_TIMEOUT_SECONDS,
     Exit code 0 alone signals success. The file carries failure details only;
     the parent logs them after reaping the child, then removes the directory.
     """
-    command = probe_process_command(name)
     if cancel_event is not None and cancel_event.is_set():
         return "cancelled"
+    try:
+        command = probe_process_command(name)
+    except OSError as error:
+        _probe_failure(name, "start-error", None, error=error)
+        return "start-error"
     env = dict(environ)
     if len(command) > 1 and command[1] == "-m":
         project_root = str(Path(__file__).resolve().parents[3])

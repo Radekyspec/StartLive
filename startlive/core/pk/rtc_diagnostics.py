@@ -1,4 +1,4 @@
-"""Runtime identity shared by RTC logs and the packaged application self-test."""
+"""Runtime identity for diagnosing RTC failures in packaged applications."""
 import platform
 import ssl
 from importlib.metadata import PackageNotFoundError, version

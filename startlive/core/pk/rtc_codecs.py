@@ -5,7 +5,7 @@ connection-scoped catalogue; it is never advertised to aiortc's stock receiver.
 Raw server answers are validated before either video encoder starts sending.
 """
 from copy import deepcopy
-from types import FunctionType, MethodType
+from types import MethodType
 
 from aiortc import RTCPeerConnection, RTCRtpSender
 from aiortc.codecs import CODECS
@@ -13,6 +13,7 @@ from aiortc.rtcrtpparameters import RTCRtpCodecCapability, RTCRtpCodecParameters
 
 from startlive.core.exceptions import PkError, PkProtocolError
 from .rtc_av1 import source_capability
+from .rtc_peer_codecs import create_offer, set_remote_description
 
 
 def set_native_codec_preferences(transceiver, video_config=None):
@@ -53,9 +54,9 @@ def av1_codecs():
 def enable_av1_publication(pc):
     """Give only this PC's offer/answer methods an extended codec catalogue.
 
-    aiortc 1.15 hardcodes its module-level CODECS in these two methods. Rebind
-    their globals on this instance rather than mutate that process-wide table
-    across awaits, or copy and maintain the whole peer-connection implementation.
+    aiortc 1.15 hardcodes its module-level CODECS in these two methods. Our
+    version-pinned adapters read the instance catalogue instead. Do not clone
+    functions through __code__: Nuitka functions have no executable bytecode.
     Receive transceivers still select only the built-in H.264 decoder.
     """
     if not isinstance(pc, RTCPeerConnection) or getattr(pc, "_pk_av1_enabled",
@@ -63,13 +64,9 @@ def enable_av1_publication(pc):
         return
     catalogue = deepcopy(CODECS)
     catalogue["video"].extend(av1_codecs())
-    for name in ("createOffer", "setRemoteDescription"):
-        original = getattr(RTCPeerConnection, name)
-        scope = dict(original.__globals__, CODECS=catalogue)
-        method = FunctionType(original.__code__, scope, original.__name__,
-                              original.__defaults__, original.__closure__)
-        method.__kwdefaults__ = original.__kwdefaults__
-        setattr(pc, name, MethodType(method, pc))
+    pc._pk_codec_catalogue = catalogue
+    pc.createOffer = MethodType(create_offer, pc)
+    pc.setRemoteDescription = MethodType(set_remote_description, pc)
     pc._pk_av1_enabled = True
 
 

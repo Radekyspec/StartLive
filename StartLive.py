@@ -147,11 +147,6 @@ def cli() -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--pk-rtc-self-test":
-        from startlive.core.pk.rtc_probe import probe_main
-
-        sys.exit(probe_main())
-
     # 编码器检测子进程，不执行 Velopack 钩子，不初始化 Qt
     if len(sys.argv) > 1 and sys.argv[1] == "--pk-encoder-probe":
         from startlive.core.pk.encoder_probe_child import probe_main

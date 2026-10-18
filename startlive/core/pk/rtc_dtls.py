@@ -5,6 +5,9 @@ ECDHE-RSA suites and cipher policy strings allowing them; an RSA server cannot
 negotiate with aiortc's default. Add modern RSA-authenticated suites while keeping
 the same client certificate, SRTP profiles and remote fingerprint validation.
 """
+from pathlib import Path
+from traceback import extract_tb
+
 from aiortc import RTCPeerConnection
 from aiortc.rtcdtlstransport import RTCCertificate
 
@@ -39,7 +42,10 @@ def observe_pk_dtls(peer, on_error):
         except Exception as error:
             pk_trace("rtc.dtls.start.failed", pc_id=hex(id(peer)),
                      state=dtls.state, error_type=type(error).__name__,
-                     error=str(error))
+                     error=str(error),
+                     stack=[{"file": Path(frame.filename).name,
+                             "line": frame.lineno, "function": frame.name}
+                            for frame in extract_tb(error.__traceback__)])
             # The owner propagates the exception and closes the peer. Consume
             # it here so the detached provider task has no unhandled exception.
             on_error(error)
