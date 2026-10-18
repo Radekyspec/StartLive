@@ -1,18 +1,19 @@
 """PK diagnostics in the existing StartLive log, without affecting the flow."""
-from startlive.core.constant.pk_trace import _DESCRIPTIONS, _OPERATIONS, \
-    _REASONS
 import json
 import logging
-from threading import Lock
 from dataclasses import asdict, is_dataclass
 from enum import Enum
+from threading import Lock
 
+from startlive.core.constant.pk_trace import _DESCRIPTIONS, _OPERATIONS, \
+    _REASONS, _RTC_STATES, _RTC_STATE_TYPES
 from startlive.core.log import get_logger
 
 
 # Only results, parsing decisions and failures belong in the normal log.
-# UI actions, polling probes, packet counters and intermediate setup steps do
+# UI actions, polling probes, packet counters and most setup steps do
 # not become visible just because the application's logger enables DEBUG.
+# ICE/DTLS state transitions are sparse and needed to diagnose connection stalls.
 
 
 class _DtlsFailureHandler(logging.Handler):
@@ -83,6 +84,13 @@ def pk_trace(event: str, *, logger_name="PK", **fields):
                 return
         if event.startswith("http."):
             description = f"{_OPERATIONS.get(fields.get('operation'), 'PK')} {description}"
+        if event in ("rtc.pc.state", "rtc.dtls.state", "rtc.channel.state"):
+            state = fields.get("state")
+            if state in _RTC_STATES:
+                fields["state_description"] = _RTC_STATES[state]
+            state_type = fields.get("state_type")
+            if state_type in _RTC_STATE_TYPES:
+                fields["state_type_description"] = _RTC_STATE_TYPES[state_type]
         reason = fields.get("reason")
         if isinstance(reason, str) and reason in _REASONS:
             fields["reason_description"] = _REASONS[reason]

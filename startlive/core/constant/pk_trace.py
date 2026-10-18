@@ -45,6 +45,13 @@ _DESCRIPTIONS = {
     "rtc.rpc.closed": "RTC 信令通道已关闭",
     "rtc.transport.closed_reason": "音视频传输已断开",
     "rtc.connection.ready": "RTC 连接已就绪",
+    "rtc.connection.retry": "RTC 当前中继路径未连通，尝试备用路径",
+    "rtc.pc.state": "RTC 连接状态变化",
+    "rtc.ice.gathered": "ICE 本地候选路径收集完成",
+    "rtc.ice.selected": "ICE 已选中的传输路径",
+    "rtc.dtls.state": "DTLS 安全握手状态变化",
+    "rtc.channel.state": "RTC 数据通道状态变化",
+    "rtc.relay.allocated": "TURN 中继地址分配成功",
     "rtc.connection.closed": "RTC 连接已关闭",
     "rtc.media.publish.success": "音视频发布成功",
     "rtc.media.subscribe.success": "对方音视频订阅成功",
@@ -91,6 +98,31 @@ _DESCRIPTIONS = {
 }
 
 _OPERATIONS = {name: operation.label for name, operation in OPERATIONS.items()}
+
+_RTC_STATE_TYPES = {
+    "connectionState": "整体连接",
+    "iceConnectionState": "ICE 连通性检查",
+    "iceGatheringState": "ICE 候选路径收集",
+    "signalingState": "SDP 协商",
+}
+
+_RTC_STATES = {
+    "new": "尚未开始",
+    "gathering": "正在收集候选路径",
+    "complete": "候选路径收集完成",
+    "checking": "正在检查候选路径是否连通",
+    "connecting": "正在连接／握手",
+    "connected": "连接／握手成功",
+    "completed": "连通性检查完成，已选定路径",
+    "disconnected": "连接中断",
+    "failed": "连接／握手失败",
+    "closed": "已关闭",
+    "closing": "正在关闭",
+    "open": "已打开",
+    "stable": "协商稳定",
+    "have-local-offer": "已设置本地提议，等待远端应答",
+    "have-remote-offer": "已收到远端提议，等待本地应答",
+}
 
 _REASONS = {
     "not_eligible_or_busy": "当前不满足接收条件或正在忙碌",

@@ -122,6 +122,11 @@ class _Allocation:
                 host=address[0], port=address[1], type="relay",
                 related_address=related[0], related_port=related[1])
             self.protocol.local_candidate = candidate
+            pk_trace("rtc.relay.allocated", component=self.component,
+                     server=self.adapter.connection.turn_server,
+                     transport=self.adapter.connection.turn_transport,
+                     tls=bool(self.adapter.connection.turn_ssl),
+                     relay_address=address)
             return candidate, self.protocol
         except BaseException as error:
             if not isinstance(error, asyncio.CancelledError):

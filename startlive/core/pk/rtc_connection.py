@@ -5,11 +5,12 @@ remote answer, then joins over the opened binary DataChannel. This aiortc
 implementation uses StartLive's own ICE policy. Direct ICE-TCP remains gated;
 native local tuning is not a server requirement.
 """
-from threading import get_ident
-from urllib.parse import urlsplit
 import asyncio
 import ipaddress
 import socket
+from dataclasses import replace
+from threading import get_ident
+from urllib.parse import urlsplit
 
 from aiortc import (
     RTCBundlePolicy,
@@ -19,20 +20,40 @@ from aiortc import (
     RTCSessionDescription,
 )
 
+from startlive.core.constant.pk_transport import VERIFIED_RELAY_TRANSPORTS
+from startlive.core.exceptions import PkError, PkProtocolError
+from startlive.core.pk.states.session import RtcTicket
+from startlive.core.pk.states.transport import RtcTransportPolicy
 from .rtc_dtls import configure_pk_dtls
 from .rtc_relay import configure_relay, prepare_relay
 from .rtc_signaling import RtcSignaling
 from .rtc_users import RtcUserRegistry
 from .rtc_wire import decode_ticket
 from .trace import enable_dtls_failure_trace, pk_trace, sdp_for_trace
-from startlive.core.pk.states.session import RtcTicket
-from startlive.core.pk.states.transport import RtcTransportPolicy
-from startlive.core.constant.pk_transport import VERIFIED_RELAY_TRANSPORTS
-from startlive.core.exceptions import PkError, PkProtocolError
 
 
 # Enable only the client-to-TURN transports demonstrated by local relay media,
 # allocation failure and cancellation tests. Production PK has its own gate.
+
+
+def _connection_configurations(configuration, *, relay_only):
+    """aiortc uses only the first TURN URL, not the rest as fallbacks.
+
+    Give each ticket-authorized relay path its own peer connection. Never
+    turn a relay-only ticket into a direct connection while retrying.
+    """
+    if not relay_only:
+        return [configuration]
+    configurations = []
+    seen = set()
+    for server in configuration.iceServers:
+        urls = server.urls if isinstance(server.urls, list) else [server.urls]
+        for url in urls:
+            if url not in seen:
+                seen.add(url)
+                configurations.append(replace(
+                    configuration, iceServers=[replace(server, urls=[url])]))
+    return configurations
 
 
 def _address(value):
@@ -167,10 +188,11 @@ class RtcConnection:
         # Validate before allocating the PC/channels or starting ICE gathering.
         self.configuration = ice_configuration(self.ticket,
                                                transport_policy=transport_policy)
-        self.pc = peer_connection_factory(self.configuration)
-        configure_pk_dtls(self.pc)
-        if self.ticket.get("turn", {}).get("turn_only"):
-            configure_relay(self.pc)
+        self._relay_only = bool(self.ticket.get("turn", {}).get("turn_only"))
+        self._configurations = _connection_configurations(
+            self.configuration, relay_only=self._relay_only)
+        self._peer_connection_factory = peer_connection_factory
+        self._stage = "created"
         self.notification, self.timeout = notification, timeout
         # If no callback is injected, retain notifications received while
         # awaiting Join so the later session owner can reconcile them. The
@@ -186,6 +208,14 @@ class RtcConnection:
         self.members_response = None
         self._close_task = None
         self.signaling = None
+        self._create_peer(self._configurations[0])
+
+    def _create_peer(self, configuration):
+        self.configuration = configuration
+        self.pc = self._peer_connection_factory(configuration)
+        configure_pk_dtls(self.pc)
+        if self._relay_only:
+            configure_relay(self.pc)
         self.channel = self.pc.createDataChannel("sctp_data_channel_101",
                                                  id=101,
                                                  ordered=True, negotiated=False)
@@ -201,6 +231,9 @@ class RtcConnection:
                        lambda channel=channel: self._channel_state(channel,
                                                                    "close"))
         self.pc.on("connectionstatechange", self._state_changed)
+        dtls = getattr(getattr(self.pc, "sctp", None), "transport", None)
+        if dtls is not None:
+            dtls.on("statechange", self._trace_dtls_state)
         for event, attribute in (
                 ("iceconnectionstatechange", "iceConnectionState"),
                 ("icegatheringstatechange", "iceGatheringState"),
@@ -244,6 +277,8 @@ class RtcConnection:
         if self.pc.connectionState == "failed":
             self._trace_selected_pair()
             self._trace_dtls_state()
+        elif self.pc.connectionState == "connected":
+            self._trace_selected_pair()
         if self.pc.connectionState in ("failed", "closed"):
             self._opened.set()
 
@@ -262,6 +297,40 @@ class RtcConnection:
                         protocol=ssl.get_protocol_version_name() if ssl else None)
         except Exception:
             pass
+
+    def _connection_diagnostics(self):
+        """Snapshot before cleanup; never include ICE/TURN credentials or SDP."""
+        result = {"stage": self._stage,
+                  "connection_state": getattr(self.pc, "connectionState", None),
+                  "ice_state": getattr(self.pc, "iceConnectionState", None),
+                  "gathering_state": getattr(self.pc, "iceGatheringState",
+                                             None),
+                  "channel_state": self.channel.readyState}
+        try:
+            sctp = self.pc.sctp
+            dtls = sctp.transport
+            ice = dtls.transport
+            result.update(dtls_state=dtls.state, sctp_state=sctp.state)
+            connection = ice._connection
+            result["turn"] = {"server": connection.turn_server,
+                              "transport": connection.turn_transport,
+                              "tls": connection.turn_ssl}
+
+            def candidate(value):
+                return {"type": value.type, "transport": value.transport,
+                        "host": value.host, "port": value.port}
+
+            result["local_candidates"] = [
+                candidate(c) for c in connection.local_candidates]
+            result["pairs"] = [
+                {"local": candidate(pair.local_candidate),
+                 "remote": candidate(pair.remote_candidate),
+                 "state": pair.state.name, "nominated": pair.nominated}
+                for pair in connection._check_list]
+        except (AttributeError, TypeError):
+            # Diagnostics must also work with injected offline peers.
+            pass
+        return result
 
     def _receive_notification(self, message):
         handled = self.users.consume(message)
@@ -293,48 +362,93 @@ class RtcConnection:
             self._trace_selected_pair()
             return self
         except asyncio.TimeoutError:
-            self._trace("rtc.connection.timeout", timeout=self.timeout)
+            self._trace("rtc.connection.timeout", timeout=self.timeout,
+                        **self._connection_diagnostics())
             await self.close()
             raise PkError("RTC 初始连接超时") from None
         except BaseException as error:
-            self._trace("rtc.connection.failed", error=error)
+            self._trace("rtc.connection.failed", error=error,
+                        **self._connection_diagnostics())
             await self.close()
             raise
 
     async def _connect(self):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.timeout
+        self._stage = "resolving"
         addresses = await _resolve_addresses(self.ticket["addr"])
         self._trace("rtc.connection.resolved", addresses=addresses)
-        prepare_relay(self.pc)
-        offer = await self.pc.createOffer()
-        self._trace("rtc.sdp.local.offer", stage="initial",
-                    sdp=sdp_for_trace(offer.sdp))
-        await self.pc.setLocalDescription(offer)
-        self._trace("rtc.sdp.local.applied", stage="initial",
-                    sdp=sdp_for_trace(self.pc.localDescription.sdp))
-        answer = initial_answer(self.ticket, addresses)
-        self._trace("rtc.sdp.remote.answer", stage="initial",
-                    sdp=sdp_for_trace(answer))
-        await self.pc.setRemoteDescription(
-            RTCSessionDescription(answer, "answer"))
-        self._trace("rtc.sdp.remote.applied", stage="initial",
-                    sdp=sdp_for_trace(self.pc.remoteDescription.sdp))
-        await self._opened.wait()
-        if self.channel.readyState != "open":
-            dtls = getattr(getattr(self.pc, "sctp", None), "transport", None)
-            if getattr(dtls, "state", None) == "failed":
-                raise PkError("RTC 安全握手失败（DTLS），详细原因已记录到日志")
-            raise PkError("RTC 信令连接失败")
+        for index, configuration in enumerate(self._configurations):
+            if index:
+                self._create_peer(configuration)
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise asyncio.TimeoutError
+            # Reserve time for the other advertised paths instead of letting
+            # a blackholed UDP path consume the entire connection deadline.
+            attempt_timeout = remaining / (len(self._configurations) - index)
+            try:
+                await asyncio.wait_for(self._open_transport(addresses),
+                                       attempt_timeout)
+                break
+            except (asyncio.TimeoutError, PkError, OSError) as error:
+                dtls = getattr(getattr(self.pc, "sctp", None), "transport",
+                               None)
+                if (index + 1 == len(self._configurations)
+                        or isinstance(error, PkProtocolError)
+                        or getattr(dtls, "state", None) == "failed"):
+                    raise
+                self._trace("rtc.connection.retry", attempt=index + 1,
+                            error_type=type(error).__name__,
+                            next_turn_url=
+                            self._configurations[index + 1].iceServers[0].urls[
+                                0],
+                            **self._connection_diagnostics())
+                # Retire all sockets, TURN allocations and callbacks before
+                # replacing the PC. Cancellation must not start another peer.
+                await self.pc.close()
+        # Retry only transport establishment. Once Join can have been sent,
+        # replaying it on a fresh peer could create a duplicate server session.
         self._trace_dtls_state()
         self.signaling = RtcSignaling(self.channel, self.ticket,
                                       notification=self._receive_notification)
+        self._stage = "join"
         with self.signaling.block_notifications():
             self.join_response = await self.signaling.join()
+            self._stage = "members"
             with self.signaling.block_notifications():
                 self.members_response = await self.signaling.refresh_members(
                     self.join_response.get("callid", 0))
                 self.users.initialize(self.members_response.get("users", []))
         if self.signaling.closed:
             raise PkError("RTC 初始成员信息同步失败")
+        self._stage = "ready"
+
+    async def _open_transport(self, addresses):
+        self._stage = "gathering"
+        prepare_relay(self.pc)
+        offer = await self.pc.createOffer()
+        self._trace("rtc.sdp.local.offer", stage="initial",
+                    sdp=sdp_for_trace(offer.sdp))
+        await self.pc.setLocalDescription(offer)
+        self._trace("rtc.ice.gathered", **self._connection_diagnostics())
+        self._trace("rtc.sdp.local.applied", stage="initial",
+                    sdp=sdp_for_trace(self.pc.localDescription.sdp))
+        answer = initial_answer(self.ticket, addresses)
+        self._trace("rtc.sdp.remote.answer", stage="initial",
+                    sdp=sdp_for_trace(answer))
+        self._stage = "remote_description"
+        await self.pc.setRemoteDescription(
+            RTCSessionDescription(answer, "answer"))
+        self._trace("rtc.sdp.remote.applied", stage="initial",
+                    sdp=sdp_for_trace(self.pc.remoteDescription.sdp))
+        self._stage = "transport"
+        await self._opened.wait()
+        if self.channel.readyState != "open":
+            dtls = getattr(getattr(self.pc, "sctp", None), "transport", None)
+            if getattr(dtls, "state", None) == "failed":
+                raise PkError("RTC 安全握手失败（DTLS），详细原因已记录到日志")
+            raise PkError("RTC 信令连接失败")
 
     async def __aexit__(self, exc_type, *_):
         await self.close()
