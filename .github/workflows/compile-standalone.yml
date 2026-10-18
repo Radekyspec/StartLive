@@ -88,11 +88,12 @@ jobs:
           output-dir: build
           report: build/nuitka-report.xml
           enable-plugins: pyside6,upx
+          # Let aiortc imports and Nuitka's PyAV rules collect av. Forcing the
+          # whole package scans its .py/native module pairs twice in 4.2.2.
           include-package: |
             startlive.core.pk
             aiortc
             aioice
-            av
           # Distribution metadata options are declared in StartLive.py.
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
