@@ -5,17 +5,15 @@ HTTP/push/RTC transports without replacing the business controllers.
 """
 from time import monotonic
 
-from .invitation_lifecycle import PkInvitationLifecycle
-from .rtc_lifecycle import PkRtcLifecycle
-from .round_presentation import PkRoundPresentation
-from .continuous_controller import PkContinuousController
-from .directed_invite import PkDirectedInviteController
-from .exit_controller import PkExitController
-from .handle_controller import PkHandleController
-from .join_controller import PkJoinController
-from .match_controller import PkMatchController
-from .push_controller import PkPushController
-from .round_controller import PkRoundController
+from startlive.core.constant.pk import NativeInteractionState, NativePkType, \
+    PkMode, PkPhase
+from startlive.core.constant.pk_api import PK_CLASSIC_INFO_UNAVAILABLE
+from startlive.core.constant.pk_info import NativePkState, PkInfoAction
+from startlive.core.exceptions import PkError
+from startlive.core.pk.identity import require_current_identity
+from startlive.core.pk.pk_eligibility import pk_start_eligibility
+from startlive.core.pk.pk_info import parse_pk_info
+from startlive.core.pk.round_state import PkRoundState
 from startlive.core.pk.states.eligibility import PkStartEligibilityState, \
     PkVideoEligibilityState
 from startlive.core.pk.states.events import (
@@ -29,21 +27,16 @@ from startlive.core.pk.states.events import (
     PkOperationEvent,
 )
 from startlive.core.pk.states.info import PkClassicInfoResult, PkInfoDecision
-from startlive.core.constant.pk import NativeInteractionState, NativePkType, \
-    PkMode, PkPhase
-from startlive.core.constant.pk_api import PK_CLASSIC_INFO_UNAVAILABLE
-from startlive.core.constant.pk_info import NativePkState, PkInfoAction
-from startlive.core.exceptions import PkError
-from startlive.core.pk.identity import require_current_identity
-from startlive.core.pk.pk_eligibility import pk_start_eligibility
-from startlive.core.pk.pk_info import parse_pk_info
-from startlive.core.pk.round_state import PkRoundState
 from startlive.core.pk.trace import pk_trace
 from startlive.core.pk.trace_id import new_trace_id
 from startlive.core.pk.video_eligibility import video_eligibility
-from .provider_readiness import VideoProviderReadiness
-from startlive.core.workers.pk.rtc_media import RtcMediaWorker
 from startlive.core.workers.pk.session_jobs import PkSessionJobs
+from .continuous_controller import PkContinuousController
+from .exit_controller import PkExitController
+from .match_controller import PkMatchController
+from .push_controller import PkPushController
+from .round_controller import PkRoundController
+from .round_presentation import PkRoundPresentation
 
 
 def _connection(ticket):
@@ -55,7 +48,7 @@ class PkSessionController:
     def __init__(self, manager, identity, options, view, *, readiness,
                  identity_guard=require_current_identity,
                  connector_factory=_connection,
-                 push_factory=PkPushController, rtc_factory=RtcMediaWorker,
+                 push_factory=PkPushController, rtc_factory=None,
                  invitation_display_allowed=False,
                  invitation_only=False, clock=monotonic,
                  provider_preflight=None, provider_readiness=None):
@@ -64,8 +57,7 @@ class PkSessionController:
         self.readiness, self.identity_guard = readiness, identity_guard
         self._clock = clock
         self._owns_provider_readiness = provider_readiness is None
-        self.provider_readiness = provider_readiness or VideoProviderReadiness(
-            manager, provider_preflight)
+        self.provider_readiness = None
         self.invitation_only = invitation_only
         self.invitation_display_allowed = invitation_display_allowed or invitation_only
         self._push_authenticated = False
@@ -80,8 +72,10 @@ class PkSessionController:
         self._polling_suspended = False
         self._exit_query_resume_pending = False
         self._pending_round_events = []
-        self.invitations = PkInvitationLifecycle(self)
-        self.rtc = PkRtcLifecycle(self, connector_factory, rtc_factory)
+        self.invitations = self.rtc = self.join = self.handle = None
+        if options.mode == PkMode.VIDEO:
+            self._initialize_video(connector_factory, rtc_factory,
+                                   provider_readiness, provider_preflight)
         self.presentation = PkRoundPresentation(self)
         self.round_state = PkRoundState(self.kind,
                                         start_state_provider=self._start_facts)
@@ -97,21 +91,15 @@ class PkSessionController:
                                        trace_id=self.trace_id,
                                        polling_allowed=lambda: not (
                                                    self.closed or self.stopping or self._polling_suspended))
-        self.join = PkJoinController(identity, connect=self.rtc.connect,
-                                     identity_guard=identity_guard,
-                                     eligibility_check=lambda
-                                         _: video_eligibility(
-                                         self._video_facts()))
-        self.handle = PkHandleController(manager, identity, self.join,
-                                         handled=self.invitations.handled,
-                                         failed=self.invitations.failed)
         self.exit = PkExitController(manager, identity,
                                      reconcile=self._exit_result,
                                      failed=self._exit_failed,
-                                     local_shutdown=self.rtc.stop,
+                                     local_shutdown=self._stop_rtc,
                                      finished=lambda: None,
                                      pk_state_provider=lambda: self.round_state.state,
                                      round_id_provider=lambda: self.round_state.round_id)
+        if self.kind == NativePkType.DOUBLE_INVITE:
+            from .directed_invite import PkDirectedInviteController
         self.flow = (
             PkDirectedInviteController(manager, identity, sent=self._waiting,
                                        failed=self._flow_failed,
@@ -136,15 +124,43 @@ class PkSessionController:
                     requested_peer_uid=options.peer_search,
                     continuous=options.continuous)
 
+    def _initialize_video(self, connector_factory, rtc_factory,
+                          provider_readiness, provider_preflight):
+        from .invitation_lifecycle import PkInvitationLifecycle
+        from .rtc_lifecycle import PkRtcLifecycle
+        from .handle_controller import PkHandleController
+        from .join_controller import PkJoinController
+        from .provider_readiness import VideoProviderReadiness
+
+        if rtc_factory is None:
+            from startlive.core.workers.pk.rtc_media import RtcMediaWorker
+            rtc_factory = RtcMediaWorker
+        self.provider_readiness = provider_readiness or VideoProviderReadiness(
+            self.manager, provider_preflight)
+        self.invitations = PkInvitationLifecycle(self)
+        self.rtc = PkRtcLifecycle(self, connector_factory, rtc_factory)
+        self.join = PkJoinController(self.identity, connect=self.rtc.connect,
+                                     identity_guard=self.identity_guard,
+                                     eligibility_check=lambda
+                                         _: video_eligibility(
+                                         self._video_facts()))
+        self.handle = PkHandleController(self.manager, self.identity, self.join,
+                                         handled=self.invitations.handled,
+                                         failed=self.invitations.failed)
+
+    def _stop_rtc(self):
+        if self.rtc is not None:
+            self.rtc.stop()
+
     def _trace(self, event, **fields):
         pk_trace(event, **({"trace_id": self.trace_id, "uid": self.identity.uid,
                             "room_id": self.identity.room_id,
                             "pk_id": self.round_state.round_id,
                             "biz_session_id": self.round_state.biz_session_id,
-                            "rtc_channel_id": self.rtc.event.rtc_channel_id if self.rtc.event else None,
+                            "rtc_channel_id": self.join_event.rtc_channel_id if self.join_event else None,
                             "pk_state": self.round_state.state,
                             "kind": self.round_state.kind,
-                            "interaction_state": self.join.native_state,
+                            "interaction_state": self.join.native_state if self.join else None,
                             "phase": self.flow.phase, "closed": self.closed,
                             "stopping": self.stopping} | fields))
 
@@ -399,7 +415,7 @@ class PkSessionController:
                 if not self.join.handle(event):
                     self._trace("session.push.ignored", command=event.command,
                                 reason="duplicate_or_unusable_join")
-            elif isinstance(event, PkLeaveEvent) and self.rtc.event:
+            elif isinstance(event, PkLeaveEvent) and self.join_event:
                 decision = self.exit.server_leave(event,
                                                   rtc_channel_id=self.rtc.event.rtc_channel_id,
                                                   native_state=self.join.native_state)
@@ -416,7 +432,8 @@ class PkSessionController:
                 if self.round.handle_match_timeout(event) and isinstance(
                         self.flow, PkMatchController):
                     self.flow.match_timed_out()
-            elif isinstance(event, PkOperationEvent):
+            elif isinstance(event,
+                            PkOperationEvent) and self.invitations is not None:
                 if event.operation_type in (2, 4):
                     self.invitations.finish_outgoing(event)
                 elif event.operation_type == 3:
@@ -502,7 +519,8 @@ class PkSessionController:
                                                                      PkMatchController)):
                 self.flow.match_timed_out()
             self.view.set_active(False)
-            self.invitations.resume_waiting()
+            if self.invitations is not None:
+                self.invitations.resume_waiting()
 
     def _refresh_continuous(self):
         # Contract27: round terminal with an active RTC connection does not
@@ -515,9 +533,11 @@ class PkSessionController:
             self._render_continuous()
 
     def _both_idle(self):
-        return (self.round_state.state == NativePkState.IDLE
-                and self.join.native_state == NativeInteractionState.READY
-                and self.rtc.future is None and not self.stopping)
+        if self.round_state.state != NativePkState.IDLE or self.stopping:
+            return False
+        return self.rtc is None or (
+                self.join.native_state == NativeInteractionState.READY
+                and self.rtc.future is None)
 
     def _continuous_requeue(self, status):
         if (
@@ -544,7 +564,7 @@ class PkSessionController:
         self.presentation.info = self.presentation.peer_uid = None
         self.presentation.ended = False
         self.presentation.render()
-        if isinstance(self.flow, PkDirectedInviteController):
+        if not isinstance(self.flow, PkMatchController):
             self.flow = PkMatchController(self.manager, self.identity,
                                           NativePkType.DOUBLE_RANDOM,
                                           waiting=self._waiting,
@@ -635,7 +655,7 @@ class PkSessionController:
 
     def disconnect(self):
         self._trace("session.disconnect.requested")
-        if self.rtc.event and not self.closed and not self.stopping:
+        if self.join_event and not self.closed and not self.stopping:
             self.round.stop_polling()
             self.exit.disconnect_business_two(self.rtc.event.biz_session_id,
                                               trace_id=self.trace_id)
@@ -645,14 +665,15 @@ class PkSessionController:
         if not self.closed:
             try:
                 self.identity_guard(self.identity)
-                self.invitations.tick()
+                if self.invitations is not None:
+                    self.invitations.tick()
                 if self.presentation.remaining_seconds() != self.presentation.remaining:
                     self.presentation.render()
                 if not self.stopping:
                     self.round.tick()
             except Exception as error:
                 self._fatal(error)
-        if self.rtc.finish_if_done():
+        if self.rtc is not None and self.rtc.finish_if_done():
             pending, self._pending_round_events = self._pending_round_events, []
             try:
                 for event in pending:
@@ -682,7 +703,7 @@ class PkSessionController:
         if self._continuous_refresh_pending and self.continuous and not self.continuous.busy:
             self._continuous_refresh_pending = False
             self._refresh_continuous()
-        if self.rtc.worker and not self.stopping:
+        if self.rtc is not None and self.rtc.worker and not self.stopping:
             facts = self.readiness(PkMode.VIDEO)
             if facts.output_ready is not True or facts.live_output_active is not True:
                 self._status(facts.reason)
@@ -692,18 +713,21 @@ class PkSessionController:
         if self.closed:
             return
         self._trace("session.close.requested", pending_jobs=self.manager.busy)
-        self.rtc.stop()
+        self._stop_rtc()
         self.closed = True
-        self.handle.retire()
+        if self.handle is not None:
+            self.handle.retire()
         self.exit.retire()
-        self.provider_readiness.cancel(self)
-        if self._owns_provider_readiness:
-            self.provider_readiness.close()
+        if self.provider_readiness is not None:
+            self.provider_readiness.cancel(self)
+            if self._owns_provider_readiness:
+                self.provider_readiness.close()
         self._exit_query_resume_pending = False
         self.presentation.clock_key = self.presentation.deadline = self.presentation.remaining = None
         self.view.set_round_info(None)
-        self.invitations.dismiss()
-        self.invitations.accepted = None
+        if self.invitations is not None:
+            self.invitations.dismiss()
+            self.invitations.accepted = None
         if self.invitation_only:
             self.view.set_invitation_waiting(False)
             self.view.dismiss_invitation()
@@ -713,7 +737,7 @@ class PkSessionController:
         self.round.close()
         # Retire in-flight precheck/match callbacks; do not start new requests
         # from an owner that no longer belongs to the UI/account.
-        if isinstance(self.flow, PkDirectedInviteController):
+        if not isinstance(self.flow, PkMatchController):
             self.flow.retire()
         else:
             self.flow.phase = PkPhase.FINISHED
@@ -722,17 +746,20 @@ class PkSessionController:
 
     @property
     def idle_invitation_listener(self):
-        return self.invitations.idle
+        return self.invitations is not None and self.invitations.idle
 
     @property
     def join_event(self):
-        return self.rtc.event
+        return self.rtc.event if self.rtc is not None else None
 
     def set_invitation_reception(self, enabled):
-        self.invitations.set_reception(enabled)
+        if self.invitations is not None:
+            self.invitations.set_reception(enabled)
 
     def answer_invitation(self, event, accept):
-        self.invitations.answer(event, accept)
+        if self.invitations is not None:
+            self.invitations.answer(event, accept)
 
     def set_publisher_muted(self, media, muted):
-        self.rtc.set_muted(media, muted)
+        if self.rtc is not None:
+            self.rtc.set_muted(media, muted)
