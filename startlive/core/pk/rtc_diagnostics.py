@@ -7,6 +7,11 @@ from OpenSSL import SSL
 
 
 def runtime_details():
+    compiler = globals().get("__compiled__")
+    compiler_version = (
+        ".".join(str(getattr(compiler, part)) for part in
+                 ("major", "minor", "micro"))
+        if compiler is not None else None)
     versions = {}
     for name in ("aiortc", "aioice", "pyOpenSSL", "cryptography", "pyee",
                  "certifi"):
@@ -19,6 +24,7 @@ def runtime_details():
         "platform": platform.system(),
         "architecture": platform.machine(),
         "compiled": "__compiled__" in globals(),
+        "nuitka": compiler_version,
         "versions": versions,
         "tls_openssl": ssl.OPENSSL_VERSION,
         "dtls_openssl": SSL.SSLeay_version(SSL.SSLEAY_VERSION).decode("ascii"),
