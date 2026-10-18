@@ -8,10 +8,10 @@ from sys import platform
 from time import perf_counter, sleep
 
 
-def _sleep_until(deadline):
+def sleep_until(deadline):
+    """Block a probe/worker thread until a perf_counter deadline."""
     # Compute remaining time in the worker, excluding executor queue latency.
-    remaining = deadline - perf_counter()
-    if remaining > 0:
+    while (remaining := deadline - perf_counter()) > 0:
         sleep(remaining)
 
 
@@ -22,7 +22,7 @@ async def wait_until(deadline):
         # Python 3.11 uses a high-resolution waitable timer for time.sleep.
         # asyncio's Windows timeout can round a sub-ms wait to a ~16 ms tick.
         # No busy loop or process-wide timer-resolution changes are needed.
-        await asyncio.to_thread(_sleep_until, deadline)
+        await asyncio.to_thread(sleep_until, deadline)
     else:
         while (remaining := deadline - perf_counter()) > 0:
             await asyncio.sleep(remaining)

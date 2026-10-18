@@ -12,7 +12,7 @@ from pathlib import Path
 from subprocess import DEVNULL, Popen, TimeoutExpired
 from tempfile import TemporaryDirectory
 from threading import Lock
-from time import monotonic, sleep
+from time import monotonic, perf_counter, sleep
 
 from startlive.core.constant.pk_encoder import (
     AMF_PRESETS,
@@ -27,6 +27,7 @@ from startlive.core.constant.pk_encoder import ENCODERS_BY_NAME
 from startlive.core.exceptions import PkError
 from startlive.core.pk.states.encoder import VideoEncodingConfig, \
     translate_preset, platform_candidates
+from .rtc_timing import sleep_until
 from .trace import pk_trace
 
 
@@ -175,16 +176,6 @@ def _av1_probe_stream(payloads):
     return bytes(result)
 
 
-def _pace_probe_frame(deadline, interval):
-    """Space actual submissions; a late frame starts a new schedule."""
-    while True:
-        now = monotonic()
-        remaining = deadline - now
-        if remaining <= 0:
-            return now + interval
-        sleep(remaining)
-
-
 def probe_encoder(name):
     """Exercise the live sender contract, including a delayed refresh request.
 
@@ -228,7 +219,7 @@ def probe_encoder(name):
     last_timestamp = -1 if is_av1 else None
     refresh_timestamp = None
     interval = 1 / plan.frame_rate
-    next_submission = monotonic()
+    next_submission = perf_counter()
     for index in range(3 * (encoder_delay_budget(plan.frame_rate) + 1)):
         frame = av.VideoFrame(plan.width, plan.height, "yuv420p")
         for plane_index, plane in enumerate(frame.planes):
@@ -239,7 +230,9 @@ def probe_encoder(name):
         force = output_count >= 2 and refresh_timestamp is None
         if force:
             refresh_timestamp = index * 90000 // plan.frame_rate
-        next_submission = _pace_probe_frame(next_submission, interval)
+        sleep_until(next_submission)
+        # Space actual submissions; a late frame starts a new schedule.
+        next_submission = perf_counter() + interval
         payloads, timestamp = encoder.encode(frame, force_keyframe=force)
         if not payloads:
             continue
