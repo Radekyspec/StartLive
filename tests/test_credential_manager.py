@@ -1,30 +1,29 @@
-from json import dumps, loads
 import unittest
+from json import dumps, loads
 from unittest.mock import patch
 
 from requests import HTTPError, RequestException
 from requests.utils import dict_from_cookiejar
 
-from src.core import app_state
-from src.core.app_state import create_session
-from src.core.constant import (
+from startlive.core import app_state
+from startlive.core.app_state import create_session
+from startlive.core.constant import (
     HeadersType,
     KEYRING_COOKIES_INDEX,
     KEYRING_SETTINGS,
     KEYRING_SERVICE_NAME,
 )
-from src.core.credentials import (
+from startlive.core.credentials import (
     CredentialStore,
     CredentialTransactionError,
 )
-from src.core.workers.base import BaseWorker
-from src.core.workers.credentials import credential_manager
-from src.core.workers.credentials.credential_manager import (
+from startlive.core.workers.base import BaseWorker
+from startlive.core.workers.credentials import credential_manager
+from startlive.core.workers.credentials.credential_manager import (
     CredentialManagerWorker,
     CredentialValidationError,
 )
 from tests.helpers import FakeKeyring
-
 
 SERVICE = KEYRING_SERVICE_NAME
 INDEX = KEYRING_COOKIES_INDEX

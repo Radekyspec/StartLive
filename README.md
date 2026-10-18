@@ -54,6 +54,7 @@ With pip:
 
 ```shell
 python -m pip install startlive
+python -m pip install startlive[pk]  # if you want to use the bilibili pk feature
 startlive
 python -m pip install --upgrade startlive
 ```
@@ -105,6 +106,7 @@ python -m venv venv
 
 ```shell
 .\venv\Scripts\pip.exe install -e .
+.\venv\Scripts\pip.exe install -e ".[pk]"  # if you want to use the bilibili pk feature
 .\venv\Scripts\python.exe .\StartLive.py
 ```
 
@@ -112,6 +114,7 @@ python -m venv venv
 
 ```shell
 ./venv/bin/pip install -e .
+./venv/bin/pip install -e ".[pk]"  # if you want to use the bilibili pk feature
 ./venv/bin/python ./StartLive.py
 ```
 

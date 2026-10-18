@@ -53,6 +53,7 @@ uv tool upgrade startlive
 
 ```shell
 python -m pip install startlive
+python -m pip install startlive[pk]  # 如果需要使用pk功能
 startlive
 python -m pip install --upgrade startlive
 ```
@@ -71,8 +72,6 @@ Windows 的配置和日志保存在 `%LOCALAPPDATA%/StartLive` 下，
 ## 使用方法
 
 [点我查看教程（腾讯文档）](https://docs.qq.com/doc/DTHVMdkhtUWJjRFhv?scene=4edcd4a61e4d506148e0f879bN4Lu1)
-
-## 从源代码运行/开发
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Radekyspec/StartLive)
 
@@ -98,6 +97,7 @@ python -m venv venv
 
 ```shell
 .\venv\Scripts\pip.exe install -e .
+.\venv\Scripts\pip.exe install -e ".[pk]"  # 如果需要使用pk功能
 .\venv\Scripts\python.exe .\StartLive.py
 ```
 
@@ -105,6 +105,7 @@ python -m venv venv
 
 ```shell
 ./venv/bin/pip install -e .
+./venv/bin/pip install -e ".[pk]"  # 如果需要使用pk功能
 ./venv/bin/python ./StartLive.py
 ```
 

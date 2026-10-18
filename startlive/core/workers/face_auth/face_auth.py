@@ -1,0 +1,67 @@
+# module import
+from time import sleep
+from typing import Callable
+
+# local package import
+from startlive.core import app_state
+from startlive.core.constant import FaceAuthType, HeadersType
+# package import
+from startlive.core.log import get_logger
+from startlive.core.sign import gen_dm_track
+from startlive.core.workers.base import LongLiveWorker, Presenter
+
+
+class FaceAuthWorker(LongLiveWorker):
+    def __init__(self, presenter: Presenter, /, auth_type: FaceAuthType):
+        super().__init__(name="人脸认证", presenter=presenter,
+                         headers_type=HeadersType.WEB if auth_type == FaceAuthType.V2 else HeadersType.APP)
+        self._auth_type = auth_type
+        self.logger = get_logger(self.__class__.__name__)
+
+    def run(self, report_progress: Callable | None, *args, **kwargs):
+        if self._auth_type == FaceAuthType.V2:
+            return self._face_auth_v2_precheck()
+
+        url = "https://api.live.bilibili.com/xlive/app-blink/v1/preLive/IsUserIdentifiedByFaceAuth"
+        verify_data = {
+            "room_id": app_state.room_info["room_id"],
+            "face_auth_code": "60024",
+            "csrf_token": app_state.cookies_dict["bili_jct"],
+            "csrf": app_state.cookies_dict["bili_jct"],
+            "visit_id": "",
+        }
+        while self.is_running:
+            self.logger.info("IsUserIdentifiedByFaceAuth Request")
+            response = self._session.post(url, data=verify_data)
+            response.encoding = "utf-8"
+            self.logger.info("IsUserIdentifiedByFaceAuth Response")
+            response = response.json()
+            self.logger.info(f"IsUserIdentifiedByFaceAuth Result: {response}")
+            if response["data"] and response["data"]["is_identified"]:
+                # auth complete
+                return 0
+            sleep(1)
+        return -1
+
+    def _face_auth_v2_precheck(self):
+        url = "https://api.bilibili.com/x/gaia-vgate/v2/validatePreCheck"
+        verify_params = {
+            "token": app_state.stream_status.face_voucher,
+            "dm_track": gen_dm_track(),
+            "csrf": app_state.cookies_dict["bili_jct"]
+        }
+        while self.is_running:
+            self.logger.info("validatePreCheck Request")
+            response = self._session.post(url, data=verify_params)
+            self.logger.info("validatePreCheck Response")
+            response.encoding = "utf-8"
+            response = response.json()
+            self.logger.info(f"validatePreCheck Result: {response}")
+            if response["data"] and response["data"]["status"] == 1:
+                # auth complete
+                return 1
+            elif response["data"] and response["data"]["status"] >= 2:
+                # auth timeout / failed
+                return 2
+            sleep(1)
+        return -1

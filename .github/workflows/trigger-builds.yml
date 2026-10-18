@@ -1,4 +1,4 @@
-name: Trigger Builds
+name: Trigger Binary Builds
 
 on:
   workflow_dispatch:

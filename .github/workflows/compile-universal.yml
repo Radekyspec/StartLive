@@ -3,14 +3,14 @@ name: Compile universal binaries
 on:
   push:
     branches:
-      - "master"
+      - "dev"
   workflow_dispatch:
 
 jobs:
   build:
     strategy:
       matrix:
-        os: [ windows-latest, macos-15-intel, macos-latest ]
+        os: [ windows-2025-vs2026, macos-15-intel, macos-15 ]
 
     runs-on: ${{ matrix.os }}
 
@@ -28,7 +28,7 @@ jobs:
           import os
           import sys
           sys.path.insert(0, '.')
-          from src.core.constant._version import __version__
+          from startlive.core.constant._version import __version__
           with open(os.environ['GITHUB_ENV'], 'a') as env_file:
               env_file.write(f'VERSION={__version__}\n')
 
@@ -46,13 +46,14 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v7
-        if: matrix.os != 'macos-latest'
+        if: matrix.os != 'macos-15'
         with:
           python-version: '3.14.6' # Version range or exact version of a Python version to use, using SemVer's version range syntax
           architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
           cache: 'pip'
           cache-dependency-path: |
             **/requirements*.txt
+            pyproject.toml
 
       - name: Setup Python for ARM
         uses: actions/setup-python@v7
@@ -62,14 +63,15 @@ jobs:
           cache: 'pip'
           cache-dependency-path: |
             **/requirements*.txt
-        if: matrix.os == 'macos-latest'
+            pyproject.toml
+        if: matrix.os == 'macos-15'
 
       - name: Install Dependencies
         run: |
-          pip install -r requirements.txt
+          python -m pip install ".[pk]"
 
       - name: Install ImageIO for Mac
-        if: matrix.os != 'windows-latest'
+        if: runner.os == 'macOS'
         run: |
           pip install imageio
 
@@ -77,8 +79,11 @@ jobs:
         run: |
           python tools/write_version.py
 
+      - name: Build OBS PK plugin
+        uses: ./.github/actions/build-obs-pk
+
       - name: Download UPX (Windows)
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $zip = "$env:RUNNER_TEMP\upx.zip"
@@ -90,55 +95,105 @@ jobs:
           echo "$env:UPX_DIR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build Executable for Windows
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         uses: Nuitka/Nuitka-Action@main
         with:
-          nuitka-version: main
+          # 4.3.1 breaks OpenSSL private-key conversion in compiled RTC.
+          nuitka-version: '4.2.2'
+          update-check: never
           script-name: StartLive.py
           # mingw64: true
           msvc: latest
           mode: app
+          output-dir: build
+          report: build/nuitka-report.xml
           # enable-plugins: pyside6,upx
           enable-plugins: pyside6
+          # Let aiortc imports and Nuitka's PyAV rules collect av. Forcing the
+          # whole package scans its .py/native module pairs twice in 4.2.2.
+          include-package: |
+            startlive.core.pk
+            aiortc
+            aioice
+          # Distribution metadata options are declared in StartLive.py.
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
           file-version: ${{ env.VERSION }}
-          windows-icon-from-ico: "resources/icon_left.ico"
+          windows-icon-from-ico: "startlive/resources/icon_left.ico"
           windows-console-mode: "disable"
-          include-data-dir: "resources=resources"
           noinclude-data-files: |
-            "resources/version.json"
-            "resources/icon_left_macOS.ico"
+            resources/version.json
+            resources/icon_left_macOS.ico
+          # Keep the DLL inside the onefile payload, beside the other resources.
+          include-raw-dir: startlive/resources=resources
           # onefile-no-compression: true
           # upx-disable-cache: true
           deployment: true
 
       - name: Build Executable for Mac
         uses: Nuitka/Nuitka-Action@main
-        if: matrix.os != 'windows-latest'
+        if: runner.os == 'macOS'
         with:
-          nuitka-version: main
+          # Keep Windows and macOS on the same verified RTC compiler.
+          nuitka-version: '4.2.2'
+          update-check: never
           script-name: StartLive.py
           mode: app
+          output-dir: build
+          report: build/nuitka-report.xml
           enable-plugins: pyside6
+          # Let aiortc imports and Nuitka's PyAV rules collect av. Forcing the
+          # whole package scans its .py/native module pairs twice in 4.2.2.
+          include-package: |
+            startlive.core.pk
+            aiortc
+            aioice
+          # Distribution metadata options are declared in StartLive.py.
           company-name: "Radekyspec"
           product-name: "StartLive开播器"
           file-description: "StartLive开播器"
           file-version: ${{ env.VERSION }}
           macos-app-version: ${{ env.VERSION }}
-          macos-app-icon: "resources/icon_left_macOS.ico"
+          macos-app-icon: "startlive/resources/icon_left_macOS.ico"
           macos-signed-app-name: "com.radekyspec.startlive"
-          include-data-dir: "resources=resources"
-          noinclude-data-files: "resources/version.json"
+          noinclude-data-files: resources/version.json
+          # Preserve the whole OBS bundle without relocating its OBS/Qt dependencies.
+          include-raw-dir: startlive/resources=resources
           deployment: true
 
-      - name: Upload Artifacts
+      - name: Sign the bundled OBS plugin and refresh the app signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          codesign --force --sign - --timestamp=none \
+            build/StartLive.app/Contents/MacOS/resources/obs-startlive-pk.plugin
+          codesign --force --sign - --timestamp=none \
+            --preserve-metadata=entitlements,identifier,flags build/StartLive.app
+
+      - name: Archive macOS app with executable permissions and symbolic links
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          ARTIFACT_NAME: StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+        run: ditto -c -k --sequesterRsrc --keepParent build/StartLive.app "build/$ARTIFACT_NAME.zip"
+
+      - name: Upload macOS Artifacts
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v7
+        with:
+          # With archive disabled, the filename determines the artifact name.
+          path: build/StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-${{ runner.arch }}.zip
+          archive: false
+          if-no-files-found: error
+
+      - name: Upload Windows Artifacts
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
           name: StartLive-v${{ env.APP_VERSION }}-${{ runner.os }}-${{ runner.arch }}
           path: |
             build/*.exe
             build/*.bin
-            build/*.app/**/*
           include-hidden-files: true

@@ -1,0 +1,51 @@
+from platform import system
+from typing import Callable
+
+from PySide6.QtCore import QObject, Signal, Slot
+
+from startlive.PySide.log import get_logger
+from startlive.core import runtime
+
+
+class VelopackUpdateWorker(QObject):
+    update_downloaded = Signal(object, object)
+    failed = Signal(str)
+    finished = Signal()
+
+    def __init__(self, update_url: str, progress: Callable) -> None:
+        super().__init__()
+        self._update_url = update_url
+        self.logger = get_logger(self.__class__.__name__)
+        self._progress = progress
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            if runtime.package_managed:
+                self.logger.info(
+                    "Automatic updates are disabled for Python package installs; "
+                    "use uv tool upgrade startlive or pip install --upgrade startlive."
+                )
+                return
+            if system() == "Linux":
+                self.logger.info(
+                    "Automatic updates are disabled on Linux; "
+                    "use the system package manager instead."
+                )
+                return
+
+            from velopack import UpdateManager
+
+            manager = UpdateManager(self._update_url)
+            update_info = manager.check_for_updates()
+            if update_info is None:
+                return
+
+            # 此操作可能耗时，因此放在后台线程。
+            manager.download_updates(update_info, self._progress)
+            self.update_downloaded.emit(manager, update_info)
+        except Exception as exc:
+            self.logger.exception("Velopack update failed")
+            self.failed.emit(str(exc))
+        finally:
+            self.finished.emit()

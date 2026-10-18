@@ -6,3 +6,6 @@ venv/
 build/
 dist/
 .pypi-check/
+analysis/
+.analysis-tools/
+.superpowers/

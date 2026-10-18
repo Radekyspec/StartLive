@@ -1,5 +1,14 @@
 # -*- coding: utf-8 -*-
 
+# PK version checks require distribution metadata in compiled builds.
+# nuitka-project: --include-distribution-metadata=aiortc
+# nuitka-project: --include-distribution-metadata=aioice
+# nuitka-project: --include-distribution-metadata=pyOpenSSL
+# nuitka-project: --include-distribution-metadata=cryptography
+# nuitka-project: --include-distribution-metadata=pyee
+# nuitka-project: --include-distribution-metadata=certifi
+# nuitka-project: --include-package-data=certifi
+
 import sys
 from argparse import ArgumentParser, SUPPRESS
 from pathlib import Path
@@ -24,7 +33,7 @@ def _run_velopack_hooks() -> None:
 
 
 def main() -> int:
-    from src.core.constant import VERSION
+    from startlive.core.constant import VERSION
 
     parser = ArgumentParser(prog="startlive")
     parser.add_argument("--version", action="version",
@@ -66,9 +75,9 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication
     from qdarktheme import enable_hi_dpi
 
-    from src.PySide.classes import ErrorCenter, install_exception_handlers
-    from src.PySide.window import MainWindow
-    from src.core import app_state
+    from startlive.PySide.classes import ErrorCenter, install_exception_handlers
+    from startlive.PySide.window import MainWindow
+    from startlive.core import app_state
 
     if MainWindow.is_another_instance_running():
         return 0
@@ -84,8 +93,11 @@ def main() -> int:
 
     enable_hi_dpi()
     app = QApplication([sys.argv[0], *qt_args])
-    # %LocalAppData%/StartLive in velopack and squirrel.windows
+    # %LocalAppData%/StartLive/current/ in velopack and
+    # %LocalAppData%/StartLive/app-x.y.z/ in squirrel.windows
     base_path = Path(__file__).resolve().parent
+    if (base_path / "startlive").is_dir():
+        base_path = base_path / "startlive"
     app.setWindowIcon(
         QIcon(str(base_path / "resources" / icon_file))
     )
@@ -127,7 +139,7 @@ def main() -> int:
 
 def cli() -> int:
     """Entry point for installations managed by pip or uv tool."""
-    from src.core import cache, runtime
+    from startlive.core import cache, runtime
 
     runtime.package_managed = True
     cache._cache_dir.clear()
@@ -135,6 +147,12 @@ def cli() -> int:
 
 
 if __name__ == "__main__":
+    # 编码器检测子进程，不执行 Velopack 钩子，不初始化 Qt
+    if len(sys.argv) > 1 and sys.argv[1] == "--pk-encoder-probe":
+        from startlive.core.pk.encoder_probe_child import probe_main
+
+        sys.exit(probe_main(sys.argv[2:]))
+
     # 必须在单实例检查、Qt 初始化和其他正常启动逻辑之前运行。
     # 安装、更新或卸载期间，Velopack 可能在这里直接终止进程。
     _run_velopack_hooks()

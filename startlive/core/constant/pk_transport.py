@@ -1,0 +1,1 @@
+VERIFIED_RELAY_TRANSPORTS = frozenset({0, 1, 2})

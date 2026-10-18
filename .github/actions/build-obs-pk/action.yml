@@ -1,0 +1,120 @@
+name: Build OBS PK plugin
+description: Build against OBS 28.0.0 and Qt 6.3.1 and stage the plugin in startlive/resources
+
+runs:
+  using: composite
+  steps:
+    - name: Check out OBS 28.0.0 SDK source
+      uses: actions/checkout@v7
+      with:
+        repository: obsproject/obs-studio
+        ref: '28.0.0'
+        # Bundled plugins are disabled; none of the submodules are needed.
+        persist-credentials: false
+        path: build/obs-sdk-source
+
+    - name: Install pinned CMake
+      shell: bash
+      run: python -m pip install cmake==4.2.3
+
+    - name: Cache OBS 28 dependency archives
+      uses: actions/cache@v4
+      with:
+        path: build/obs-pk-downloads
+        key: obs-pk-deps-2022-08-02-${{ runner.os }}-${{ runner.arch }}-v1
+
+    - name: Prepare OBS 28 dependencies and Qt 6.3.1
+      shell: bash
+      run: python tools/prepare_obs_pk_deps.py --os '${{ runner.os }}' --arch '${{ runner.arch }}'
+
+    - name: Build and stage Windows plugin
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        # windows-2025-vs2026 includes v142 and this Windows SDK. Qt 6.3.1
+        # uses stdext APIs removed from the latest MSVC standard library.
+        $VsRoot = "$env:ProgramFiles/Microsoft Visual Studio/18/Enterprise"
+        if (-not (Test-Path "$VsRoot/VC/Tools/MSVC/14.29.30133/bin/Hostx64/x64/cl.exe")) {
+          throw 'The pinned runner must provide MSVC v142 (14.29.30133)'
+        }
+        $VsConfigureArgs = @(
+          '-G', 'Visual Studio 18 2026', '-A', 'x64,version=10.0.26100.0',
+          '-T', 'v142,version=14.29.30133,host=x64',
+          "-DCMAKE_GENERATOR_INSTANCE=$VsRoot"
+        )
+        $ObsSource = "$env:GITHUB_WORKSPACE/build/obs-sdk-source"
+        $ObsBuild = "$env:GITHUB_WORKSPACE/build/obs-sdk-build"
+        $ObsSdk = "$env:GITHUB_WORKSPACE/build/obs-sdk"
+        $ObsDeps = "$env:GITHUB_WORKSPACE/build/obs-pk-deps"
+        $PluginBuild = "$env:GITHUB_WORKSPACE/build/obs-pk"
+        $PluginStage = "$env:GITHUB_WORKSPACE/build/obs-pk-install"
+
+        # OBS 28 uses obs_libraries, not the newer Development component.
+        # Its bundled Jansson needs the policy floor when using CMake 4.
+        python -m cmake -S $ObsSource -B $ObsBuild @VsConfigureArgs `
+          "-DOBS_VERSION_OVERRIDE=28.0.0" "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
+          -DENABLE_UI=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF `
+          "-DCMAKE_PREFIX_PATH=$ObsDeps" "-DCMAKE_INSTALL_PREFIX=$ObsSdk"
+        if ($LASTEXITCODE -ne 0) { throw 'OBS SDK configure failed' }
+        python -m cmake --build $ObsBuild --config Release --target libobs obs-frontend-api --parallel
+        if ($LASTEXITCODE -ne 0) { throw 'OBS SDK build failed' }
+        python -m cmake --install $ObsBuild --config Release --component obs_libraries --prefix $ObsSdk
+        if ($LASTEXITCODE -ne 0) { throw 'OBS SDK install failed' }
+
+        python -m cmake -S plugins/obs-startlive-pk -B $PluginBuild @VsConfigureArgs `
+          "-DCMAKE_PREFIX_PATH=$ObsSdk;$ObsDeps"
+        if ($LASTEXITCODE -ne 0) { throw 'OBS PK configure failed' }
+        python -m cmake --build $PluginBuild --config Release --parallel
+        if ($LASTEXITCODE -ne 0) { throw 'OBS PK build failed' }
+        python -m cmake --install $PluginBuild --config Release --prefix $PluginStage
+        if ($LASTEXITCODE -ne 0) { throw 'OBS PK install failed' }
+        Copy-Item -LiteralPath "$PluginStage/obs-plugins/64bit/obs-startlive-pk.dll" -Destination startlive/resources/obs-startlive-pk.dll -Force
+
+    - name: Select pinned Xcode
+      if: runner.os == 'macOS'
+      shell: bash
+      run: echo 'DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer' >> "$GITHUB_ENV"
+
+    - name: Build and stage macOS plugin
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        OBS_SRC="$GITHUB_WORKSPACE/build/obs-sdk-source"
+        OBS_BUILD="$GITHUB_WORKSPACE/build/obs-sdk-build"
+        OBS_SDK="$GITHUB_WORKSPACE/build/obs-sdk"
+        OBS_DEPS="$GITHUB_WORKSPACE/build/obs-pk-deps"
+        PK_BUILD="$GITHUB_WORKSPACE/build/obs-pk"
+        case "$RUNNER_ARCH" in
+          X64) PK_ARCH=x86_64; PK_MACOS_TARGET=10.15 ;;
+          ARM64) PK_ARCH=arm64; PK_MACOS_TARGET=11.0 ;;
+          *) echo "Unsupported macOS architecture: $RUNNER_ARCH" >&2; exit 1 ;;
+        esac
+        python -m cmake -S "$OBS_SRC" -B "$OBS_BUILD" -G Xcode \
+          -DOBS_VERSION_OVERRIDE=28.0.0 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+          "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" "-DCMAKE_OSX_DEPLOYMENT_TARGET=$PK_MACOS_TARGET" \
+          -DCMAKE_OSX_SYSROOT=macosx15.5 -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+          -DOBS_CODESIGN_LINKER=OFF \
+          -DENABLE_UI=OFF -DENABLE_PLUGINS=OFF -DENABLE_SCRIPTING=OFF \
+          "-DCMAKE_PREFIX_PATH=$OBS_DEPS" "-DCMAKE_INSTALL_PREFIX=$OBS_SDK"
+        python -m cmake --build "$OBS_BUILD" --config Release \
+          --target libobs obs-frontend-api --parallel
+        python -m cmake --install "$OBS_BUILD" --config Release \
+          --component obs_libraries --prefix "$OBS_SDK"
+        # OBS 28's macOS export overwrites this target's PUBLIC_HEADER with
+        # obs-frontend-api_EXPORT.h; restore the public API header in the SDK.
+        install -m 644 "$OBS_SRC/UI/obs-frontend-api/obs-frontend-api.h" "$OBS_SDK/include/obs/obs-frontend-api.h"
+
+        python -m cmake -S plugins/obs-startlive-pk -B "$PK_BUILD" -G Xcode \
+          "-DCMAKE_OSX_ARCHITECTURES=$PK_ARCH" "-DCMAKE_OSX_DEPLOYMENT_TARGET=$PK_MACOS_TARGET" \
+          -DCMAKE_OSX_SYSROOT=macosx15.5 -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+          "-DCMAKE_PREFIX_PATH=$OBS_SDK;$OBS_SDK/Frameworks;$OBS_DEPS" \
+          "-Dlibobs_DIR=$OBS_SDK/Frameworks/libobs.framework/Resources/cmake" \
+          "-Dobs-frontend-api_DIR=$OBS_SDK/lib/cmake/obs-frontend-api"
+        python -m cmake --build "$PK_BUILD" --config Release --parallel
+        python -m cmake --install "$PK_BUILD" --config Release --prefix "$GITHUB_WORKSPACE/startlive/resources"
+        PK_BUNDLE="$GITHUB_WORKSPACE/startlive/resources/obs-startlive-pk.plugin"
+        test -f "$PK_BUNDLE/Contents/Info.plist"
+        test -f "$PK_BUNDLE/Contents/MacOS/obs-startlive-pk"
+        lipo "$PK_BUNDLE/Contents/MacOS/obs-startlive-pk" -verify_arch "$PK_ARCH"

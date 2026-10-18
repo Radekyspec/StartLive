@@ -41,13 +41,15 @@ def main():
         if entrypoints["console_scripts"]["startlive"] != "StartLive:cli":
             raise ValueError("Missing startlive command")
         required = {
-            "StartLive.py", "src/core/runtime.py",
-            "src/core/constant/_version.py", "src/PySide/window/main_window.py",
-            "resources/icon_left.ico", "resources/icon_left_macOS.ico",
-            "resources/version.json",
+            "StartLive.py", "startlive/core/runtime.py",
+            "startlive/core/constant/_version.py",
+            "startlive/PySide/window/main_window.py",
+            "startlive/resources/icon_left.ico",
+            "startlive/resources/icon_left_macOS.ico",
+            "startlive/resources/version.json",
         }
         required.update(
-            f"resources/{theme}-{icon}.svg"
+            f"startlive/resources/{theme}-{icon}.svg"
             for theme in ("dark", "light")
             for icon in ("home", "log", "menu", "settings", "theme")
         )
@@ -95,12 +97,12 @@ def main():
         run(str(python), "-I", "-c", """
 from pathlib import Path
 import StartLive
-from src.core import cache, runtime
-from src.core.constant import CacheType
+from startlive.core import cache, runtime
+from startlive.core.constant import CacheType
 runtime.package_managed = True
 root = Path(StartLive.__file__).parent
-assert (root / "resources" / "icon_left.ico").is_file()
-assert (root / "resources" / "dark-home.svg").is_file()
+assert (root / "startlive" / "resources" / "icon_left.ico").is_file()
+assert (root / "startlive" / "resources" / "dark-home.svg").is_file()
 assert not cache.cache_base_dir(CacheType.CONFIG).is_relative_to(root)
 """, cwd=directory, env=env)
     print(
