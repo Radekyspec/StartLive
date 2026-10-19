@@ -106,8 +106,18 @@ class PkRoundState:
         if not self._type_allowed(info):
             return self._decision(PkInfoAction.BLOCKED, info,
                                   "尚未确认此 PK 类型的状态映射")
-        if self.state == NativePkState.IDLE and basic.status >= 1001:
-            return self._decision(PkInfoAction.IGNORED, info, "idle_terminal")
+        if self.state == NativePkState.IDLE:
+            # A post-terminal current-state query can still return a late
+            # 401/404/1001 snapshot for the round we just ended. Accepting it
+            # revives Freezing and leaves the UI stuck in "PK 进行中"; the
+            # round ID is the durable boundary. A different pk_id is a new
+            # round and remains admissible.
+            if basic.pk_id and basic.pk_id == self.last_ended_round_id:
+                return self._decision(PkInfoAction.IGNORED, info,
+                                      "already_ended")
+            if basic.status >= 1001:
+                return self._decision(PkInfoAction.IGNORED, info,
+                                      "idle_terminal")
         previous = self.state
         self.info, self.timestamp = info, info.timestamp
         # Contract25: accepted common DTO replaces current kind. Request intent

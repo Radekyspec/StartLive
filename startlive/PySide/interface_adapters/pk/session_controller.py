@@ -529,7 +529,11 @@ class PkSessionController:
                                 rtc_started=self.rtc.future is not None)
             elif isinstance(event, (PkBattlePreEvent, PkBattleStartEvent)):
                 if self.round_state.kind == NativePkType.DOUBLE_CLASSIC and event.pk_id:
-                    if self.round_state.round_id in (0, event.pk_id):
+                    if event.pk_id == self.round_state.last_ended_round_id:
+                        self._trace("session.push.ignored", command=command,
+                                    reason="already_ended",
+                                    event_pk_id=event.pk_id)
+                    elif self.round_state.round_id in (0, event.pk_id):
                         self.round_state.round_id = event.pk_id
                         self.round.query_classic(event.pk_id)
                     else:
