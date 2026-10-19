@@ -1,7 +1,6 @@
 from typing import Any, Callable, Mapping
 
 # package import
-from keyring import get_password, delete_password
 from requests import RequestException
 from requests.cookies import cookiejar_from_dict
 
@@ -10,6 +9,7 @@ from startlive.core import app_state
 from startlive.core.constant import *
 from startlive.core.constant import HeadersType
 from startlive.core.credentials import CredentialStore
+from startlive.core.credentials.backend import get_password, delete_password
 from startlive.core.exceptions import (
     CredentialRecordCorruptedError,
     CredentialTransactionError,

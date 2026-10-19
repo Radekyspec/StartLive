@@ -39,7 +39,7 @@ Velopack 更新器，因此无需单独安装 Velopack。
 
 ### 从 PyPI 安装
 
-需要 Python 3.11–3.14、桌面环境以及可用的系统 keyring 后端。
+需要 Python 3.11–3.14 和桌面环境。记住登录凭据需要可用的系统 keyring 后端。
 
 使用 uv 安装、启动和更新：
 
@@ -65,6 +65,17 @@ Windows 的配置和日志保存在 `%LOCALAPPDATA%/StartLive` 下，
 
 维护者请参阅[PyPI 发布指南](publishing.md)
 
+### Debian / 云桌面的临时登录模式
+
+Linux 未检测到系统密钥环或 keyring 已禁用时，StartLive 会把登录凭据和 OBS 密码保存在
+本次进程的内存中，并在状态栏提示临时登录模式。扫码登录、账号切换和 OBS
+连接仍可使用；退出后需要重新登录并重新输入 OBS 密码。非敏感偏好设置照常保存。
+
+如需在 Debian 上记住登录，安装 `gnome-keyring` 和 `dbus-user-session`，
+在具有 D-Bus 会话且密钥环已解锁的桌面中启动 StartLive。配置完成后重启应用。
+已有系统密钥环记录会保留，临时凭据不会写入明文文件。已选用的系统密钥环
+之后发生故障时仍会正常报错，避免把暂时无法访问的已保存账号误当成空账号列表。
+
 ## 软件截图
 
 ![2bf8d9d51186e774903b6cd26831f355](https://github.com/user-attachments/assets/974b0dbb-fcd5-4b26-be76-42db728b8942)
@@ -81,7 +92,7 @@ Windows 的配置和日志保存在 `%LOCALAPPDATA%/StartLive` 下，
 * `Python 3.14.6` 经测试可用, 推荐使用`3.12.10`
 * 桌面端环境
 * `PySide6 (Qt for Python)` [支持的架构](https://wiki.qt.io/Qt_for_Python)
-* 受 [keyring](https://pypi.org/project/keyring/) 支持的密钥后端存储服务
+* 记住登录凭据需要受 [keyring](https://pypi.org/project/keyring/) 支持的密钥后端存储服务（Linux 下可选）
   - 在 `Windows` 上通常为系统自带的 [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)
   - 在 `macOS` 上通常为系统自带的 [Keychain钥匙串](https://en.wikipedia.org/wiki/Keychain_%28software%29)
 

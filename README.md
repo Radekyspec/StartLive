@@ -40,7 +40,8 @@ paru -S startlive-git
 
 ### Install from PyPI
 
-Requires Python 3.11–3.14, a desktop environment and a supported system keyring.
+Requires Python 3.11–3.14 and a desktop environment. A supported system keyring
+is needed to remember login credentials between runs.
 
 With uv:
 
@@ -72,6 +73,21 @@ Supported Linux installations are managed and updated through the system
 package manager. The in-app Velopack updater is disabled on Linux, so Velopack
 does not need to be installed separately.
 
+### Minimal Linux desktops (Debian / cloud desktops)
+
+When Linux has no keyring backend, or keyring is disabled, StartLive keeps login
+credentials and OBS passwords in memory for the current process. The status bar identifies
+this temporary login mode. You can scan the login QR code, switch accounts and
+use OBS normally, but must log in again and re-enter the OBS password after
+exiting. Non-secret preferences continue to be saved normally.
+
+To enable remembered logins on Debian, install `gnome-keyring` and
+`dbus-user-session`, then run StartLive in a desktop D-Bus session with an
+unlocked keyring. Restart StartLive after configuring the keyring. Existing
+system-keyring records are preserved; temporary credentials are never written
+to a plaintext file. Errors from an already selected persistent backend are
+reported normally so temporary service failures cannot discard saved accounts.
+
 ## Screenshots
 
 ![2bf8d9d51186e774903b6cd26831f355](https://github.com/user-attachments/assets/974b0dbb-fcd5-4b26-be76-42db728b8942)
@@ -90,7 +106,8 @@ does not need to be installed separately.
 - Tested on **Python 3.14.6**; **Python 3.12.10** recommended
 - Desktop environment
 - `PySide6 (Qt for Python)` [supported platforms/architectures](https://wiki.qt.io/Qt_for_Python)
-- A keyring backend supported by the [`keyring`](https://pypi.org/project/keyring/) package  
+- A keyring backend supported by the [`keyring`](https://pypi.org/project/keyring/) package
+  for remembered logins (optional on Linux)
   - On **Windows**: typically the built-in [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)  
   - On **macOS**: typically the system `Keychain`  
 
