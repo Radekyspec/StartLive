@@ -46,7 +46,6 @@ class PkRoomInfoController:
         self.identity_guard(self.identity)
         self.busy = True
         self.next_poll = self.clock() + (self.poll_interval or 0)
-        worker = None
         request = {"biz_session_id": self.session.biz_session_id,
                    "room_id": str(self.identity.room_id)}
         try:

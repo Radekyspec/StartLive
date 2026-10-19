@@ -42,7 +42,7 @@ class PkLinkPanelWorker(PkRequestWorker):
     """Prepare the verified 1v1 panel using the shared request transport."""
     operation = "layout_data"
 
-    def __init__(self, presenter, identity, /, search="", *, page=1):
+    def __init__(self, presenter, identity, /):
         super().__init__(presenter, identity, fields={})
 
     def run(self, report_progress, *args, **kwargs):

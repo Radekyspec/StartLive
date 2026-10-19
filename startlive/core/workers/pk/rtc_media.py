@@ -60,7 +60,8 @@ class RtcMediaWorker(LongLiveWorker):
         self.identity_guard(self.identity)
         return True
 
-    async def _set_muted(self, media, command, report):
+    @staticmethod
+    async def _set_muted(media, command, report):
         try:
             state = await media.set_muted(command.media, command.muted,
                                           signal=command.signal,

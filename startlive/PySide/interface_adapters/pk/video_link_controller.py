@@ -24,7 +24,7 @@ class PkVideoLinkController:
         self.list_busy = self.list_again = False
         self.attempt = RequestAttempt()
 
-    def invite(self, candidate, *, trace_id=""):
+    def invite(self, candidate):
         self.candidate = candidate
         self.phase = PkPhase.INVITING
         self.connecting_request = True

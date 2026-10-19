@@ -35,8 +35,8 @@ class PkRoundState:
     def _type_allowed(self, info):
         mapped = pk_type_from_server(info.basic.type, info.basic.sub_type)
         return mapped is not None and (
-                    self.accepts_type is None or self.accepts_type(
-                info.basic) is True)
+                self.accepts_type is None or self.accepts_type(
+            info.basic) is True)
 
     def _idle_allowed(self, info):
         if self.start_state_provider is not None:
@@ -112,7 +112,7 @@ class PkRoundState:
         self.flag3d0_unknown = basic.status in (301, 501, 602)
         action = PkInfoAction.UPDATED
         statuses = STATUS_STATES if info.legacy else VIDEO_STATUS_STATES
-        if (basic.status >= 1001 if info.legacy else basic.status == 1401):
+        if basic.status >= 1001 if info.legacy else basic.status == 1401:
             action = PkInfoAction.ROUND_ENDED
         elif basic.status == 0:
             if info.match.match_status == 0:

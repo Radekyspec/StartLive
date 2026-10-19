@@ -243,7 +243,7 @@ def _load_settings(name: SettingsName):
             state.update(
                 {key: values[key] for key in state.keys() if key in values})
     except (OSError, UnicodeError, ValueError, TypeError, KeyError,
-            KeyringError) as error:
+            KeyringError):
         _settings_logger.warning("Could not load %s settings", name,
                                  exc_info=True)
         return

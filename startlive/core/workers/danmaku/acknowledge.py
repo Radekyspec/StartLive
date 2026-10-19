@@ -1,9 +1,9 @@
 """Keep HTTP sequence acknowledgements off the socket/heartbeat thread."""
 from queue import Empty, Full, Queue
 
-from startlive.core.exceptions import DanmakuAuthenticationError, DanmakuError
 from startlive.core.danmaku.api import DanmakuApi
 from startlive.core.danmaku.identity import require_current_identity
+from startlive.core.exceptions import DanmakuAuthenticationError, DanmakuError
 from startlive.core.workers.base import LongLiveWorker
 
 
@@ -19,7 +19,7 @@ class DanmakuAckWorker(LongLiveWorker):
         # Overflow fails the submitting push worker instead of losing ACKs.
         self._pending = Queue(maxsize=256)
 
-    def enqueue(self, identity, queue_uuid, sequences):
+    def enqueue(self, identity, sequences):
         """Pass this directly as DanmakuWorker.sequence_ack.
 
         queue_uuid is context metadata; the confirmed HTTP form has no such

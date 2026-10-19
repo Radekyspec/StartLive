@@ -13,15 +13,15 @@ from av.codec.codec import UnknownCodecError
 from av.error import FFmpegError
 from av.video.reformatter import VideoReformatter
 
+from startlive.core.constant.pk_video import MAX_ENCODER_LATENCY_SECONDS
+from startlive.core.exceptions import PkError
+from startlive.core.pk.states.encoder import VideoEncodingConfig
+from startlive.core.pk.states.video_publication import VideoPublication
+from startlive.core.pk.video_encoder_config import configured_plan
 from .rtc_h264 import source_capability, validate_encoder_sps
 from .rtc_video_pacer import configure_video_pacing
 from .trace import pk_trace
 from .video_encoder_backend import encoder_attempts, make_video_context
-from startlive.core.pk.states.encoder import VideoEncodingConfig
-from startlive.core.pk.states.video_publication import VideoPublication
-from startlive.core.constant.pk_video import MAX_ENCODER_LATENCY_SECONDS
-from startlive.core.exceptions import PkError
-from startlive.core.pk.video_encoder_config import configured_plan
 
 
 # Live output must make progress within a quarter-second of submitted media.
@@ -277,7 +277,7 @@ class PkH264Encoder(PkVideoEncoder):
     def _parameters(limits):
         return {"profile-level-id": limits.profile_level_id}
 
-    def _split_picture(self, data, keyframe, frame, plan, limits):
+    def _split_picture(self, data, frame, plan, limits):
         if not data.startswith((b"\x00\x00\x01", b"\x00\x00\x00\x01")):
             raise PkError("H264 output is not Annex-B")
         nals = list(self._split_bitstream(data))
@@ -308,7 +308,7 @@ class PkH264Encoder(PkVideoEncoder):
 
 class PkAv1Encoder(PkVideoEncoder):
     @staticmethod
-    def _source_capability(width, height):
+    def _source_capability():
         from .rtc_av1 import source_capability
         return source_capability()
 

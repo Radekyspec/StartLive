@@ -54,7 +54,6 @@ class PkSettingsController:
         self.busy = True
         self.view.set_error("")
         self.view.set_busy(True)
-        worker = None
         try:
             worker = factory(PkPresenter(
                 finished=lambda result: self._complete(sequence, completed,

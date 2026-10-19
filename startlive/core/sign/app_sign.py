@@ -46,6 +46,7 @@ def livehime_sign(payload, *, access_key: bool = True, build: bool = True,
     :param platform: whether to include platform
     :param ts: whether to include ts
     :param version: whether to include version
+    :param native_wire: whether to use native wire format
     """
     signed = base_payload(access_key=access_key, build=build, platform=platform,
                           ts=ts, version=version)

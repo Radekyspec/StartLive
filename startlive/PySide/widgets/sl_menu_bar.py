@@ -220,7 +220,8 @@ class StartLiveMenuBar(QMenuBar):
         ):
             self.accountSwitch.emit(target)
 
-    def _ready_switch_account(self):
+    @staticmethod
+    def _ready_switch_account():
         """
         Determines whether the system is ready to switch the account based on the current
         cookie index or the scanning status configuration.

@@ -191,7 +191,6 @@ class PkRoundController:
         self._pending_classic = classic
         self._trace("round.query.started", requested_pk_id=pk_id,
                     classic=classic)
-        worker = None
         try:
             worker_class = PkClassicInfoWorker if classic else PkInfoWorker
             worker = worker_class(PkPresenter(

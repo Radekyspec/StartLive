@@ -1,5 +1,5 @@
-from startlive.core.exceptions import PkError
 from startlive.core.constant.pk_info import NativePkState
+from startlive.core.exceptions import PkError
 from startlive.core.pk.business_session import local_quit_from_business_leave
 from startlive.core.workers.pk.exit_pk import PkExitWorker
 from startlive.core.workers.pk.quit_connection import PkQuitConnectionWorker
@@ -72,10 +72,10 @@ class PkExitController:
         try:
             if exit_pk:
                 self._submit_exit(True)
-            self._submit("quit", PkQuitConnectionWorker(self._presenter("quit"),
-                                                        self.identity,
-                                                        biz_session_id,
-                                                        trace_id=trace_id))
+            self._submit(PkQuitConnectionWorker(self._presenter("quit"),
+                                                self.identity,
+                                                biz_session_id,
+                                                trace_id=trace_id))
         finally:
             # No HTTP completion barrier in this explicit native branch.
             try:
@@ -114,10 +114,10 @@ class PkExitController:
         presenter = self._attempt.presenter(succeeded,
                                             lambda error: self._done("exit",
                                                                      error=error))
-        self._submit("exit", PkExitWorker(presenter, self.identity,
-                                          end_round=end_round))
+        self._submit(PkExitWorker(presenter, self.identity,
+                                  end_round=end_round))
 
-    def _submit(self, operation, worker):
+    def _submit(self, worker):
         try:
             self.manager.submit(worker)
         except Exception as error:
