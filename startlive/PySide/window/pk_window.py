@@ -583,12 +583,11 @@ class PkWindow(QDialog):
         heading = f"{stage} · 回合 {info.round_id}" if info.round_id else stage
         if info.remaining_seconds is not None:
             heading += f" · 剩余约 {info.remaining_seconds} 秒"
-        own = f"我方 UID：{info.own_uid}"
-        if info.own_name:
-            own += f"（{info.own_name}）"
-        peer = f"对方 UID：{info.peer_search}" if info.peer_search else "对方：等待确认"
-        if info.peer_name:
-            peer += f"（{info.peer_name}）"
+        # PK user information is presented by name only. UIDs remain internal
+        # identifiers for protocol/state correlation, not display text.
+        own = info.own_name or "我方"
+        peer = info.peer_name or (
+            "对方（等待确认）" if info.peer_search else "对方")
         lines = [heading]
         for identity, votes, votes_text, result in (
                 (own, info.own_votes, info.own_votes_text, info.own_result),
