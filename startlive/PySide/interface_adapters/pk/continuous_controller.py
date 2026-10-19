@@ -8,13 +8,12 @@ from .pk_presenter import PkPresenter
 
 
 class PkContinuousController:
-    """Read the server switch back after updates; never invent local requeue."""
+    """Video-random continuous PK reader; classic never owns one."""
 
     def __init__(self, manager, identity, kind, *, changed, failed,
                  trace_id=None, requeue_checked=None):
-        if kind not in (NativePkType.DOUBLE_CLASSIC,
-                        NativePkType.DOUBLE_RANDOM):
-            raise PkError("该模式尚未接入连续 PK 开关")
+        if kind is not NativePkType.DOUBLE_RANDOM:
+            raise PkError("连续 PK 仅支持视频随机 PK")
         self.manager, self.identity, self.kind = manager, identity, kind
         self.changed, self.failed = changed, failed
         self.requeue_checked = requeue_checked

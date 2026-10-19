@@ -122,9 +122,13 @@ class PkSessionController:
         if options.mode == PkMode.VIDEO_LINK:
             from .video_link_controller import PkVideoLinkController
             self.flow = PkVideoLinkController(self)
-        continuous_kind = NativePkType.DOUBLE_CLASSIC if options.mode == PkMode.TRADITIONAL else NativePkType.DOUBLE_RANDOM
-        self.continuous = None if invitation_only or options.mode == PkMode.VIDEO_LINK else PkContinuousController(
-            manager, identity, continuous_kind, changed=self._continuous_loaded,
+        # Continuous PK is a video-PK server setting only. Classic has no
+        # verified auto-next behavior and no writable switch, so it must not
+        # create a reader or issue autoMatchSwitchStatus at all.
+        self.continuous = None if (
+                    invitation_only or options.mode != PkMode.VIDEO) else PkContinuousController(
+            manager, identity, NativePkType.DOUBLE_RANDOM,
+            changed=self._continuous_loaded,
             failed=self._continuous_failed, trace_id=self.trace_id,
             requeue_checked=self._continuous_requeue)
         self.push = push_factory(manager, identity, ready=self._push_ready,

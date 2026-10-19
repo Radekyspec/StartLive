@@ -778,7 +778,7 @@ class PkWindow(QDialog):
             self._trace("ui.stop.ignored",
                         reason="classic_manual_end_disabled")
             self.status.setText(
-                "经典 PK 不支持手动断开；请停止直播或等待回合自然结束")
+                "经典 PK 不支持手动结束；请等待回合自然结束或停止直播")
             return
         self._session_action("stop_round")
 
@@ -804,6 +804,10 @@ class PkWindow(QDialog):
 
     def _change_continuous(self, enabled):
         self._trace("ui.continuous_selected", enabled=enabled)
+        if self.mode.currentData() != PkMode.VIDEO:
+            self._trace("ui.continuous.ignored",
+                        reason="continuous_not_supported")
+            return
         if (self._session is not None and not self._session.closed
                 and not getattr(self._session, "invitation_only", False)):
             self._session_action("set_continuous", enabled)
@@ -932,11 +936,13 @@ class PkWindow(QDialog):
             and self._session is not None and self._session.round_state.state == NativePkState.IDLE
             and getattr(self._session.rtc, "publisher_ready", False)
             and not getattr(self._session.flow, "starting_pk", False))
+        video = self.mode.currentData() == PkMode.VIDEO
         if self._session is None or self._session.closed or self._idle_listener():
-            self.continuous.setEnabled(self._session_enabled and not busy)
+            self.continuous.setEnabled(
+                self._session_enabled and not busy and video)
         else:
             self.continuous.setEnabled(
-                self._session_enabled and self._continuous_editable
+                self._session_enabled and video and self._continuous_editable
                 and not getattr(self._session, "invitation_only", False)
                 and self._pending_start is None and self._candidate_dialog is None)
 
@@ -959,8 +965,14 @@ class PkWindow(QDialog):
             video and not busy and not self.random_match.isChecked())
         self.disconnect_button.setVisible(video or link)
         if self.mode.currentData() == PkMode.TRADITIONAL:
+            with QSignalBlocker(self.continuous):
+                self.continuous.setChecked(False)
+            self.continuous.setToolTip("经典 PK 不支持连续 PK")
             self.stop_button.setToolTip(
                 "经典 PK 不支持手动结束；请等待回合自然结束或停止直播")
+        else:
+            self.continuous.setToolTip("")
+            self.stop_button.setToolTip("")
         self.wait_invitation_button.setVisible(video or link)
         self.wait_invitation_button.setEnabled(
             self._session_enabled and (video or link) and not busy)
@@ -969,8 +981,10 @@ class PkWindow(QDialog):
         self._refresh_publisher_controls()
 
     def _request_start(self):
+        continuous = (self.continuous.isChecked()
+                      and self.mode.currentData() == PkMode.VIDEO)
         self._trace("ui.start.requested", random=self.random_match.isChecked(),
-                    continuous=self.continuous.isChecked())
+                    continuous=continuous)
         if self._shutdown or not self._session_enabled or self._controls_busy():
             return
         uid = None
@@ -983,7 +997,7 @@ class PkWindow(QDialog):
                 return
             uid = int(value)
         options = PkOptions(PkMode(self.mode.currentData()), uid,
-                            self.continuous.isChecked() if self.mode.currentData() != PkMode.VIDEO_LINK else False)
+                            continuous)
         if (
                 options.mode is PkMode.VIDEO and uid is not None) or options.mode is PkMode.VIDEO_LINK:
             if self._candidate_dialog is not None:

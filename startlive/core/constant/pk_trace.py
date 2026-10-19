@@ -53,6 +53,7 @@ _DESCRIPTIONS = {
     "ui.live_stopped": "直播已停止，关闭 PK 会话",
     "ui.stop.ignored": "忽略经典 PK 的结束按钮请求",
     "ui.disconnect.ignored": "忽略经典 PK 的断开按钮请求",
+    "ui.continuous.ignored": "忽略经典 PK 的连续 PK 开关",
     "settings.confirmed": "PK 设置解析结果",
     "settings.saved": "PK 设置保存结果",
     "rtc.rpc.response": "RTC 信令响应 Response",
@@ -173,4 +174,5 @@ _REASONS = {
     "idle_terminal": "空闲状态下收到结束通知",
     "terminal_before_round": "回合建立前收到结束通知",
     "classic_manual_end_disabled": "经典 PK 不支持手动结束",
+    "continuous_not_supported": "当前模式不支持连续 PK",
 }
