@@ -7,8 +7,8 @@ from typing import Callable
 from obsws_python.error import OBSSDKRequestError
 
 from startlive.core import app_state
-from startlive.core.obs.states.output import ObsOutputStatus
 from startlive.core.log import get_logger
+from startlive.core.obs.states import ObsOutputStatus
 from startlive.core.workers.base import LongLiveWorker, Presenter
 
 
