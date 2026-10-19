@@ -787,6 +787,12 @@ class PkSessionController:
         self._trace("session.stop_round.requested")
         if self.closed:
             return
+        if self.options.mode == PkMode.TRADITIONAL:
+            # Classic PK has no verified manual end entry. Only the server
+            # round end or the stop-live local cleanup may retire it.
+            self._trace("session.stop_round.ignored",
+                        reason="classic_manual_end_disabled")
+            return
         if self.options.mode == PkMode.VIDEO_LINK and self.join_event is not None:
             self.disconnect()
             return
@@ -813,7 +819,13 @@ class PkSessionController:
 
     def disconnect(self):
         self._trace("session.disconnect.requested")
-        if self.join_event and not self.closed and not self.stopping:
+        if self.closed:
+            return
+        if self.options.mode == PkMode.TRADITIONAL:
+            self._trace("session.disconnect.ignored",
+                        reason="classic_manual_end_disabled")
+            return
+        if self.join_event and not self.stopping:
             if self.options.mode == PkMode.VIDEO_LINK:
                 from startlive.core.workers.pk.video_link import \
                     PkDisconnectLinkWorker

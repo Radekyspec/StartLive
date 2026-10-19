@@ -80,10 +80,8 @@ class PkWindow(QDialog):
             lambda: current_identity())
         if session_factory is not None:
             self.startRequested.connect(self._start_session)
-            self.stopRequested.connect(
-                lambda: self._session_action("stop_round"))
-            self.disconnectRequested.connect(
-                lambda: self._session_action("disconnect"))
+            self.stopRequested.connect(self._request_stop)
+            self.disconnectRequested.connect(self._request_disconnect)
             self.continuousChanged.connect(self._change_continuous)
         QApplication.instance().aboutToQuit.connect(self.shutdown)
         self._session_enabled = False
@@ -774,11 +772,28 @@ class PkWindow(QDialog):
                                   and self._pending_start is None)
         self._refresh_session_controls()
 
+    def _request_stop(self):
+        self._trace("ui.stop.requested")
+        if self.mode.currentData() == PkMode.TRADITIONAL:
+            self._trace("ui.stop.ignored",
+                        reason="classic_manual_end_disabled")
+            self.status.setText(
+                "经典 PK 不支持手动断开；请停止直播或等待回合自然结束")
+            return
+        self._session_action("stop_round")
+
+    def _request_disconnect(self):
+        self._trace("ui.disconnect.requested")
+        if self.mode.currentData() == PkMode.TRADITIONAL:
+            self._trace("ui.disconnect.ignored",
+                        reason="classic_manual_end_disabled")
+            self.status.setText(
+                "经典 PK 不支持手动断开；请停止直播或等待回合自然结束")
+            return
+        self._session_action("disconnect")
+
     def _session_action(self, method, *args):
         self._trace("ui.session_action", action=method)
-        if method == "stop_round" and self._classic_capture_check is not None:
-            self._cancel_classic_capture_check("已取消经典 PK 采集检查")
-            return
         if self._session is not None:
             try:
                 getattr(self._session, method)(*args)
@@ -903,11 +918,15 @@ class PkWindow(QDialog):
         self.wait_invitation_button.setEnabled(
             self._session_enabled and not busy
             and self.mode.currentData() != PkMode.TRADITIONAL)
+        # Classic PK has no manual end entry: only the server round end or
+        # stop-live local cleanup may retire the session.
         self.stop_button.setEnabled(
-            self._session_enabled and (self._active or self._idle_listener()
-                                       or self._classic_capture_check is not None))
+            self._session_enabled and self.mode.currentData() != PkMode.TRADITIONAL
+            and (self._active or self._idle_listener()
+                 or self._classic_capture_check is not None))
         self.disconnect_button.setEnabled(
-            self._session_enabled and self._connection_active)
+            self._session_enabled and self._connection_active
+            and self.mode.currentData() != PkMode.TRADITIONAL)
         self.convert_pk_button.setEnabled(
             self._session_enabled and self._connection_active
             and self._session is not None and self._session.round_state.state == NativePkState.IDLE
@@ -938,8 +957,10 @@ class PkWindow(QDialog):
         self.random_match.setEnabled(video and not busy)
         self.peer_search.setEnabled(
             video and not busy and not self.random_match.isChecked())
-        self.disconnect_button.setVisible(
-            video or link or self._connection_active)
+        self.disconnect_button.setVisible(video or link)
+        if self.mode.currentData() == PkMode.TRADITIONAL:
+            self.stop_button.setToolTip(
+                "经典 PK 不支持手动结束；请等待回合自然结束或停止直播")
         self.wait_invitation_button.setVisible(video or link)
         self.wait_invitation_button.setEnabled(
             self._session_enabled and (video or link) and not busy)
@@ -1256,13 +1277,17 @@ class PkWindow(QDialog):
         self.set_status("直播已停止，PK 会话已关闭")
         self._refresh_session_controls()
 
+    def _active_close_hint(self):
+        if self.mode.currentData() == PkMode.TRADITIONAL:
+            return "经典 PK 不支持手动结束；请等待回合自然结束或停止直播"
+        return ("请先断开视频连线，再关闭窗口" if self._connection_active
+                else "请先结束 PK，再关闭窗口")
+
     def closeEvent(self, event):
         self._trace("ui.close.requested", active=self._active,
                     connection_active=self._connection_active)
         if not self._shutdown and (self._active or self._connection_active):
-            self.status.setText(
-                "请先断开视频连线，再关闭窗口" if self._connection_active
-                else "请先结束 PK，再关闭窗口")
+            self.status.setText(self._active_close_hint())
             event.ignore()
             return
         self.shutdown()
@@ -1272,9 +1297,7 @@ class PkWindow(QDialog):
         self._trace("ui.dismiss.requested", active=self._active,
                     connection_active=self._connection_active)
         if not self._shutdown and (self._active or self._connection_active):
-            self.status.setText(
-                "请先断开视频连线，再关闭窗口" if self._connection_active
-                else "请先结束 PK，再关闭窗口")
+            self.status.setText(self._active_close_hint())
             return
         self.shutdown()
         super().reject()
