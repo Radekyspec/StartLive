@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from startlive.PySide.interface_adapters.gui_dispatcher import GUIDispatcher
 from startlive.PySide.interface_adapters.pk.pk_presenter import PkPresenter
-from startlive.core.constant.pk import PkMode
+from startlive.core.constant.pk import PkMode, PkPhase
 from startlive.core.constant.pk_info import NativePkState
 from startlive.core.constant.ui import PK_WINDOW_FONT_SIZE_OFFSET_PT
 from startlive.core.exceptions import PkError
@@ -479,8 +479,17 @@ class PkWindow(QDialog):
         if reason:
             self.status.setText(reason)
 
+    def refresh_controls(self):
+        """Re-evaluate phase-derived controls without changing status text."""
+        self._refresh_session_controls()
+
     def set_status(self, text):
         self.status.setText(text)
+        # Phase changes often surface as a status update (waiting, cancelled,
+        # handoff). Refresh the phase-derived stop button immediately instead
+        # of waiting for the next 250 ms window tick.
+        if not self._shutdown:
+            self._refresh_session_controls()
 
     def _open_settings(self):
         if self._shutdown or not self._session_enabled:
@@ -741,7 +750,8 @@ class PkWindow(QDialog):
         self._refresh_session_controls()
 
     def _idle_listener(self):
-        return bool(getattr(self._session, "idle_invitation_listener", False))
+        return bool(self._session is not None
+                    and self._session.idle_invitation_listener)
 
     def _controls_busy(self):
         return ((
@@ -755,9 +765,8 @@ class PkWindow(QDialog):
 
     @staticmethod
     def _apply_reception(owner, enabled):
-        setter = getattr(owner, "set_invitation_reception", None)
-        if setter is not None and not owner.closed:
-            setter(enabled)
+        if not owner.closed:
+            owner.set_invitation_reception(enabled)
 
     def set_invitation_reception(self, enabled):
         """Apply a local reception preference without starting or ending a call."""
@@ -774,7 +783,8 @@ class PkWindow(QDialog):
 
     def _request_stop(self):
         self._trace("ui.stop.requested")
-        if self.mode.currentData() == PkMode.TRADITIONAL:
+        if (self.mode.currentData() == PkMode.TRADITIONAL
+                and not self._classic_matching()):
             self._trace("ui.stop.ignored",
                         reason="classic_manual_end_disabled")
             self.status.setText(
@@ -912,6 +922,56 @@ class PkWindow(QDialog):
             self.remote_video_mute.setEnabled(remote_ready)
             self.remote_mute.setEnabled(remote_ready)
 
+    def _flow_phase(self):
+        session = self._session
+        if session is None or session.closed:
+            return None
+        return session.flow.phase
+
+    def _classic_matching(self):
+        return (self.mode.currentData() == PkMode.TRADITIONAL
+                and self._flow_phase() in (PkPhase.PREPARING,
+                                           PkPhase.MATCHING))
+
+    def _stop_text(self):
+        if self._idle_listener():
+            return "停止监听"
+        mode, phase = self.mode.currentData(), self._flow_phase()
+        if mode == PkMode.VIDEO_LINK:
+            return "结束 PK"
+        if phase in (PkPhase.PREPARING, PkPhase.MATCHING):
+            return "取消匹配"
+        if mode == PkMode.VIDEO and phase == PkPhase.INVITING:
+            return "取消邀请"
+        return "结束本轮" if mode == PkMode.VIDEO else "结束 PK"
+
+    def _stop_tooltip(self):
+        mode, phase = self.mode.currentData(), self._flow_phase()
+        if mode == PkMode.TRADITIONAL:
+            if phase in (PkPhase.PREPARING, PkPhase.MATCHING):
+                return "取消匹配不会结束对局；匹配成功后需等待回合自然结束"
+            return "匹配成功后需等待回合自然结束"
+        if mode == PkMode.VIDEO:
+            if phase in (PkPhase.PREPARING, PkPhase.MATCHING):
+                return "取消当前匹配"
+            if phase == PkPhase.INVITING:
+                return "取消当前邀请"
+        return ""
+
+    def _stop_enabled(self):
+        if not self._session_enabled:
+            return False
+        mode, phase = self.mode.currentData(), self._flow_phase()
+        if mode == PkMode.VIDEO_LINK:
+            return bool(self._active or self._idle_listener()
+                        or self._classic_capture_check is not None)
+        if mode == PkMode.TRADITIONAL:
+            return phase in (PkPhase.PREPARING, PkPhase.MATCHING)
+        return bool(self._active or self._idle_listener()
+                    or self._classic_capture_check is not None
+                    or phase in (PkPhase.PREPARING, PkPhase.MATCHING,
+                                 PkPhase.INVITING))
+
     def _refresh_session_controls(self):
         self.settings_button.setEnabled(
             self._session_enabled and not self._shutdown)
@@ -922,19 +982,16 @@ class PkWindow(QDialog):
         self.wait_invitation_button.setEnabled(
             self._session_enabled and not busy
             and self.mode.currentData() != PkMode.TRADITIONAL)
-        # Classic PK has no manual end entry: only the server round end or
-        # stop-live local cleanup may retire the session.
-        self.stop_button.setEnabled(
-            self._session_enabled and self.mode.currentData() != PkMode.TRADITIONAL
-            and (self._active or self._idle_listener()
-                 or self._classic_capture_check is not None))
+        # Classic can cancel while a match request is in flight; an active
+        # classic round still has no verified manual end entry.
+        self.stop_button.setEnabled(self._stop_enabled())
         self.disconnect_button.setEnabled(
             self._session_enabled and self._connection_active
             and self.mode.currentData() != PkMode.TRADITIONAL)
         self.convert_pk_button.setEnabled(
             self._session_enabled and self._connection_active
             and self._session is not None and self._session.round_state.state == NativePkState.IDLE
-            and getattr(self._session.rtc, "publisher_ready", False)
+            and self._session.rtc.publisher_ready
             and not getattr(self._session.flow, "starting_pk", False))
         video = self.mode.currentData() == PkMode.VIDEO
         if self._session is None or self._session.closed or self._idle_listener():
@@ -943,7 +1000,7 @@ class PkWindow(QDialog):
         else:
             self.continuous.setEnabled(
                 self._session_enabled and video and self._continuous_editable
-                and not getattr(self._session, "invitation_only", False)
+                and not self._session.invitation_only
                 and self._pending_start is None and self._candidate_dialog is None)
 
     def _refresh_match_options(self):
@@ -968,16 +1025,13 @@ class PkWindow(QDialog):
             with QSignalBlocker(self.continuous):
                 self.continuous.setChecked(False)
             self.continuous.setToolTip("经典 PK 不支持连续 PK")
-            self.stop_button.setToolTip(
-                "经典 PK 不支持手动结束；请等待回合自然结束或停止直播")
         else:
             self.continuous.setToolTip("")
-            self.stop_button.setToolTip("")
         self.wait_invitation_button.setVisible(video or link)
         self.wait_invitation_button.setEnabled(
             self._session_enabled and (video or link) and not busy)
-        self.stop_button.setText(
-            "停止监听" if self._idle_listener() else "结束本轮" if video else "结束 PK")
+        self.stop_button.setText(self._stop_text())
+        self.stop_button.setToolTip(self._stop_tooltip())
         self._refresh_publisher_controls()
 
     def _request_start(self):
@@ -1293,6 +1347,8 @@ class PkWindow(QDialog):
 
     def _active_close_hint(self):
         if self.mode.currentData() == PkMode.TRADITIONAL:
+            if self._classic_matching():
+                return "请先取消匹配，或停止直播"
             return "经典 PK 不支持手动结束；请等待回合自然结束或停止直播"
         return ("请先断开视频连线，再关闭窗口" if self._connection_active
                 else "请先结束 PK，再关闭窗口")

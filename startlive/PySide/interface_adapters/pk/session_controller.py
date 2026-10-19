@@ -384,6 +384,7 @@ class PkSessionController:
             # PkVideoLinkController.invite() has no trace_id parameter; its
             # Connect worker does not send a client_traceid.
             self.flow.invite(self.options.candidate)
+            self.view.refresh_controls()
             return
         self.round_state.state = NativePkState.STARTING
         self.presentation.info = self.presentation.peer_uid = None
@@ -393,6 +394,7 @@ class PkSessionController:
             self.flow.invite(self.options.candidate, trace_id=self.trace_id)
         else:
             self.flow.start(trace_id=self.trace_id)
+        self.view.refresh_controls()
 
     def _waiting(self, _):
         if not self.closed and self.round_state.state == NativePkState.STARTING:
@@ -797,9 +799,11 @@ class PkSessionController:
         self._trace("session.stop_round.requested")
         if self.closed:
             return
-        if self.options.mode == PkMode.TRADITIONAL:
-            # Classic PK has no verified manual end entry. Only the server
-            # round end or the stop-live local cleanup may retire it.
+        if (self.options.mode == PkMode.TRADITIONAL
+                and self.flow.phase not in (PkPhase.PREPARING,
+                                            PkPhase.MATCHING)):
+            # Classic has no verified manual end entry for an active round.
+            # Cancelling an in-flight match is the one allowed exception.
             self._trace("session.stop_round.ignored",
                         reason="classic_manual_end_disabled")
             return
