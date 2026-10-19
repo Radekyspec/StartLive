@@ -1,7 +1,10 @@
 import unittest
 from json import dumps, loads
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from keyring.backends.fail import Keyring as UnavailableKeyring
 from requests import HTTPError, RequestException
 from requests.utils import dict_from_cookiejar
 
@@ -17,6 +20,8 @@ from startlive.core.credentials import (
     CredentialStore,
     CredentialTransactionError,
 )
+from startlive.core.credentials import backend as credential_backend
+from startlive.core.constant.settings import SettingsName
 from startlive.core.workers.base import BaseWorker
 from startlive.core.workers.credentials import credential_manager
 from startlive.core.workers.credentials.credential_manager import (
@@ -180,6 +185,42 @@ class CredentialManagerTests(unittest.TestCase):
         worker.requests = RequestSequence(worker._session, responses)
         worker._session.get = worker.requests
         return worker
+
+    def test_missing_linux_keyring_supports_startup_and_account_reload(self):
+        self.get_password_patch.stop()
+        self.delete_password_patch.stop()
+        with patch.object(credential_backend, "_backend", None), \
+                patch.object(credential_backend, "system", return_value="Linux"), \
+                patch.object(credential_backend.keyring, "get_keyring",
+                             return_value=UnavailableKeyring()):
+            self.assertEqual(CredentialManagerWorker(None, 0).run(None), 0)
+            self.assertTrue(app_state.scan_status["is_new"])
+            stored = CredentialStore().add(self.cookies("7"))
+            self.assertEqual(CredentialStore().read(stored.key), self.cookies("7"))
+            worker = CredentialManagerWorker(None, stored.index)
+            worker._session.get = RequestSequence(worker._session, [nav_ok("7")])
+            self.assertEqual(worker.run(None), stored.index)
+            self.assertEqual(app_state.cookies_dict["DedeUserID"], "7")
+            self.assertTrue(app_state.scan_status["scanned"])
+
+    def test_missing_linux_keyring_keeps_obs_password_out_of_settings_file(self):
+        canary = "SYNTHETIC_OBS_PASSWORD"
+        with TemporaryDirectory() as directory, \
+                patch.object(credential_backend, "_backend", None), \
+                patch.object(credential_backend, "system", return_value="Linux"), \
+                patch.object(credential_backend.keyring, "get_keyring",
+                             return_value=UnavailableKeyring()):
+            path = Path(directory) / "obs.json"
+            with patch.object(app_state, "get_cache_path",
+                              return_value=(Path(directory), path)):
+                app_state.obs_settings.update({"password": canary, "port": "4456"})
+                app_state.save_settings(SettingsName.OBS)
+                self.assertNotIn(canary, path.read_text(encoding="utf-8"))
+                self.assertNotIn("password", loads(path.read_text(encoding="utf-8")))
+                app_state.obs_settings.reset()
+                app_state._load_settings(SettingsName.OBS)
+                self.assertEqual(app_state.obs_settings["password"], canary)
+                self.assertEqual(app_state.obs_settings["port"], "4456")
 
     def test_cold_start_prunes_expired_first_account_then_loads_second(self):
         self.seed_accounts("1", "2")

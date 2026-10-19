@@ -12,7 +12,6 @@ from threading import RLock
 from typing import Optional, Any, List
 import logging
 
-from keyring import get_password, set_password, delete_password
 from keyring.errors import KeyringError, PasswordDeleteError
 from obsws_python import ReqClient
 from requests import Session
@@ -27,6 +26,9 @@ from .observable_state import ObservableState
 from startlive.core.pk.states.encoder import VideoEncodingConfig
 from startlive.core.obs.states.output import ObsOutputStatus
 from startlive.core.credentials.states.account_snapshot import AccountSnapshot
+from startlive.core.credentials.backend import (
+    get_password, set_password, delete_password,
+)
 from startlive.core.exceptions import TaskCancelled
 
 dumps = partial(dumps, ensure_ascii=False,
@@ -352,13 +354,13 @@ def create_session(h_type: HeadersType, *,
             session.post = partial(session.post, verify=True, timeout=5)
             session.trust_env = False
         case ProxyMode.SYSTEM:
-            session.get = partial(session.get, verify=False, timeout=5)
-            session.post = partial(session.post, verify=False, timeout=5)
+            session.get = partial(session.get, verify=True, timeout=5)
+            session.post = partial(session.post, verify=True, timeout=5)
             session.trust_env = True
         case ProxyMode.CUSTOM:
-            session.get = partial(session.get, verify=False, timeout=5,
+            session.get = partial(session.get, verify=True, timeout=5,
                                   proxies=custom_proxy)
-            session.post = partial(session.post, verify=False, timeout=5,
+            session.post = partial(session.post, verify=True, timeout=5,
                                    proxies=custom_proxy)
             session.trust_env = False
     return session

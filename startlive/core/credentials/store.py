@@ -3,9 +3,8 @@ from collections.abc import Sequence
 from json import dumps, loads
 from typing import Any, Mapping
 
-import keyring
-
 from startlive.core import app_state
+from . import backend as credential_backend
 from .states.results import StoredCredential, RemovedCredential
 from startlive.core.constant import (
     KEYRING_COOKIES,
@@ -22,7 +21,7 @@ from startlive.core.exceptions import (
 
 
 class CredentialStore:
-    def __init__(self, backend: Any = keyring):
+    def __init__(self, backend: Any = credential_backend):
         self._backend = backend
         self._logger = logging.getLogger(__name__)
 

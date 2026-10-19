@@ -44,6 +44,7 @@ from startlive.PySide.widgets import StartLiveMenuBar, LogViewer, SideBar
 from startlive.core import app_state
 from startlive.core.constant import *
 from startlive.core.constant.settings import SettingsName
+from startlive.core.credentials.backend import using_session_keyring
 from startlive.core.workers import WorkerManager
 from startlive.core.workers.base import LongLiveWorker, BaseWorker
 from startlive.core.workers.const import ConstantUpdateWorker, \
@@ -632,6 +633,14 @@ class MainWindow(SingleInstanceWindow):
         if getattr(self, "_credential_result_handled", False):
             return
         self._credential_result_handled = True
+        if using_session_keyring():
+            self.statusBar().showMessage(
+                "临时登录：退出后需重新登录，OBS 密码不保留。"
+            )
+            self.statusBar().setToolTip(
+                "系统密钥环不可用，登录凭据和 OBS 密码仅保存在本次运行的内存中。"
+                "配置并解锁系统密钥环后，重启 StartLive 可恢复凭据保存功能。"
+            )
         app_state.scan_status["cred_loaded"] = True
         if app_state.scan_status["scanned"]:
             self.logger.info("load existing credential")
