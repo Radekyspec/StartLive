@@ -15,8 +15,8 @@ def output_readiness(status, mode, *, now=None, status_max_age=3):
     if not live:
         return PkOutputReadiness(False, False, None, "OBS 尚未推流或正在重连")
     if mode == PkMode.TRADITIONAL:
-        # Traditional PK uses the existing broadcast. StartLive has no separate
-        # LiveHime voice-microphone service to initialize or invent a flag for.
+        # These are broadcast facts only. Classic audio capture is checked
+        # separately before creating the session and starting its match flow.
         return PkOutputReadiness(True, True, True, "OBS 正在推流（经典 PK）")
     # StartLive has no voice-microphone service conflict to gate here. Capture
     # availability is checked separately against the JOIN publication selection.

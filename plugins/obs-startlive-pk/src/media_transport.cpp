@@ -1,6 +1,8 @@
 #include "media_transport.hpp"
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <thread>
 #include <string>
 #include <vector>
 #ifdef _WIN32
@@ -89,9 +91,9 @@ bool LocalMediaServer::open(size_t buffer_size)
     SECURITY_ATTRIBUTES attributes{sizeof(SECURITY_ATTRIBUTES), descriptor, FALSE};
     constexpr auto pipe_name = L"\\\\.\\pipe\\StartLive.PkMedia.v2";
     s.pipe = CreateNamedPipeW(pipe_name,
-        PIPE_ACCESS_OUTBOUND | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
+        PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
         PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-        1, DWORD(s.buffer_size), 0, 0, &attributes);
+        1, DWORD(s.buffer_size), 4096, 0, &attributes);
     LocalFree(descriptor);
     s.stop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     s.overlap.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
@@ -154,6 +156,66 @@ bool LocalMediaServer::accept_client()
         return true;
     }
     return false;
+#endif
+}
+
+bool LocalMediaServer::capture_selection(bool &audio, bool &video)
+{
+    auto &s = *state;
+    uint8_t request[8]{};
+    size_t received = 0;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (!s.stopped && received < sizeof(request)) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            if (received) return false; // Never default a partial request to AV.
+            audio = video = true;
+            return true;
+        }
+#ifdef _WIN32
+        DWORD available = 0;
+        if (!PeekNamedPipe(s.pipe, nullptr, 0, nullptr, &available, nullptr)) return false;
+        if (!available) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+        ResetEvent(s.overlap.hEvent);
+        DWORD count = 0;
+        BOOL ok = ReadFile(s.pipe, request + received,
+                          DWORD(std::min<size_t>(available, sizeof(request) - received)),
+                          &count, &s.overlap);
+        if (!s.finish(ok, ok ? ERROR_SUCCESS : GetLastError()) ||
+            !GetOverlappedResult(s.pipe, &s.overlap, &count, FALSE) || !count) return false;
+#else
+        auto count = recv(s.client, request + received, sizeof(request) - received, 0);
+        if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+        if (count <= 0) return false;
+#endif
+        received += size_t(count);
+    }
+    if (s.stopped || received != sizeof(request) ||
+        request[0] != 'S' || request[1] != 'L' || request[2] != 'P' || request[3] != 'C' ||
+        request[4] != 1 || !request[5] || (request[5] & ~3) || request[6] || request[7])
+        return false;
+    audio = (request[5] & 1) != 0;
+    video = (request[5] & 2) != 0;
+    request[3] = 'A';
+    return write(request, sizeof(request));
+}
+
+bool LocalMediaServer::client_alive()
+{
+    auto &s = *state;
+    if (s.stopped) return false;
+#ifdef _WIN32
+    return PeekNamedPipe(s.pipe, nullptr, 0, nullptr, nullptr, nullptr) != FALSE;
+#else
+    uint8_t byte;
+    auto count = recv(s.client, &byte, 1, MSG_PEEK);
+    return count > 0 || (count < 0 &&
+        (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR));
 #endif
 }
 

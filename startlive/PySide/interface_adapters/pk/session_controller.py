@@ -261,6 +261,8 @@ class PkSessionController:
             raise PkError("等待邀请仅用于未指定对手的视频 PK")
         if self.options.mode == PkMode.TRADITIONAL and self.options.peer_search is not None:
             raise PkError("经典 PK 仅支持随机匹配")
+        if self.options.mode == PkMode.TRADITIONAL:
+            self.view.require_classic_audio_ready()
         if self.kind == NativePkType.DOUBLE_INVITE and not self.invitation_only:
             if self.options.candidate is None or self.options.candidate.uid != self.options.peer_search:
                 raise PkError("请搜索并选择视频 PK 对手")
@@ -355,6 +357,12 @@ class PkSessionController:
         if self.closed or self._business_started or self.invitation_only:
             return
         self.identity_guard(self.identity)
+        if self.options.mode == PkMode.TRADITIONAL:
+            try:
+                self.view.require_classic_audio_ready()
+            except Exception as error:
+                self._fatal(error)
+                return
         decision = pk_start_eligibility(self.kind, self._start_facts())
         if decision.allowed is not True:
             self._fatal(PkError(decision.reason))
@@ -814,6 +822,8 @@ class PkSessionController:
             return
         self._trace("session.close.requested", pending_jobs=self.manager.busy)
         self._stop_rtc()
+        if self.options.mode == PkMode.TRADITIONAL:
+            self.view.stop_classic_audio()
         self.closed = True
         if self.handle is not None:
             self.handle.retire()

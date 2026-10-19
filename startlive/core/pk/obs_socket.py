@@ -6,8 +6,8 @@ import stat
 from pathlib import Path
 from time import monotonic, sleep
 
-from startlive.core.exceptions import TaskCancelled
 from startlive.core.exceptions import PkError
+from startlive.core.exceptions import TaskCancelled
 
 
 def local_media_path():
@@ -54,6 +54,23 @@ class ObsLocalSocket:
                 sleep(0.05)
         raise PkError(
             "未收到 OBS 媒体连接，请在 OBS 工具菜单启动 StartLive PK 采集")
+
+    def write_exact(self, data):
+        sent = 0
+        deadline = monotonic() + 10
+        while sent < len(data):
+            self._check_cancelled()
+            try:
+                count = self.socket.send(memoryview(data)[sent:])
+            except socket.timeout:
+                if monotonic() > deadline:
+                    raise PkError("发送 OBS 采集选择超时") from None
+                continue
+            except OSError:
+                raise PkError("OBS 媒体连接已断开") from None
+            if not count:
+                raise PkError("OBS 媒体连接已断开")
+            sent += count
 
     def read_exact(self, size):
         output = bytearray()
