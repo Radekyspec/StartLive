@@ -178,7 +178,13 @@ def parse_pk_event(command, payload):
                                 user_info=data.get("user_info") if isinstance(
                                     data.get("user_info"), dict) else {})
     if command == "UNIVERSAL_INTERACT_STREAM_CONTROL":
-        config = _object(data, "config")
+        # Captured 115 is flat:
+        # data{biz_session_id,rtc_channel_id,uid,stream_control,...}.
+        # Older synthetic fixtures nested the identity under data.config; keep
+        # accepting that shape without making a real 115 fatal.
+        config = data.get("config") if isinstance(data.get("config"),
+                                                  dict) else data
+
         return PkStreamControlEvent(
             **common, biz_session_id=_text(config.get("biz_session_id")),
             rtc_channel_id=_text(config.get("rtc_channel_id")),
