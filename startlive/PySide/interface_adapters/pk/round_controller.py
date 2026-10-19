@@ -202,6 +202,7 @@ class PkRoundController:
                                                         classic=classic)),
                 self.identity, pk_id,
                 **({"current_state": pk_id == 0} if classic else {}))
+            worker.request_allowed = lambda: not self._closed and serial == self._query_serial and self._polling_allowed()
             self.manager.submit(worker)
         except Exception as error:
             self._query_failed(serial, error, pk_id=pk_id, classic=classic)

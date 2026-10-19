@@ -6,9 +6,9 @@ callback. Native state2 is retained as a raw value, not renamed to ACTIVE.
 """
 from copy import deepcopy
 
+from startlive.core.exceptions import PkProtocolError
 from startlive.core.pk.states.peers import PkMediaPreference, PkRemoteMember, \
     RtcSubscription
-from startlive.core.exceptions import PkProtocolError
 
 
 def default_media_preference(default_sub_mode):
@@ -50,12 +50,13 @@ class PkPeerRegistry:
     Returned values describe desired subscriptions; this object sends no RPCs.
     """
 
-    def __init__(self, own_uid, scope):
+    def __init__(self, own_uid, scope, *, rtc_preference=None):
         if own_uid <= 0 or not scope.biz_session_id or not scope.rtc_channel_id:
             raise PkProtocolError("对手列表缺少当前账号或连线会话信息")
         self.own_uid, self.scope = own_uid, scope
         self.members, self.publications = {}, {}
         self._emitted = {}
+        self.rtc_preference = rtc_preference
 
     def add_member(self, member, *, scope):
         if not self._accepts(member.uid, scope):
@@ -77,11 +78,16 @@ class PkPeerRegistry:
 
     def _reconcile(self, uid):
         member = self.members.get(uid)
-        if member is None or uid not in self.publications:
+        if uid not in self.publications or (
+                member is None and self.rtc_preference is None):
             return None
-        preference = member.preference
-        desired = RtcSubscription(uid, video=not preference.video_muted,
-                                  audio=not preference.audio_muted)
+        preference = self.rtc_preference or member.preference
+        publication = self.publications[uid]
+        desired = RtcSubscription(uid,
+                                  video=not preference.video_muted and (
+                                      publication.video if self.rtc_preference else True),
+                                  audio=not preference.audio_muted and (
+                                      publication.audio if self.rtc_preference else True))
         if self._emitted.get(uid) == desired:
             return None
         self._emitted[uid] = desired

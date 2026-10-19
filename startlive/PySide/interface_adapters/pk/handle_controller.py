@@ -11,10 +11,12 @@ from .request_attempt import RequestAttempt
 class PkHandleController:
     """Handle a preserved invitation snapshot after an explicit eligibility decision."""
 
-    def __init__(self, manager, identity, join_controller, *, handled, failed):
+    def __init__(self, manager, identity, join_controller, *, handled, failed,
+                 video_link=False):
         self.manager, self.identity, self.join_controller = manager, identity, join_controller
         self.handled, self.failed = handled, failed
         self.busy = False
+        self.video_link = video_link
         self._attempt = RequestAttempt()
 
     def retire(self):
@@ -25,7 +27,8 @@ class PkHandleController:
     def handle_event(self, event, *, accept, eligibility=None, app_room=None,
                      room_id=0):
         context = invitation_context_from_event(event)
-        if context.source not in (5, 7, 10, 11, 12):
+        if context.source not in (
+        (4, 7) if self.video_link else (5, 7, 10, 11, 12)):
             raise PkError("当前邀请来源尚未接入")
         if context.source == 12:
             if app_room is None:
@@ -54,8 +57,12 @@ class PkHandleController:
                 lambda result: self._handled(result, operation=worker.operation,
                                              request=worker.fields | worker.after_sign),
                 self._failed), self.identity, context,
-            room_id=room_id)
+            room_id=room_id,
+            **({"include_trace": False} if self.video_link else {}))
         self.busy = True
+        if self.video_link:
+            serial = self._attempt.serial
+            worker.request_allowed = lambda: serial == self._attempt.serial
         try:
             self.manager.submit(worker)
         except Exception as error:

@@ -15,7 +15,7 @@ class PkBasicInfo:
     end_time: int = 0
     punish_end_time: int = 0
     sprint_duration: int = 0
-    mutipk_type: int = 0  # Native JSON spelling.
+    muti_pk_type: int = 0  # Response spelling; requests use mutipk_type.
     biz_session_id: str = field(default="", repr=False)
     punish_text: str = field(default="", repr=False)
     status_msg: str = field(default="", repr=False)

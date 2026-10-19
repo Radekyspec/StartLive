@@ -83,7 +83,7 @@ def parse_pk_info(data):
     numbers = {name: _number(basic, name) for name in (
         "pk_id", "init_id", "status", "type", "sub_type", "start_time",
         "end_time",
-        "punish_end_time", "sprint_duration", "mutipk_type")}
+        "punish_end_time", "sprint_duration", "muti_pk_type")}
     texts = {name: _text(basic, name) for name in
              ("biz_session_id", "punish_text", "status_msg")}
     members = data.get("members", [])
@@ -136,7 +136,7 @@ def classic_pk_info(data, *, auto_matching=False, cached_timestamp=0):
                                  status=_number(data, "status", bits=32),
                                  type=_number(data, "battle_type", bits=32),
                                  sub_type=_number(data, "battle_sub_type",
-                                                  bits=32), mutipk_type=-1,
+                                                  bits=32), muti_pk_type=-1,
                                  start_time=_number(data, "pk_start_time"),
                                  end_time=end or 0,
                                  sprint_duration=end - sprint_start if end is not None and sprint_start is not None else 0,

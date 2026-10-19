@@ -2,9 +2,9 @@
 
 Imported only for video PK. Traditional PK has no aiortc/PyAV dependency.
 """
+import asyncio
 from fractions import Fraction
 from time import perf_counter, monotonic_ns
-import asyncio
 
 from aiortc import (
     AudioStreamTrack,
@@ -16,9 +16,14 @@ from aiortc import (
     clock,
 )
 from aiortc.mediastreams import MediaStreamError
-from av import AudioFifo, AudioFrame, AudioResampler, VideoFrame
+from av import AudioFifo, AudioFrame, AudioResampler
 from av.video.reformatter import Interpolation, VideoReformatter
 
+from startlive.core.exceptions import PkError
+from startlive.core.pk.states.encoder import VideoEncodingConfig
+from startlive.core.pk.states.session import MediaPacket
+from startlive.core.pk.video_encoder_config import configured_plan, \
+    current_video_config
 from .output_readiness import require_publication_capture
 from .rtc_codecs import enable_av1_publication, set_native_codec_preferences
 from .rtc_h264 import source_capability
@@ -28,13 +33,8 @@ from .rtc_sdp import local_media_fragment, merge_remote_fragment
 from .rtc_timing import wait_until
 from .rtc_video_negotiation import bind_publication_answer, publication_offer
 from .rtc_video_sender import configure_video_sender
-from .video_frames import packet_frame, reformat_packet
 from .trace import pk_trace, sdp_for_trace
-from startlive.core.pk.states.session import MediaPacket
-from startlive.core.pk.states.encoder import VideoEncodingConfig
-from startlive.core.exceptions import PkError
-from startlive.core.pk.video_encoder_config import configured_plan, \
-    current_video_config
+from .video_frames import packet_frame, reformat_packet
 
 
 async def _packet(buffer, kind, track):
@@ -474,11 +474,22 @@ class RtcMediaSession:
     def mute_state(self, media):
         return self.mute.state(media)
 
-    async def set_muted(self, media, muted, *, changed=None):
+    async def set_muted(self, media, muted, *, changed=None, signal=True):
         self._published_track(media)
-        return await self.mute.set_muted(media, muted, changed=changed)
+        return await self.mute.set_muted(media, muted, changed=changed,
+                                         signal=signal)
 
-    async def publish(self, *, video=True, audio=True):
+    async def update_subscription(self, peer_uid, *, video, audio):
+        """Change active receive channels on the negotiated subscription."""
+        self._require_ready()
+        if not self.subscribed:
+            raise PkError("RTC 订阅尚未建立")
+        await self.signaling.activate_subscription(peer_uid, video=video,
+                                                   audio=audio)
+        self._expected_media = {kind for kind, enabled in
+                                (("video", video), ("audio", audio)) if enabled}
+
+    async def publish(self, *, video=True, audio=True, audio_muted=False):
         """Publish local OBS media without presuming a remote user is ready."""
         self._trace("rtc.media.publish.start", video=video, audio=audio)
         try:
@@ -509,6 +520,8 @@ class RtcMediaSession:
                                       self.local_buffer)] if audio else [])
                 publishing = []
                 for track in self.tracks:
+                    if track.kind == "audio":
+                        track.muted = audio_muted
                     capability = await track.prepare_video() if track.kind == "video" else None
                     transceiver = self.pc.addTransceiver(track,
                                                          direction="sendonly")

@@ -2,20 +2,20 @@
 from concurrent.futures import CancelledError
 from dataclasses import replace
 
-from .pk_presenter import PkPresenter
-from .room_info_controller import PkRoomInfoController
+from startlive.core.constant.pk import NativeInteractionState, PkPhase, PkMode
+from startlive.core.constant.pk_session import RtcMediaStage
+from startlive.core.exceptions import PkError
+from startlive.core.exceptions import TaskCancelled
+from startlive.core.pk.peers import PkPeerRegistry, default_media_preference
+from startlive.core.pk.publication import publication_channels
+from startlive.core.pk.room_info import PkRoomInfoSession
 from startlive.core.pk.states.mute import RtcMuteState, RtcMuteUpdate
 from startlive.core.pk.states.peers import PkInteractionScope, RtcPublication, \
     RtcUserEvent
 from startlive.core.pk.states.room_info import RtcBusinessMessage
-from startlive.core.constant.pk import NativeInteractionState, PkPhase
-from startlive.core.constant.pk_session import RtcMediaStage
-from startlive.core.exceptions import TaskCancelled
-from startlive.core.exceptions import PkError
-from startlive.core.pk.peers import PkPeerRegistry
-from startlive.core.pk.publication import publication_channels
-from startlive.core.pk.room_info import PkRoomInfoSession
 from startlive.core.workers.pk.publication_ready import PkPublicationReadyWorker
+from .pk_presenter import PkPresenter
+from .room_info_controller import PkRoomInfoController
 
 
 class PkRtcLifecycle:
@@ -30,6 +30,7 @@ class PkRtcLifecycle:
         self.generation = 0
         self.notice_generation = None
         self._failure_reported = False
+        self.business_mute = None
 
     def connect(self, ticket, event):
         session = self.session
@@ -51,18 +52,36 @@ class PkRtcLifecycle:
                         and invite.rtc_channel_id != event.rtc_channel_id)):
                 raise PkError("视频连线与已接受的邀请不符")
         publication = publication_channels(event)
+        business_controls = session.options.mode in (PkMode.TRADITIONAL,
+                                                     PkMode.VIDEO_LINK)
+        if event.biz_label == "classic_pk":
+            if publication.video or not publication.audio:
+                raise PkError("经典 PK JOIN 不是音频发布模式")
+            session.view.prepare_classic_audio()
+        if business_controls:
+            muted = getattr(session.view, "_publisher_mute_states", {}).get(
+                "audio", RtcMuteState())
+            self.mute_states["audio"] = replace(muted, pending=False)
         # Construct admission resources before installing the new JOIN context.
         # A local startup failure must not leave a room/session behind while
         # PkJoinController clears its key.
-        peers = PkPeerRegistry(session.identity.uid,
+        peers = PkPeerRegistry(ticket.uid,
                                PkInteractionScope(event.biz_session_id,
-                                                  event.rtc_channel_id))
+                                                  event.rtc_channel_id),
+                               rtc_preference=default_media_preference(
+                                   event.default_sub_mode)
+                               if business_controls else None)
         room = PkRoomInfoController(session.manager, session.identity,
                                     PkRoomInfoSession(event),
                                     changed=self.room_changed,
                                     polling_stopped=lambda: None,
                                     failed=session._fatal,
-                                    identity_guard=session.identity_guard)
+                                    identity_guard=session.identity_guard,
+                                    poll_interval=2 if business_controls else None,
+                                    snapshot_guard=(
+                                        lambda: self.business_mute.snapshot_guard())
+                                    if business_controls else None,
+                                    clock=session._clock)
         previous = (self.event, session.round_state.biz_session_id, self.peers,
                     self.room)
         self.generation += 1
@@ -83,10 +102,17 @@ class PkRtcLifecycle:
                                          session.view.publish_buffer,
                                          session.view.remote_buffer,
                                          publication=publication,
-                                         identity_guard=session.identity_guard)
+                                         identity_guard=session.identity_guard,
+                                         **({
+                                                "audio_muted": True} if business_controls and
+                                                                        self.mute_states[
+                                                                            "audio"].local_muted else {}))
             self.event = event
             session.round_state.biz_session_id = event.biz_session_id
             self.peers, self.room, self.worker = peers, room, worker
+            if business_controls:
+                from .mute_controller import PkMuteController
+                self.business_mute = PkMuteController(self)
             self.future = session.manager.submit(worker, on_progress=True)
         except Exception:
             room.close()
@@ -102,7 +128,8 @@ class PkRtcLifecycle:
         session._trace("session.rtc.worker_started", generation=generation,
                        publish_audio=publication.audio,
                        publish_video=publication.video)
-        session._status("正在建立视频连线…")
+        session._status(
+            "正在建立经典 PK 语音…" if event.biz_label == "classic_pk" else "正在建立视频连线…")
 
     def _worker_failed(self, worker, error):
         # Future completion and the GUI dispatcher callback can arrive in either
@@ -110,6 +137,11 @@ class PkRtcLifecycle:
         if worker is not self.worker or self.session.closed or self._failure_reported:
             return
         self._failure_reported = True
+        if self.session.stopping and self.business_mute is not None:
+            # The requested local teardown still completes when Leave fails.
+            # In classic PK this must not retire the independent round owner.
+            self.session._error(error)
+            return
         self.session._fatal(error)
 
     def progress(self, event):
@@ -125,18 +157,27 @@ class PkRtcLifecycle:
                 session._trace("session.rtc.user_event", event_kind=event.kind,
                                peer_search=event.uid)
             elif isinstance(event, RtcMuteUpdate):
+                if (
+                        self.business_mute is not None and event.request_id is not None
+                        and event.request_id != self.business_mute.local_revision):
+                    return
                 session._trace("session.rtc.mute_update", media=event.media,
                                state=event.state,
                                error=str(event.error) if event.error else None)
-            if event == RtcMediaStage.CONNECTED:
+            if event in (RtcMediaStage.JOINED, RtcMediaStage.CONNECTED):
                 session.join.native_state = NativeInteractionState.CONNECTING
+                if session.options.mode == PkMode.VIDEO_LINK:
+                    self.notify_publication_ready(joined=True)
             elif event == RtcMediaStage.PUBLISHED:
                 self.publisher_ready = True
                 publication = publication_channels(self.event)
                 session.view.set_publisher_available(audio=publication.audio,
                                                      video=publication.video)
                 self.room.published()
-                self.notify_publication_ready()
+                if session.options.mode == PkMode.VIDEO:
+                    self.notify_publication_ready()
+                if self.business_mute is not None:
+                    self.business_mute.apply_controls()
             elif isinstance(event, RtcMuteUpdate):
                 self.mute_states[event.media] = event.state
                 session.view.set_publisher_mute_state(event.media, event.state)
@@ -147,6 +188,8 @@ class PkRtcLifecycle:
                         self.selected.video or self.selected.audio):
                     session._status("已连接，未开启对方画面或声音")
             elif event == RtcMediaStage.MEDIA_READY:
+                if self.business_mute is not None:
+                    self.business_mute.initialize()
                 if self.selected and (
                         self.selected.video or self.selected.audio):
                     received = (
@@ -173,13 +216,14 @@ class PkRtcLifecycle:
                            error_type=type(error).__name__, error=str(error))
             session._fatal(error)
 
-    def notify_publication_ready(self):
+    def notify_publication_ready(self, *, joined=False):
         # main3e0dc0 successful Pub -> UniversalInfo -> Handle4 for business2,
-        # excluding native kind14. JOIN admission here only supports business2.
+        # retained for existing video PK. Video-link uses completed JoinChannel.
         session = self.session
         generation = self.generation
         if (session.closed or session.stopping or self.event is None
-                or not self.publisher_ready or int(session.kind) == 14
+                or (not joined and not self.publisher_ready) or int(
+                    session.kind) == 14
                 or self.notice_generation == generation):
             return
         self.notice_generation = generation
@@ -217,11 +261,12 @@ class PkRtcLifecycle:
         try:
             worker = PkPublicationReadyWorker(
                 PkPresenter(finished=loaded, failed=failed), session.identity)
+            worker.request_allowed = current
             session.manager.submit(worker)
         except Exception as error:
             failed(error)
 
-    def room_changed(self, info):
+    def room_changed(self, info, *, apply_controls=True):
         session = self.session
         if session.closed or session.stopping:
             return
@@ -243,10 +288,16 @@ class PkRtcLifecycle:
                        verified_peer_uid=session.presentation.peer_uid,
                        expected_peer_uid=session.expected_peer_uid)
         session.presentation.render()
+        if self.business_mute is not None and apply_controls:
+            self.business_mute.receive(info.raw.get("stream_control", {}))
 
     def subscribe(self, desired):
         session = self.session
         if desired is not None:
+            if self.selected is not None and self.selected.uid != desired.uid:
+                raise PkError("本期仅支持一名 RTC 对端")
+            if self.business_mute is not None and self.business_mute.initialized:
+                return  # User receive controls own updates after initial subscription.
             session._trace("session.peer.subscribe", peer_search=desired.uid,
                            audio=desired.audio, video=desired.video)
             self.worker.subscribe(desired)
@@ -255,6 +306,8 @@ class PkRtcLifecycle:
     def set_muted(self, media, muted):
         """Explicit PK control; OBS capture and business HTTP Mute are separate."""
         session = self.session
+        if self.business_mute is not None:
+            return self.business_mute.local(media, muted)
         session._trace("session.mute.requested", media=media, muted=muted)
         if media not in self.mute_states or type(muted) is not bool:
             raise PkError("请选择要静音的声音或画面")
@@ -277,14 +330,34 @@ class PkRtcLifecycle:
                            generation=self.generation)
             # Retire HTTP reconciliation while this media owner exits; push
             # round updates are replayed only after local cleanup completes.
+            if self.event.biz_label == "classic_pk" and session.round.polling:
+                session._exit_query_resume_pending = True
             session.round.stop_polling()
             self.publisher_ready = False
             session.view.set_publisher_available(audio=False, video=False)
+            session.view.set_connection_active(False)
             self.generation += 1
             session.stopping = True
             session.join.native_state = NativeInteractionState.STOPPING
             self.room.close()
+            if self.business_mute is not None:
+                self.business_mute.close()
+            if self.event.biz_label == "classic_pk":
+                session.view.stop_classic_audio()
             self.worker.stop()
+
+    def stream_control(self, event):
+        if (self.business_mute is None or self.event is None
+                or self.session.closed or self.session.stopping):
+            return
+        channel_matches = bool(
+            event.rtc_channel_id) and event.rtc_channel_id == self.event.rtc_channel_id
+        session_matches = bool(
+            event.biz_session_id) and event.biz_session_id == self.event.biz_session_id
+        if (not (channel_matches or session_matches)
+                or event.uid not in (None, self.event.uid)):
+            return
+        self.business_mute.receive(event.stream_control, raw_event=event.raw)
 
     def finish_if_done(self):
         session = self.session
@@ -302,7 +375,13 @@ class PkRtcLifecycle:
             session._exit_query_resume_pending = True
         session.stopping = True
         session.round.stop_polling()
-        session.handle.retire()
+        if session.handle is not None:
+            session.handle.retire()
+        if self.business_mute is not None:
+            self.business_mute.close()
+            self.business_mute = None
+        if self.event is not None and self.event.biz_label == "classic_pk":
+            session.view.stop_classic_audio()
         if self.room is not None:
             self.room.close()
         session._trace("session.rtc.cleanup_completed",
@@ -316,6 +395,11 @@ class PkRtcLifecycle:
             self.peers.clear()
         self.peers = self.room = None
         self.selected = None
+        if session.options.mode == PkMode.VIDEO_LINK:
+            session.round_state.quit_round()
+            session._pending_round_events.clear()
+            session._exit_query_resume_pending = False
+            session.flow.retire()
         session.presentation.peer_uid = None
         self.publisher_ready = False
         self.mute_states = {media: RtcMuteState() for media in

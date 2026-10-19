@@ -20,11 +20,14 @@ from startlive.core.pk.states.events import (
     PkBattlePreEvent,
     PkBattleStartEvent,
     PkInfoEvent,
+    PkInfoHintEvent,
     PkInvitationEvent,
     PkJoinEvent,
     PkLeaveEvent,
     PkMatchTimeoutEvent,
     PkOperationEvent,
+    PkStreamControlEvent,
+    PkJoinEligibility,
 )
 from startlive.core.pk.states.info import PkClassicInfoResult, PkInfoDecision
 from startlive.core.pk.trace import pk_trace
@@ -32,6 +35,7 @@ from startlive.core.pk.trace_id import new_trace_id
 from startlive.core.pk.video_eligibility import video_eligibility
 from startlive.core.workers.pk.session_jobs import PkSessionJobs
 from .continuous_controller import PkContinuousController
+from .directed_invite import PkDirectedInviteController
 from .exit_controller import PkExitController
 from .match_controller import PkMatchController
 from .push_controller import PkPushController
@@ -65,7 +69,7 @@ class PkSessionController:
         self.expected_peer_uid = options.peer_search
         self.kind = (
             NativePkType.DOUBLE_CLASSIC if options.mode == PkMode.TRADITIONAL else
-            NativePkType.DOUBLE_INVITE if options.peer_search is not None else NativePkType.DOUBLE_RANDOM)
+            NativePkType.DOUBLE_INVITE if options.peer_search is not None or options.mode == PkMode.VIDEO_LINK else NativePkType.DOUBLE_RANDOM)
         self.closed = self.stopping = self.started = False
         self._business_started = self._continuous_written = False
         self._continuous_refresh_pending = False
@@ -73,9 +77,10 @@ class PkSessionController:
         self._exit_query_resume_pending = False
         self._pending_round_events = []
         self.invitations = self.rtc = self.join = self.handle = None
-        if options.mode == PkMode.VIDEO:
-            self._initialize_video(connector_factory, rtc_factory,
-                                   provider_readiness, provider_preflight)
+        self._rtc_initialization = (connector_factory, rtc_factory,
+                                    provider_readiness, provider_preflight)
+        if options.mode != PkMode.TRADITIONAL:
+            self._initialize_video(*self._rtc_initialization)
         self.presentation = PkRoundPresentation(self)
         self.round_state = PkRoundState(self.kind,
                                         start_state_provider=self._start_facts)
@@ -90,7 +95,7 @@ class PkSessionController:
                                        clock=clock,
                                        trace_id=self.trace_id,
                                        polling_allowed=lambda: not (
-                                                   self.closed or self.stopping or self._polling_suspended))
+                                               self.closed or self.stopping or self._polling_suspended))
         self.exit = PkExitController(manager, identity,
                                      reconcile=self._exit_result,
                                      failed=self._exit_failed,
@@ -98,10 +103,9 @@ class PkSessionController:
                                      finished=lambda: None,
                                      pk_state_provider=lambda: self.round_state.state,
                                      round_id_provider=lambda: self.round_state.round_id)
-        if self.kind == NativePkType.DOUBLE_INVITE:
-            from .directed_invite import PkDirectedInviteController
         self.flow = (
-            PkDirectedInviteController(manager, identity, sent=self._waiting,
+            PkDirectedInviteController(manager, identity,
+                                       sent=self._waiting,
                                        failed=self._flow_failed,
                                        intercepted=self._intercepted,
                                        cancelled=self._cancelled)
@@ -111,8 +115,11 @@ class PkSessionController:
                               cancelled=self._cancelled,
                               failed=self._flow_failed,
                               intercepted=self._intercepted))
+        if options.mode == PkMode.VIDEO_LINK:
+            from .video_link_controller import PkVideoLinkController
+            self.flow = PkVideoLinkController(self)
         continuous_kind = NativePkType.DOUBLE_CLASSIC if options.mode == PkMode.TRADITIONAL else NativePkType.DOUBLE_RANDOM
-        self.continuous = None if invitation_only else PkContinuousController(
+        self.continuous = None if invitation_only or options.mode == PkMode.VIDEO_LINK else PkContinuousController(
             manager, identity, continuous_kind, changed=self._continuous_loaded,
             failed=self._continuous_failed, trace_id=self.trace_id,
             requeue_checked=self._continuous_requeue)
@@ -135,18 +142,31 @@ class PkSessionController:
         if rtc_factory is None:
             from startlive.core.workers.pk.rtc_media import RtcMediaWorker
             rtc_factory = RtcMediaWorker
-        self.provider_readiness = provider_readiness or VideoProviderReadiness(
-            self.manager, provider_preflight)
-        self.invitations = PkInvitationLifecycle(self)
+        if self.options.mode != PkMode.TRADITIONAL:
+            self.provider_readiness = provider_readiness or VideoProviderReadiness(
+                self.manager, provider_preflight)
+            self.invitations = PkInvitationLifecycle(self)
         self.rtc = PkRtcLifecycle(self, connector_factory, rtc_factory)
         self.join = PkJoinController(self.identity, connect=self.rtc.connect,
                                      identity_guard=self.identity_guard,
-                                     eligibility_check=lambda
-                                         _: video_eligibility(
-                                         self._video_facts()))
-        self.handle = PkHandleController(self.manager, self.identity, self.join,
-                                         handled=self.invitations.handled,
-                                         failed=self.invitations.failed)
+                                     eligibility_check=self._join_eligibility)
+        if self.invitations is not None:
+            self.handle = PkHandleController(self.manager, self.identity,
+                                             self.join,
+                                             handled=self.invitations.handled,
+                                             failed=self.invitations.failed,
+                                             video_link=self.options.mode == PkMode.VIDEO_LINK)
+
+    def _join_eligibility(self, event):
+        if self.options.mode == PkMode.TRADITIONAL:
+            facts = self.readiness(PkMode.TRADITIONAL)
+            return PkJoinEligibility(
+                event.biz_label == "classic_pk" and facts.output_ready is True
+                and facts.live_output_active is True,
+                "当前不能加入经典 PK 语音")
+        if event.biz_label == "classic_pk":
+            return PkJoinEligibility(False, "经典语音通知与当前模式不符")
+        return video_eligibility(self._video_facts())
 
     def _stop_rtc(self):
         if self.rtc is not None:
@@ -236,12 +256,12 @@ class PkSessionController:
             raise PkError("此 PK 会话已启动或关闭")
         self.identity_guard(self.identity)
         if self.invitation_only and (
-                self.options.mode != PkMode.VIDEO or self.options.peer_search is not None
+                self.options.mode == PkMode.TRADITIONAL or self.options.peer_search is not None
                 or self.options.continuous):
             raise PkError("等待邀请仅用于未指定对手的视频 PK")
         if self.options.mode == PkMode.TRADITIONAL and self.options.peer_search is not None:
             raise PkError("经典 PK 仅支持随机匹配")
-        if self.kind == NativePkType.DOUBLE_INVITE:
+        if self.kind == NativePkType.DOUBLE_INVITE and not self.invitation_only:
             if self.options.candidate is None or self.options.candidate.uid != self.options.peer_search:
                 raise PkError("请搜索并选择视频 PK 对手")
         eligibility = (
@@ -255,7 +275,7 @@ class PkSessionController:
         self.view.set_active(not self.invitation_only)
         if self.invitation_only:
             self.invitations.refresh_activity()
-        if self.options.mode == PkMode.VIDEO:
+        if self.options.mode != PkMode.TRADITIONAL:
             self._status("正在检查视频 PK 组件…")
             self._check_provider(self._start_push, self._fatal)
         else:
@@ -343,6 +363,9 @@ class PkSessionController:
         self._business_started = True
         self._trace("session.business.start",
                     requested_peer_uid=self.expected_peer_uid)
+        if self.options.mode == PkMode.VIDEO_LINK:
+            self.flow.invite(self.options.candidate, trace_id=self.trace_id)
+            return
         self.round_state.state = NativePkState.STARTING
         self.presentation.info = self.presentation.peer_uid = None
         self.presentation.ended = False
@@ -406,8 +429,23 @@ class PkSessionController:
                     self._trace("session.push.ignored", command=command,
                                 reason="rtc_stopping")
                 return
-            if isinstance(event,
-                          PkJoinEvent) and self.options.mode == PkMode.VIDEO:
+            if isinstance(event, PkStreamControlEvent):
+                if self.rtc is not None:
+                    self.rtc.stream_control(event)
+            elif isinstance(event, PkInfoHintEvent):
+                self._receive_pk_hint(event)
+            elif isinstance(event,
+                            PkOperationEvent) and self.options.mode == PkMode.VIDEO_LINK:
+                self.flow.operation(event)
+            elif isinstance(event, PkJoinEvent):
+                if self.options.mode == PkMode.TRADITIONAL and self.rtc is None:
+                    if event.biz_label != "classic_pk" or self._join_eligibility(
+                            event).allowed is not True:
+                        return
+                    self._initialize_video(*self._rtc_initialization)
+                if self.options.mode == PkMode.VIDEO_LINK:
+                    self.flow.join(event)
+                    return
                 if self.invitation_only and self.invitations.accepted is None:
                     self._trace("session.push.ignored", command=event.command,
                                 reason="invitation_not_accepted")
@@ -416,6 +454,10 @@ class PkSessionController:
                     self._trace("session.push.ignored", command=event.command,
                                 reason="duplicate_or_unusable_join")
             elif isinstance(event, PkLeaveEvent) and self.join_event:
+                if (self.options.mode in (PkMode.TRADITIONAL, PkMode.VIDEO_LINK)
+                        and event.biz_session_id
+                        and event.biz_session_id != self.join_event.biz_session_id):
+                    return
                 decision = self.exit.server_leave(event,
                                                   rtc_channel_id=self.rtc.event.rtc_channel_id,
                                                   native_state=self.join.native_state)
@@ -423,6 +465,9 @@ class PkSessionController:
                             accepted=decision is not None,
                             event_rtc_channel_id=event.rtc_channel_id)
             elif isinstance(event, PkInfoEvent):
+                if self.options.mode == PkMode.VIDEO_LINK:
+                    if self.join_event is None or event.info.basic.biz_session_id != self.join_event.biz_session_id:
+                        return
                 if self.invitation_only and not self._business_started:
                     self._trace("session.push.ignored", command=event.command,
                                 reason="listener_has_no_accepted_business")
@@ -473,12 +518,42 @@ class PkSessionController:
                         error_type=type(error).__name__, error=str(error))
             self._error(error)
 
+    def _receive_pk_hint(self, event):
+        """A compact push identifies a round; never reinterpret its status enum."""
+        if (self.options.mode == PkMode.TRADITIONAL or self.join_event is None
+                or self.closed or self.stopping or self._polling_suspended
+                or type(event.pk_id) is not int or not 0 < event.pk_id < 1 << 63
+                or event.pk_id == self.round_state.last_ended_round_id
+                or (
+                        event.biz_session_id and event.biz_session_id != self.join_event.biz_session_id)):
+            return
+        state = self.round_state
+        if state.round_id == event.pk_id:
+            return
+        if state.round_id and state.state != NativePkState.IDLE:
+            self._trace("session.pk_hint.ignored",
+                        reason="different_active_round",
+                        event_pk_id=event.pk_id)
+            return
+        self.round.stop_polling()
+        state.round_id = event.pk_id
+        state.state = NativePkState.PREPARING
+        state.timestamp = 0
+        state.info = None
+        state.biz_session_id = self.join_event.biz_session_id
+        self.view.set_active(True)
+        self._status("对方已发起 PK，正在读取回合信息…")
+        self.round.query_current(event.pk_id)
+        self.round.start_polling(resume=True)
+
     def _round_changed(self, decision):
         if self.closed:
             return
         self.presentation.info, self.presentation.ended = decision.info, False
         self.presentation.render()
         self.view.set_active(True)
+        if self.options.mode == PkMode.VIDEO_LINK:
+            self.round.start_polling(resume=True)
         if (
                 decision.state == NativePkState.MATCHING and self.round_state.kind == NativePkType.DOUBLE_CLASSIC
                 and not self._polling_suspended and isinstance(self.flow,
@@ -638,6 +713,15 @@ class PkSessionController:
         self._trace("session.stop_round.requested")
         if self.closed:
             return
+        if self.options.mode == PkMode.VIDEO_LINK and self.join_event is not None:
+            self.disconnect()
+            return
+        if self.options.mode == PkMode.VIDEO_LINK and self.invitation_only:
+            self.close()
+            return
+        if self.options.mode == PkMode.VIDEO_LINK and self.flow.phase == PkPhase.CONNECTING:
+            self.flow.cancel()
+            return
         if self.flow.phase == PkPhase.STOPPING or self.exit.busy:
             self._trace("session.stop_round.ignored",
                         reason="exit_or_cancel_pending")
@@ -656,6 +740,19 @@ class PkSessionController:
     def disconnect(self):
         self._trace("session.disconnect.requested")
         if self.join_event and not self.closed and not self.stopping:
+            if self.options.mode == PkMode.VIDEO_LINK:
+                from startlive.core.workers.pk.video_link import \
+                    PkDisconnectLinkWorker
+                from .pk_presenter import PkPresenter
+                worker = PkDisconnectLinkWorker(
+                    PkPresenter(finished=lambda _: None, failed=self._error),
+                    self.identity, self.join_event.biz_session_id,
+                    exit_pk=self.round_state.round_id > 0)
+                try:
+                    self.manager.submit(worker)
+                finally:
+                    self.close()
+                return
             self.round.stop_polling()
             self.exit.disconnect_business_two(self.rtc.event.biz_session_id,
                                               trace_id=self.trace_id)
@@ -692,7 +789,8 @@ class PkSessionController:
                     self._resume_round_queries()
                 except Exception as error:
                     self._fatal(error)
-            self.invitations.resume_waiting()
+            if self.invitations is not None:
+                self.invitations.resume_waiting()
             self._refresh_continuous()
             if self.closed and not self.manager.busy:
                 self.view.set_active(False)
@@ -704,10 +802,12 @@ class PkSessionController:
             self._continuous_refresh_pending = False
             self._refresh_continuous()
         if self.rtc is not None and self.rtc.worker and not self.stopping:
-            facts = self.readiness(PkMode.VIDEO)
+            facts = self.readiness(self.options.mode)
             if facts.output_ready is not True or facts.live_output_active is not True:
                 self._status(facts.reason)
-                self.rtc.stop()
+                self.close()
+            elif self.rtc.room is not None:
+                self.rtc.room.tick()
 
     def close(self):
         if self.closed:
@@ -763,3 +863,11 @@ class PkSessionController:
     def set_publisher_muted(self, media, muted):
         if self.rtc is not None:
             self.rtc.set_muted(media, muted)
+
+    def set_remote_muted(self, media, muted):
+        if self.rtc is not None and self.rtc.business_mute is not None:
+            self.rtc.business_mute.set_remote(media, muted)
+
+    def start_connection_pk(self):
+        if self.options.mode == PkMode.VIDEO_LINK:
+            self.flow.start_pk()

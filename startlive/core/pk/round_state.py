@@ -5,11 +5,12 @@ Callers supply local readiness facts independently of this verified status map.
 Round/session binding and preservation of the timestamp across local cleanup
 are explicit StartLive policies. Create a new owner for a new flow epoch.
 """
-from .pk_eligibility import pk_start_eligibility, pk_type_from_server
-from startlive.core.pk.states.info import PkInfoDecision
 from startlive.core.constant.pk import NativePkType
 from startlive.core.constant.pk_info import STATUS_STATES, NativePkState, \
     PkInfoAction
+from startlive.core.constant.pk_info import VIDEO_STATUS_STATES
+from startlive.core.pk.states.info import PkInfoDecision
+from .pk_eligibility import pk_start_eligibility, pk_type_from_server
 
 
 class PkRoundState:
@@ -110,7 +111,8 @@ class PkRoundState:
         self.round_id = basic.pk_id or self.round_id
         self.flag3d0_unknown = basic.status in (301, 501, 602)
         action = PkInfoAction.UPDATED
-        if basic.status >= 1001:
+        statuses = STATUS_STATES if info.legacy else VIDEO_STATUS_STATES
+        if (basic.status >= 1001 if info.legacy else basic.status == 1401):
             action = PkInfoAction.ROUND_ENDED
         elif basic.status == 0:
             if info.match.match_status == 0:
@@ -119,8 +121,8 @@ class PkRoundState:
                 if not (
                         self.kind == NativePkType.MULTI_RANDOM and previous == NativePkState.PREPARING):
                     self.state = NativePkState.MATCHING
-        elif basic.status in STATUS_STATES:
-            self.state = STATUS_STATES[basic.status]
+        elif basic.status in statuses:
+            self.state = statuses[basic.status]
         if action in (PkInfoAction.ROUND_IDLE, PkInfoAction.ROUND_ENDED):
             self.last_ended_round_id = self.round_id
             self.state = NativePkState.IDLE

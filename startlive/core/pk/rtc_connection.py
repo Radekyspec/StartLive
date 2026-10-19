@@ -178,7 +178,8 @@ class RtcConnection:
 
     def __init__(self, ticket: RtcTicket, *, notification=None, timeout=15,
                  leave_timeout=3, peer_connection_factory=RTCPeerConnection,
-                 transport_policy: RtcTransportPolicy | None = None):
+                 transport_policy: RtcTransportPolicy | None = None,
+                 on_joined=None):
         enable_dtls_failure_trace()
         pk_trace("rtc.runtime", **runtime_details())
         pk_trace("rtc.connection.create", uid=ticket.uid,
@@ -196,6 +197,7 @@ class RtcConnection:
         self._peer_connection_factory = peer_connection_factory
         self._stage = "created"
         self.notification, self.timeout = notification, timeout
+        self.on_joined = on_joined
         # If no callback is injected, retain notifications received while
         # awaiting Join so the later session owner can reconcile them. The
         # bounded queue is StartLive policy, not a recovered native capacity.
@@ -432,6 +434,8 @@ class RtcConnection:
         self._stage = "join"
         with self.signaling.block_notifications():
             self.join_response = await self.signaling.join()
+            if self.on_joined is not None:
+                self.on_joined()
             self._stage = "members"
             with self.signaling.block_notifications():
                 self.members_response = await self.signaling.refresh_members(

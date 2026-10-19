@@ -1,3 +1,5 @@
+from time import monotonic
+
 from startlive.core.exceptions import PkError
 from startlive.core.pk.identity import require_current_identity
 from startlive.core.pk.trace import pk_trace
@@ -8,17 +10,26 @@ from .pk_presenter import PkPresenter
 class PkRoomInfoController:
     """Normal anchor's first post-Pub HTTP query and current RTC room updates.
 
-    All methods run on the owner's dispatcher. Poll timing is not established;
-    subsequent refreshes require an explicit call instead of a guessed timer.
+    All methods run on the owner's dispatcher. New connection flows opt into
+    the captured two-second cadence; existing video PK keeps explicit refresh.
     """
 
     def __init__(self, manager, identity, session, *, changed, polling_stopped,
                  failed,
-                 identity_guard=require_current_identity):
+                 identity_guard=require_current_identity, poll_interval=None,
+                 clock=monotonic, snapshot_guard=None):
         self.manager, self.identity, self.session = manager, identity, session
         self.changed, self.polling_stopped, self.failed = changed, polling_stopped, failed
         self.identity_guard = identity_guard
         self.busy = self._published = self._closed = False
+        self.poll_interval, self.clock = poll_interval, clock
+        self.snapshot_guard = snapshot_guard
+        self.next_poll = 0.0
+
+    def tick(self):
+        if (self.poll_interval is not None and self._published
+                and not self._closed and self.clock() >= self.next_poll):
+            self.refresh()
 
     def published(self):
         """Call only after the RTC Pub RPC/description update completed."""
@@ -34,14 +45,18 @@ class PkRoomInfoController:
             raise PkError("请等待本机音视频发布完成后再查询连线房间")
         self.identity_guard(self.identity)
         self.busy = True
+        self.next_poll = self.clock() + (self.poll_interval or 0)
         worker = None
         request = {"biz_session_id": self.session.biz_session_id,
                    "room_id": str(self.identity.room_id)}
         try:
+            controls_current = self.snapshot_guard() if self.snapshot_guard else None
             worker = PkRoomInfoWorker(PkPresenter(
-                finished=lambda result: self._loaded(result, request=request),
+                finished=lambda result: self._loaded(result, request=request,
+                                                     controls_current=controls_current),
                 failed=self._failed),
                 self.identity, self.session.biz_session_id)
+            worker.request_allowed = lambda: not self._closed and not self.session.stop_polling
             self.manager.submit(worker)
         except Exception as error:
             self._trace_failure(error, request=request, response=None,
@@ -49,7 +64,7 @@ class PkRoomInfoController:
             self._failed(error)
         return True
 
-    def _loaded(self, result, *, request):
+    def _loaded(self, result, *, request, controls_current=None):
         self.busy = False
         if self._closed:
             return
@@ -58,7 +73,10 @@ class PkRoomInfoController:
             was_stopped = self.session.stop_polling
             batch = self.session.accept_http(result.data)
             for info in batch.infos:
-                self.changed(info)
+                if controls_current is None:
+                    self.changed(info)
+                else:
+                    self.changed(info, apply_controls=controls_current())
             if batch.stop_polling and not was_stopped:
                 self.polling_stopped()
         except Exception as error:

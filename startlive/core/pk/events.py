@@ -5,21 +5,23 @@ end event does not imply that the business connection or RTC has ended.
 """
 from copy import deepcopy
 
-from .pk_info import parse_pk_info
+from startlive.core.constant.pk_events import EVENT_TYPES
+from startlive.core.exceptions import PkProtocolError
 from startlive.core.pk.states.events import (
     PkBattleEndEvent,
     PkBattlePreEvent,
     PkBattleStartEvent,
     PkInvitationContext,
     PkInfoEvent,
+    PkInfoHintEvent,
     PkInvitationEvent,
     PkJoinEvent,
     PkLeaveEvent,
     PkMatchTimeoutEvent,
     PkOperationEvent,
+    PkStreamControlEvent,
 )
-from startlive.core.constant.pk_events import EVENT_TYPES
-from startlive.core.exceptions import PkProtocolError
+from .pk_info import parse_pk_info
 
 
 def accepts_join_buvid(event_buvid: str, *, local_buvid: str,
@@ -93,7 +95,12 @@ def parse_pk_event(command, payload):
     raw = deepcopy(payload)
     common = {"command": command, "raw": raw}
     if command == "PK_INFO":
-        return PkInfoEvent(**common, info=parse_pk_info(_object(raw, "data")))
+        data = _object(raw, "data")
+        if isinstance(data.get("pk_basic"), dict):
+            return PkInfoEvent(**common, info=parse_pk_info(data))
+        return PkInfoHintEvent(**common, pk_id=_number(data.get("pk_id")),
+                               pk_status=_number(data.get("pk_status")),
+                               biz_session_id=_text(data.get("biz_session_id")))
     if command == "PK_BATTLE_MATCH_TIMEOUT":
         # Contract43 consumes only the int32 family, with an initialized zero
         # fallback. Do not borrow the round identity used by PRE/START/END.
@@ -162,7 +169,23 @@ def parse_pk_event(command, payload):
                                 target_uid=_number(data.get("target_uid")),
                                 peer_search=_number(data.get("peer_uid")),
                                 own_side=_boolean(data.get("own_side")),
-                                source=_number(data.get("source")))
+                                source=_number(data.get("source")),
+                                uid=_number(data.get("uid")),
+                                initiator=_number(data.get("initiator")),
+                                biz_label=_text(data.get("biz_label")),
+                                invitation_timeout=_number(
+                                    data.get("invitation_timeout")),
+                                user_info=data.get("user_info") if isinstance(
+                                    data.get("user_info"), dict) else {})
+    if command == "UNIVERSAL_INTERACT_STREAM_CONTROL":
+        config = _object(data, "config")
+        return PkStreamControlEvent(
+            **common, biz_session_id=_text(config.get("biz_session_id")),
+            rtc_channel_id=_text(config.get("rtc_channel_id")),
+            uid=_number(config.get("uid")),
+            # 115's inner wire shape is not yet captured. Preserve unknown
+            # values for diagnostics instead of failing event dispatch.
+            stream_control=data.get("stream_control"))
     if command == "UNIVERSAL_INTERACT_LEAVE":
         return PkLeaveEvent(**common, **session, uid=_number(data.get("uid")),
                             close_user_reason=_number(

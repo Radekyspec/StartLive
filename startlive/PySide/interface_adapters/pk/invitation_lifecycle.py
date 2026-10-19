@@ -1,13 +1,13 @@
 """Incoming prompt lifetime and outgoing invitation results on the GUI dispatcher."""
 from math import ceil
 
-from .directed_invite import PkDirectedInviteController
 from startlive.core.constant.pk import NativeInteractionState, NativePkType, \
     PkMode, PkPhase
 from startlive.core.constant.pk_info import NativePkState
 from startlive.core.exceptions import PkError
 from startlive.core.pk.events import invitation_context_from_event
 from startlive.core.pk.video_eligibility import invitation_eligibility
+from .directed_invite import PkDirectedInviteController
 
 
 class PkInvitationLifecycle:
@@ -238,6 +238,8 @@ class PkInvitationLifecycle:
         session = self.session
         if session.closed:
             return
+        if session.options.mode == PkMode.VIDEO_LINK:
+            session.flow.refresh_list()
         self.dismiss()
         session._trace("session.invitation.handled",
                        accepted=self.accepted is not None,
@@ -329,7 +331,10 @@ class PkInvitationLifecycle:
         # Source12 requires a separate room context. Listening never
         # cancels an outgoing request or auto-rejects a hidden invite.
         if (self.can_answer() and self.pending is None
-                and context.source in (5, 7, 10, 11)
+                and context.source in (
+                (4, 7) if session.options.mode == PkMode.VIDEO_LINK else (5, 7,
+                                                                          10,
+                                                                          11))
                 and context.selected_peer_uid > 0
                 and eligibility.allowed is True):
             # StartLive presentation policy: only an explicit positive
