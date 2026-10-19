@@ -1,7 +1,8 @@
-from startlive.core.constant.logging import _URL_PATTERN, \
-    _SENSITIVE_QUERY_PARAMETERS
 from logging import Formatter
 from urllib.parse import parse_qsl, urlencode, urlsplit
+
+from startlive.core.constant.logging import _URL_PATTERN, \
+    _SENSITIVE_QUERY_PARAMETERS
 
 
 def _redact(text: str) -> str:

@@ -1,10 +1,10 @@
 """Contract51 full Config snapshots and the ten requested preference changes."""
 from dataclasses import replace
 
-from startlive.core.pk.states.preferences import PkPreferenceValues
-from startlive.core.pk.states.user_settings import PkUserSettingsSnapshot
 from startlive.core.constant.pk_user_settings import PK_SETTING_SWITCH_FIELDS
 from startlive.core.exceptions import PkProtocolError
+from startlive.core.pk.states.preferences import PkPreferenceValues
+from startlive.core.pk.states.user_settings import PkUserSettingsSnapshot
 
 
 def _integer(value, *, bits=32):
@@ -22,7 +22,7 @@ def _options(data, field):
     for key, marker in values.items():
         if not isinstance(key,
                           str) or not key.isascii() or not key.removeprefix(
-                "-").isdecimal():
+            "-").isdecimal():
             # Native Config parser skips non-numeric object keys; they are not
             # duration choices. A valid selected numeric option is still required.
             continue

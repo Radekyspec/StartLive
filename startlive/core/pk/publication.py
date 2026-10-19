@@ -1,6 +1,6 @@
 """Modern JOIN publication source, independent of config.enable_* flags."""
-from startlive.core.pk.states.publication import PkPublishChannels
 from startlive.core.exceptions import PkProtocolError
+from startlive.core.pk.states.publication import PkPublishChannels
 
 
 def publication_channels(join_event):

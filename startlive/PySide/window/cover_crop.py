@@ -1,4 +1,3 @@
-from startlive.core.constant.ui import COVER_CROP_FOOTER_BTN_H
 from PIL.ImageQt import toqpixmap
 from PySide6.QtCore import (
     Qt, QBuffer, QByteArray, QIODevice,
@@ -11,6 +10,7 @@ from PySide6.QtWidgets import (
 from startlive.PySide.interface_adapters.cover import CoverUploadPresenter
 from startlive.PySide.log import get_logger
 from startlive.PySide.widgets import CropLabel
+from startlive.core.constant.ui import COVER_CROP_FOOTER_BTN_H
 from startlive.core.workers.cover import CoverUploadWorker
 
 

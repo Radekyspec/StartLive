@@ -1,8 +1,8 @@
 """Contract23 ordinary video business2 eligibility with explicit local facts."""
-from startlive.core.pk.states.events import PkInvitationEligibility, \
-    PkJoinEligibility
 from startlive.core.constant.pk import NativeInteractionState, NativePkType
 from startlive.core.constant.pk_info import NativePkState
+from startlive.core.pk.states.events import PkInvitationEligibility, \
+    PkJoinEligibility
 
 
 def interaction_business_type(event):

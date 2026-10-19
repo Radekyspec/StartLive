@@ -6,8 +6,8 @@ from startlive.core.pk.states.session import PkContinuousStatus
 
 def precheck_fields(identity, kind: NativePkType):
     result = {"room_id": str(identity.room_id),
-            "pk_version": str(kind.server_type),
-            "mobi_app": "pc_link"}
+              "pk_version": str(kind.server_type),
+              "mobi_app": "pc_link"}
     if kind == NativePkType.DOUBLE_CLASSIC:
         result["uid"] = str(identity.uid)
     return result

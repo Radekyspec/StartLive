@@ -1,7 +1,8 @@
 """Transport diagnostics never include credentials or room message bodies."""
-from startlive.core.constant.danmaku_trace import _DESCRIPTIONS
 import json
 import re
+
+from startlive.core.constant.danmaku_trace import _DESCRIPTIONS
 from startlive.core.log import get_logger
 
 

@@ -5,9 +5,9 @@ updates the state; a GUI subscriber must forward the notification to a queued
 Qt signal instead of touching widgets from that thread.
 """
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-import logging
 
 from .app_state_base import StateBase
 

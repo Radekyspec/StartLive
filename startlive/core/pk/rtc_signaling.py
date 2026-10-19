@@ -3,14 +3,14 @@
 Transport setup is deliberately a separate dependency: these messages must
 not be sent as HTTP, UDP datagrams, or to a guessed signaling websocket.
 """
+import asyncio
 from collections import deque
 from contextlib import contextmanager
-import asyncio
 
-from .trace import pk_trace, sdp_for_trace
 from startlive.core.constant.pk_wire import MAX_MESSAGE
 from startlive.core.exceptions import PkError, PkProtocolError
 from startlive.core.pk.rtc_wire import decode, encode
+from .trace import pk_trace, sdp_for_trace
 
 
 class RtcSignaling:
@@ -123,7 +123,7 @@ class RtcSignaling:
             if expected not in response:
                 raise PkProtocolError("RTC 响应类型与请求不符")
             parsed = parse_result(response[expected]) if parse_result else \
-            response[expected]
+                response[expected]
             self._trace("rtc.rpc.success", **context, result=response[expected])
             return parsed
         except asyncio.TimeoutError:

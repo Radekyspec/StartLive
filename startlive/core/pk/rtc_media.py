@@ -130,9 +130,9 @@ class ObsVideoTrack(VideoStreamTrack):
         if self.origin is None:
             self.origin = packet.timestamp_ns
         capture_pts = (
-                                  packet.timestamp_ns - self.origin) * 90000 // 1_000_000_000
+                              packet.timestamp_ns - self.origin) * 90000 // 1_000_000_000
         frame.pts = max(0 if self.last_pts < 0 else self.last_pts + (
-                    90000 + plan.frame_rate - 1) // plan.frame_rate,
+                90000 + plan.frame_rate - 1) // plan.frame_rate,
                         capture_pts)
         frame.time_base = Fraction(1, 90000)
         self.last_pts = frame.pts
@@ -192,7 +192,7 @@ class ObsAudioTrack(AudioStreamTrack):
             if self.origin is None:
                 self.origin = packet.timestamp_ns
             packet_pts = (
-                                     packet.timestamp_ns - self.origin) * 48000 // 1_000_000_000
+                                 packet.timestamp_ns - self.origin) * 48000 // 1_000_000_000
             if abs(packet_pts - (self.next_pts + self.fifo.samples)) > 48:
                 # Capture dropped samples: do not splice a partial old frame
                 # into new audio or compress the timestamp gap out of the feed.
@@ -455,10 +455,10 @@ class RtcMediaSession:
 
     def _mute_ready(self):
         return (
-                    not self.closed and self.published and self.owner_active() is True
-                    and self.signaling.joined and not getattr(self.signaling,
-                                                              "closed", False)
-                    and self.pc.remoteDescription is not None and self.pc.connectionState == "connected")
+                not self.closed and self.published and self.owner_active() is True
+                and self.signaling.joined and not getattr(self.signaling,
+                                                          "closed", False)
+                and self.pc.remoteDescription is not None and self.pc.connectionState == "connected")
 
     def _published_track(self, media):
         track = next((track for track in self.tracks if

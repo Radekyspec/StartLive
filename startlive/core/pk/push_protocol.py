@@ -1,12 +1,12 @@
 """PK business decoding only; authentication and ACKs belong to danmaku."""
 import json
 
-from .trace import pk_trace
 from startlive.core.constant.pk_events import OBSERVED_ONLY_COMMANDS, \
     EVENT_TYPES
 from startlive.core.danmaku.protocol import DanmakuProtocol
 from startlive.core.exceptions import PkProtocolError
 from startlive.core.pk.events import parse_pk_event
+from .trace import pk_trace
 
 
 class PkPushProtocol(DanmakuProtocol):

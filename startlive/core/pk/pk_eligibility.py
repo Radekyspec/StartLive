@@ -1,7 +1,7 @@
 """Contract24 forward PK type mapper and distinct idle-start eligibility."""
-from startlive.core.pk.states.eligibility import PkStartEligibility
 from startlive.core.constant.pk import NativePkType
 from startlive.core.constant.pk_info import NativePkState
+from startlive.core.pk.states.eligibility import PkStartEligibility
 
 
 def pk_type_from_server(server_type, sub_type):

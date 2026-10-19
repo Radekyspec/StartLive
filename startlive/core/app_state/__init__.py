@@ -317,7 +317,6 @@ def replace_account_cookies(cookies: dict[str, str]) -> None:
         cookies_dict.update(values)
 
 
-
 def create_session(h_type: HeadersType, *,
                    inherit_account_cookies: bool = True,
                    account_cookies: dict[str, str] | None = None) -> Session:

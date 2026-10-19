@@ -66,7 +66,7 @@ class PkSearchDialog(QDialog):
         self._search = self.query.text().strip()
         if not self.video_link and (
                 not self._search.isascii() or not self._search.isdecimal() or not 0 < int(
-                self._search) < 1 << 64):
+            self._search) < 1 << 64):
             self.status.setText("请输入有效的主播 UID 或房间号")
             return
         self._page, self._has_next = 0, False
@@ -85,7 +85,7 @@ class PkSearchDialog(QDialog):
             from startlive.core.workers.pk.video_link import PkLinkPanelWorker
             worker_type = PkLinkPanelWorker
         worker = worker_type(presenter, self.identity,
-                                          self._search, page=page)
+                             self._search, page=page)
         try:
             self.manager.submit(worker)
         except Exception as error:

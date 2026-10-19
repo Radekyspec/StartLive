@@ -1,5 +1,5 @@
-from .pk_request import PkRequestWorker
 from startlive.core.exceptions import PkProtocolError
+from .pk_request import PkRequestWorker
 
 
 class PkInfoWorker(PkRequestWorker):

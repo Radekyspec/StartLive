@@ -21,13 +21,13 @@ class PkInvitationLifecycle:
         """An unclaimed listener can be replaced by an explicit outgoing flow."""
         session = self.session
         return (
-                    session.invitation_only and session.started and not session.closed and not session.stopping
-                    and not session._business_started and self.pending is None
-                    and self.accepted is None and not session.handle.busy
-                    and session.rtc.future is None and session.rtc.event is None
-                    and session.join.native_state == NativeInteractionState.READY
-                    and session.round_state.state == NativePkState.IDLE
-                    and session.flow.phase in (PkPhase.IDLE, PkPhase.FINISHED))
+                session.invitation_only and session.started and not session.closed and not session.stopping
+                and not session._business_started and self.pending is None
+                and self.accepted is None and not session.handle.busy
+                and session.rtc.future is None and session.rtc.event is None
+                and session.join.native_state == NativeInteractionState.READY
+                and session.round_state.state == NativePkState.IDLE
+                and session.flow.phase in (PkPhase.IDLE, PkPhase.FINISHED))
 
     def set_reception(self, enabled):
         """Local presentation preference; no server-setting or RTC side effect."""
@@ -332,9 +332,11 @@ class PkInvitationLifecycle:
         # cancels an outgoing request or auto-rejects a hidden invite.
         if (self.can_answer() and self.pending is None
                 and context.source in (
-                (4, 7) if session.options.mode == PkMode.VIDEO_LINK else (5, 7,
-                                                                          10,
-                                                                          11))
+                        (4,
+                         7) if session.options.mode == PkMode.VIDEO_LINK else (
+                                5, 7,
+                                10,
+                                11))
                 and context.selected_peer_uid > 0
                 and eligibility.allowed is True):
             # StartLive presentation policy: only an explicit positive

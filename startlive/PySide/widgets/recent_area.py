@@ -1,10 +1,11 @@
-from startlive.core.constant.ui import RECENT_AREA_CHILD_BTN_H
 # -*- coding: utf-8 -*-
 from functools import partial
 
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel, \
     QSizePolicy, QStackedLayout, QButtonGroup
+
+from startlive.core.constant.ui import RECENT_AREA_CHILD_BTN_H
 
 
 class RecentAreaBar(QWidget):

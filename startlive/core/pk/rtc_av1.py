@@ -4,10 +4,10 @@ Wire format: https://aomediacodec.github.io/av1-rtp-spec/ (sections 4 and 7).
 Level limits: AV1 specification Annex A. Only single-layer, 8-bit 4:2:0
 publishing is exposed. Receiving remains negotiated independently as H.264.
 """
-from startlive.core.pk.states.av1 import Av1Limits
-from startlive.core.pk.states.video import VideoEncodingPlan
 from startlive.core.constant.pk_av1 import AV1_LEVELS
 from startlive.core.exceptions import PkError, PkProtocolError
+from startlive.core.pk.states.av1 import Av1Limits
+from startlive.core.pk.states.video import VideoEncodingPlan
 
 
 def level_limits(level):
@@ -95,7 +95,7 @@ def inspect_sequence(obu):
         value = 0
         for _ in range(count):
             value = (value << 1) | (
-                        (body[position // 8] >> (7 - position % 8)) & 1)
+                    (body[position // 8] >> (7 - position % 8)) & 1)
             position += 1
         return value
 

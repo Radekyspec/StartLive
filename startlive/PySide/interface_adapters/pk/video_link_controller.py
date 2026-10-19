@@ -211,8 +211,8 @@ class PkVideoLinkController:
                                          session.join_event.biz_session_id)
         serial = self.attempt.serial
         worker.request_allowed = lambda: (
-                    not session.closed and not session.stopping
-                    and serial == self.attempt.serial)
+                not session.closed and not session.stopping
+                and serial == self.attempt.serial)
         self.attempt.submit(session.manager, worker)
 
     def retire(self):

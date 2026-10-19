@@ -5,18 +5,18 @@ Native's traced type/command/version gate does not itself enforce that binding.
 The caller owns this object per interaction and discards it at teardown; an
 old connection must never be attached to a new context.
 """
+import json
 from collections import deque
 from copy import deepcopy
-import json
 
-from .peers import room_info_members
+from startlive.core.exceptions import PkProtocolError
 from startlive.core.pk.states.room_info import (
     PkRoomInfo,
     PkRoomInfoBatch,
     PkRoomInfoContext,
     RtcBusinessMessage,
 )
-from startlive.core.exceptions import PkProtocolError
+from .peers import room_info_members
 
 
 def business_message(notification):

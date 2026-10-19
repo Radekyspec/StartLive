@@ -1,5 +1,5 @@
-from .pk_request import PkRequestWorker
 from startlive.core.pk.parameters import exit_pk_fields
+from .pk_request import PkRequestWorker
 
 
 class PkExitWorker(PkRequestWorker):

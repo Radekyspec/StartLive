@@ -1,6 +1,6 @@
-from .pk_request import PkRequestWorker
 from startlive.core.pk.parameters import precheck_fields
 from startlive.core.pk.precheck import parse_precheck
+from .pk_request import PkRequestWorker
 
 
 class _PkPrecheckWorker(PkRequestWorker):

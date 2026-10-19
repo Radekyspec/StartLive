@@ -5,11 +5,6 @@ instead of dropping RTP fragments or growing another queue. Waiting happens
 only in the video sender coroutine, before encryption; the latest-frame OBS
 buffer already bounds producer backlog. The 2.5x rate is StartLive policy.
 """
-from startlive.core.constant.pk_video import (
-    PK_PACER_BURST_BYTES,
-    PK_PACER_REFILL_SECONDS,
-    PK_PACER_RATE_FACTOR,
-)
 from contextvars import ContextVar
 from time import perf_counter
 
@@ -25,9 +20,14 @@ from aiortc.rtp import (
     unpack_remb_fci,
 )
 
+from startlive.core.constant.pk_video import (
+    PK_PACER_BURST_BYTES,
+    PK_PACER_REFILL_SECONDS,
+    PK_PACER_RATE_FACTOR,
+)
+from startlive.core.constant.pk_video_config import DEFAULT_VIDEO_CONFIG
 from .rtc_timing import wait_until
 from .trace import pk_trace
-from startlive.core.constant.pk_video_config import DEFAULT_VIDEO_CONFIG
 
 
 class PkVideoPacer:
@@ -161,7 +161,7 @@ def configure_video_pacing(sender):
                 packet = RtpPacket.parse(data, extensions)
                 if packet.extensions.abs_send_time is not None:
                     packet.extensions.abs_send_time = (
-                                                                  clock.current_ntp_time() >> 14) & 0xFFFFFF
+                                                              clock.current_ntp_time() >> 14) & 0xFFFFFF
                     data = packet.serialize(extensions)
             await original_send(data)
             pacer.observed(data)

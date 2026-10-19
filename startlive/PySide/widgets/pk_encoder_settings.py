@@ -16,11 +16,11 @@ from PySide6.QtWidgets import (
 
 from startlive.PySide.states.pk_encoder import PKEncoderEvents
 from startlive.core import app_state
-from startlive.core.constant.settings import SettingsName
+from startlive.core.constant.pk_encoder import SCALE_MODES
 from startlive.core.constant.pk_video_config import DEFAULT_VIDEO_CONFIG
+from startlive.core.constant.settings import SettingsName
 from startlive.core.pk.states.encoder import VideoEncodingConfig, aq_policy, \
     preset_choices, translate_preset
-from startlive.core.constant.pk_encoder import SCALE_MODES
 from startlive.core.workers.base.CallbackPresenter import CallbackPresenter
 from startlive.core.workers.pk.scan_encoders import ScanPkEncodersWorker
 

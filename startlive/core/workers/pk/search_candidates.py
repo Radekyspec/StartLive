@@ -1,7 +1,7 @@
-from .pk_request import PkRequestWorker
+from startlive.core.exceptions import PkProtocolError
 from startlive.core.pk.candidates import parse_candidate_page, \
     video_search_fields
-from startlive.core.exceptions import PkProtocolError
+from .pk_request import PkRequestWorker
 
 
 class PkSearchCandidatesWorker(PkRequestWorker):

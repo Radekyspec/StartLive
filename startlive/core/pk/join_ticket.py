@@ -1,9 +1,9 @@
 """Bind a supplied JOIN ticket to the logged-in user and current device."""
+from startlive.core.exceptions import PkAuthenticationError, PkProtocolError
+from startlive.core.pk.states.events import PkJoinEvent
+from startlive.core.pk.states.session import PkIdentity, RtcTicket
 from .events import accepts_join_buvid
 from .rtc_wire import decode_ticket
-from startlive.core.pk.states.session import PkIdentity, RtcTicket
-from startlive.core.pk.states.events import PkJoinEvent
-from startlive.core.exceptions import PkAuthenticationError, PkProtocolError
 
 
 def ticket_from_join(event: PkJoinEvent, identity: PkIdentity, *,

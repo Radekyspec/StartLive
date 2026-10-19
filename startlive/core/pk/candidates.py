@@ -1,8 +1,8 @@
 """Contract12 projection for directed video PK candidate mode8."""
 from copy import deepcopy
 
-from startlive.core.pk.states.candidates import PkCandidate, PkCandidatePage
 from startlive.core.exceptions import PkProtocolError
+from startlive.core.pk.states.candidates import PkCandidate, PkCandidatePage
 
 
 def video_search_fields(search: str, *, page: int = 1):

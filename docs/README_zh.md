@@ -13,8 +13,16 @@
 <!-- markdownlint-restore -->
 
 ## 声明
-- 本软件使用 [GNU General Public License 3.0](https://www.gnu.org/licenses/gpl-3.0.zh-cn.html) 协议开源
-- 本软件 logo 并非使用 GPL-3.0 协议开源，画师[花漫酱](https://space.bilibili.com/49468802)及软件开发者保留所有权利。不得以 GPL-3.0 协议已授权为由在未经授权的情况下使用本软件 logo，不得在未经授权的情况下将本软件 logo 用于任何商业用途。
+
+-
+
+本软件使用 [GNU General Public License 3.0](https://www.gnu.org/licenses/gpl-3.0.zh-cn.html)
+协议开源
+
+- 本软件 logo 并非使用 GPL-3.0
+  协议开源，画师[花漫酱](https://space.bilibili.com/49468802)及软件开发者保留所有权利。不得以
+  GPL-3.0 协议已授权为由在未经授权的情况下使用本软件 logo，不得在未经授权的情况下将本软件
+  logo 用于任何商业用途。
 
 ### 通过 Releases 下载
 
@@ -82,8 +90,10 @@ Windows 的配置和日志保存在 `%LOCALAPPDATA%/StartLive` 下，
 * 桌面端环境
 * `PySide6 (Qt for Python)` [支持的架构](https://wiki.qt.io/Qt_for_Python)
 * 受 [keyring](https://pypi.org/project/keyring/) 支持的密钥后端存储服务
-  - 在 `Windows` 上通常为系统自带的 [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)
-  - 在 `macOS` 上通常为系统自带的 [Keychain钥匙串](https://en.wikipedia.org/wiki/Keychain_%28software%29)
+    - 在 `Windows`
+      上通常为系统自带的 [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)
+    - 在 `macOS`
+      上通常为系统自带的 [Keychain钥匙串](https://en.wikipedia.org/wiki/Keychain_%28software%29)
 
 ### 安装 & 运行
 
@@ -93,7 +103,7 @@ Windows 的配置和日志保存在 `%LOCALAPPDATA%/StartLive` 下，
 python -m venv venv
 ```
 
-- **Windows**: 
+- **Windows**:
 
 ```shell
 .\venv\Scripts\pip.exe install -e .

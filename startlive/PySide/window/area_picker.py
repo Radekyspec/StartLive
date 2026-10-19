@@ -1,13 +1,3 @@
-from startlive.core.constant.ui import (
-    AREA_PICKER_CHILD_COLS,
-    AREA_PICKER_CHILD_BTN_W,
-    AREA_PICKER_PARENT_BTN_W,
-    AREA_PICKER_CHILD_BTN_H,
-    AREA_PICKER_CHILD_H_GAP,
-    AREA_PICKER_CHILD_V_GAP,
-    AREA_PICKER_PARENT_H_GAP,
-    AREA_PICKER_FOOTER_BTN_H,
-)
 # -*- coding: utf-8 -*-
 from functools import partial
 
@@ -19,6 +9,16 @@ from PySide6.QtWidgets import (
 
 from startlive.PySide.widgets import RecentAreaBar
 from startlive.core import app_state
+from startlive.core.constant.ui import (
+    AREA_PICKER_CHILD_COLS,
+    AREA_PICKER_CHILD_BTN_W,
+    AREA_PICKER_PARENT_BTN_W,
+    AREA_PICKER_CHILD_BTN_H,
+    AREA_PICKER_CHILD_H_GAP,
+    AREA_PICKER_CHILD_V_GAP,
+    AREA_PICKER_PARENT_H_GAP,
+    AREA_PICKER_FOOTER_BTN_H,
+)
 
 
 class AreaPickerPanel(QDialog):

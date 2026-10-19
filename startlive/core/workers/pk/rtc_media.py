@@ -168,8 +168,8 @@ class RtcMediaWorker(LongLiveWorker):
                                                                 audio=desired.audio)
                             else:
                                 await media.subscribe(desired.uid,
-                                                  video=desired.video,
-                                                  audio=desired.audio)
+                                                      video=desired.video,
+                                                      audio=desired.audio)
                             selected = desired
                             report(RtcMediaStage.SUBSCRIBED)
                             if desired.video or desired.audio:
