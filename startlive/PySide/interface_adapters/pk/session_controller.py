@@ -17,6 +17,7 @@ from startlive.core.pk.round_state import PkRoundState
 from startlive.core.pk.states.eligibility import PkStartEligibilityState, \
     PkVideoEligibilityState
 from startlive.core.pk.states.events import (
+    PkBattleEndEvent,
     PkBattlePreEvent,
     PkBattleStartEvent,
     PkInfoEvent,
@@ -55,7 +56,8 @@ class PkSessionController:
                  push_factory=PkPushController, rtc_factory=None,
                  invitation_display_allowed=False,
                  invitation_only=False, clock=monotonic,
-                 provider_preflight=None, provider_readiness=None):
+                 provider_preflight=None, provider_readiness=None,
+                 rtc_leave_timeout=30.0):
         manager = PkSessionJobs(manager)
         self.manager, self.identity, self.options, self.view = manager, identity, options, view
         self.readiness, self.identity_guard = readiness, identity_guard
@@ -75,6 +77,8 @@ class PkSessionController:
         self._continuous_refresh_pending = False
         self._polling_suspended = False
         self._exit_query_resume_pending = False
+        self._rtc_leave_timeout = float(rtc_leave_timeout)
+        self._rtc_leave_deadline = None
         self._pending_round_events = []
         self.invitations = self.rtc = self.join = self.handle = None
         self._rtc_initialization = (connector_factory, rtc_factory,
@@ -169,6 +173,7 @@ class PkSessionController:
         return video_eligibility(self._video_facts())
 
     def _stop_rtc(self):
+        self._rtc_leave_deadline = None
         if self.rtc is not None:
             self.rtc.stop()
 
@@ -408,6 +413,10 @@ class PkSessionController:
 
     def _cancelled(self):
         self._trace("session.business.cancelled")
+        # Native ReqCancelMatch success is followed by QuitPkForce and Idle;
+        # no exit/handle/quit request is part of this branch.
+        self.round.stop_polling()
+        self.round_state.quit_round()
         self._status("已取消 PK")
         self.close()
 
@@ -425,6 +434,12 @@ class PkSessionController:
             return
         try:
             self.identity_guard(self.identity)
+            if isinstance(event, PkBattleEndEvent):
+                # The round boundary is local state, independent of RTC. Handle
+                # it even while a server 114 is stopping media: either order
+                # (dt:33 then 114, or 114 then dt:33) must converge to Idle.
+                self.round.handle_event(event)
+                return
             if self.stopping:
                 # LEAVE and the final PK_INFO can arrive in either order.
                 # Keep round updates until local RTC cleanup has completed;
@@ -466,12 +481,18 @@ class PkSessionController:
                         and event.biz_session_id
                         and event.biz_session_id != self.join_event.biz_session_id):
                     return
-                decision = self.exit.server_leave(event,
-                                                  rtc_channel_id=self.rtc.event.rtc_channel_id,
-                                                  native_state=self.join.native_state)
+                decision = self.exit.server_leave(
+                    event, rtc_channel_id=self.rtc.event.rtc_channel_id,
+                    native_state=self.join.native_state,
+                    business_label=self.join_event.biz_label)
+                if decision is not None:
+                    # The server-owned LEAVE arrived; the 114 fallback is moot.
+                    self._rtc_leave_deadline = None
                 self._trace("session.leave.decision",
                             accepted=decision is not None,
-                            event_rtc_channel_id=event.rtc_channel_id)
+                            event_rtc_channel_id=event.rtc_channel_id,
+                            event_biz_label=event.biz_label,
+                            leave_reason=decision.reason if decision else None)
             elif isinstance(event, PkInfoEvent):
                 if self.options.mode == PkMode.VIDEO_LINK:
                     if self.join_event is None or event.info.basic.biz_session_id != self.join_event.biz_session_id:
@@ -591,10 +612,16 @@ class PkSessionController:
                                                            PkInfoDecision) else None,
                         completed_pk_id=result.info.basic.pk_id if isinstance(
                             result, PkInfoDecision) else None)
-            self.presentation.info = result.info if isinstance(result,
-                                                               PkInfoDecision) else None
-            self.presentation.ended = (isinstance(result, PkInfoDecision)
-                                       and result.action == PkInfoAction.ROUND_ENDED)
+            if isinstance(result, PkInfoDecision):
+                self.presentation.info = result.info
+                self.presentation.ended = (
+                        result.action == PkInfoAction.ROUND_ENDED)
+            elif not self.presentation.ended:
+                # A 6204 current-state reply confirms "no matching round". In
+                # the normal end path it arrives after the final score has been
+                # shown, so it must not erase that terminal presentation.
+                self.presentation.info = None
+                self.presentation.ended = False
             self.presentation.render()
             if (isinstance(result,
                            PkClassicInfoResult) and result.code == PK_CLASSIC_INFO_UNAVAILABLE
@@ -602,6 +629,10 @@ class PkSessionController:
                                                                      PkMatchController)):
                 self.flow.match_timed_out()
             self.view.set_active(False)
+            if (isinstance(result, PkInfoDecision)
+                    and result.action == PkInfoAction.ROUND_ENDED
+                    and self.round_state.kind == NativePkType.DOUBLE_CLASSIC):
+                self._arm_rtc_leave_fallback()
             if self.invitations is not None:
                 self.invitations.resume_waiting()
 
@@ -621,6 +652,41 @@ class PkSessionController:
         return self.rtc is None or (
                 self.join.native_state == NativeInteractionState.READY
                 and self.rtc.future is None)
+
+    def _arm_rtc_leave_fallback(self):
+        """StartLive policy: do not wait forever for a missing server 114.
+
+        The native client has no timeout; a lost LEAVE leaves the old channel
+        attached until the next JOIN. This bounded fallback is local cleanup,
+        not a PK business request, and is logged separately.
+        """
+        rtc = self.rtc
+        if (self.closed or self.stopping or rtc is None or rtc.event is None
+                or rtc.future is None or rtc.future.done()):
+            return False
+        if self._rtc_leave_deadline is None:
+            self._rtc_leave_deadline = self._clock() + self._rtc_leave_timeout
+            self._trace("session.rtc.leave_fallback.armed",
+                        timeout=self._rtc_leave_timeout)
+        return True
+
+    def _check_rtc_leave_fallback(self):
+        deadline = self._rtc_leave_deadline
+        if deadline is None or self.closed or self.stopping:
+            return False
+        rtc = self.rtc
+        if (rtc is None or rtc.event is None or rtc.future is None
+                or rtc.future.done()):
+            self._rtc_leave_deadline = None
+            return False
+        if self._clock() < deadline:
+            return False
+        self._rtc_leave_deadline = None
+        self._trace("session.rtc.leave_fallback.fired",
+                    timeout=self._rtc_leave_timeout,
+                    reason="classic_pk_114_not_received")
+        rtc.stop()
+        return True
 
     def _continuous_requeue(self, status):
         if (
@@ -775,10 +841,13 @@ class PkSessionController:
                 if self.presentation.remaining_seconds() != self.presentation.remaining:
                     self.presentation.render()
                 if not self.stopping:
+                    self._check_rtc_leave_fallback()
+                if not self.stopping:
                     self.round.tick()
             except Exception as error:
                 self._fatal(error)
         if self.rtc is not None and self.rtc.finish_if_done():
+            self._rtc_leave_deadline = None
             pending, self._pending_round_events = self._pending_round_events, []
             try:
                 for event in pending:
@@ -824,10 +893,13 @@ class PkSessionController:
         self._stop_rtc()
         if self.options.mode == PkMode.TRADITIONAL:
             self.view.stop_classic_audio()
+        self.round_state.quit_round()
         self.closed = True
         if self.handle is not None:
             self.handle.retire()
         self.exit.retire()
+        if self.continuous is not None:
+            self.continuous.close()
         if self.provider_readiness is not None:
             self.provider_readiness.cancel(self)
             if self._owns_provider_readiness:
@@ -845,12 +917,9 @@ class PkSessionController:
         self.manager.retired = True
         self.push.stop()
         self.round.close()
-        # Retire in-flight precheck/match callbacks; do not start new requests
-        # from an owner that no longer belongs to the UI/account.
-        if not isinstance(self.flow, PkMatchController):
-            self.flow.retire()
-        else:
-            self.flow.phase = PkPhase.FINISHED
+        # Retire in-flight precheck/match callbacks and queued sends; an owner
+        # that no longer belongs to the UI/account must not start requests.
+        self.flow.retire()
         if not self.manager.busy:
             self.view.set_active(False)
 

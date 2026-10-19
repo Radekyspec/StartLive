@@ -21,14 +21,24 @@ class PkContinuousController:
         self.trace_id = trace_id or new_trace_id()
         self.status = None
         self.busy = False
+        self.closed = False
+
+    def close(self):
+        """Retire this reader; a later read must not leave the closed owner."""
+        self.closed = True
+        self.busy = False
 
     def load(self, *, check_requeue=False):
+        if self.closed:
+            raise PkError("连续 PK 状态读取已关闭")
         if self.busy:
             raise PkError("正在读取或更新连续 PK 状态")
         self.busy = True
         self._read(check_requeue=check_requeue)
 
     def set_enabled(self, enabled):
+        if self.closed:
+            raise PkError("连续 PK 状态读取已关闭")
         if self.busy:
             raise PkError("正在读取或更新连续 PK 状态")
         if self.status is None:
@@ -58,6 +68,7 @@ class PkContinuousController:
         self.failed(error)
 
     def _submit(self, worker):
+        worker.request_allowed = lambda: not self.closed
         try:
             self.manager.submit(worker)
         except Exception as error:

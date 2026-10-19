@@ -111,6 +111,12 @@ class StartLiveMenuBar(QMenuBar):
         self._conversion_dialog.raise_()
         self._conversion_dialog.activateWindow()
 
+    def stop_pk_for_live_stop(self):
+        """Retire the PK owner after stopLive; do not close the PK window."""
+        window = self._pk_window
+        if window is not None:
+            window.live_stopped()
+
     def shutdown_pk_window(self):
         """Retire the separate PK worker pool before changing account or exiting."""
         window = self._pk_window

@@ -9,7 +9,12 @@ from startlive.core.constant.pk import NativePkType
 from startlive.core.constant.pk_info import STATUS_STATES, NativePkState, \
     PkInfoAction
 from startlive.core.constant.pk_info import VIDEO_STATUS_STATES
-from startlive.core.pk.states.info import PkInfoDecision
+from startlive.core.pk.states.info import (
+    PkBasicInfo,
+    PkInfo,
+    PkInfoDecision,
+    PkMatchInfo,
+)
 from .pk_eligibility import pk_start_eligibility, pk_type_from_server
 
 
@@ -128,6 +133,28 @@ class PkRoundState:
             self.state = NativePkState.IDLE
             self.round_id = 0
         return self._decision(action, info, previous_state=previous)
+
+    def end_from_battle(self, pk_id=0):
+        """Project PK_BATTLE_END after the caller observed Freezing.
+
+        The push carries neither a status nor a timestamp. Keep the last
+        accepted snapshot so the final score stays on screen; only synthesize
+        a display-only terminal DTO when no snapshot exists yet.
+        """
+        previous = self.state
+        ended = self.round_id or (
+            pk_id if type(pk_id) is int and pk_id > 0 else 0)
+        if ended:
+            self.last_ended_round_id = ended
+        self.round_id = 0
+        self.state = NativePkState.IDLE
+        info = self.info
+        if info is None:
+            info = PkInfo(4, PkBasicInfo(pk_id=ended, status=1001,
+                                         type=self.kind.server_type),
+                          PkMatchInfo(), 0, {})
+        return self._decision(PkInfoAction.ROUND_ENDED, info,
+                              "battle_end_push", previous_state=previous)
 
     def quit_round(self):
         """Classic6204 Not Matching quits local round state without RTC work."""

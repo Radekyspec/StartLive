@@ -46,7 +46,8 @@ class PkExitController:
         self._pending = {"exit"}
         self._submit_exit(end_round)
 
-    def server_leave(self, event, *, rtc_channel_id, native_state):
+    def server_leave(self, event, *, rtc_channel_id, native_state,
+                     business_label=None):
         """Call only for this controller's captured account/flow event stream.
 
         Server LEAVE takes the guarded local path, independently of any HTTP
@@ -54,7 +55,8 @@ class PkExitController:
         """
         decision = local_quit_from_business_leave(event,
                                                   rtc_channel_id=rtc_channel_id,
-                                                  native_state=native_state)
+                                                  native_state=native_state,
+                                                  business_label=business_label)
         if decision is not None:
             self.local_shutdown()
         return decision
@@ -118,10 +120,9 @@ class PkExitController:
                                   end_round=end_round))
 
     def _submit(self, worker):
-        try:
-            self.manager.submit(worker)
-        except Exception as error:
-            worker.on_exception(error)
+        # Exit/Quit are generation-bound too: retire() must stop queued sends
+        # after stopLive/owner shutdown, not only discard their callbacks.
+        self._attempt.submit(self.manager, worker)
 
     def _done(self, operation, result=None, error=None):
         self._pending.discard(operation)

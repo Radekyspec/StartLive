@@ -17,9 +17,14 @@ def require_business_join(event, *, native_state, eligibility):
         raise PkError("连线信息缺少 RTC 频道")
 
 
-def local_quit_from_business_leave(event, *, rtc_channel_id, native_state):
+def local_quit_from_business_leave(event, *, rtc_channel_id, native_state,
+                                   business_label=None):
     if not isinstance(event,
                       PkLeaveEvent) or native_state == NativeInteractionState.READY:
+        return None
+    # 114 names its business family. An absent label is tolerated for older
+    # captures; an explicit different label must never tear down this room.
+    if business_label and event.biz_label and event.biz_label != business_label:
         return None
     # Native compares channel strings exactly. Rejecting an empty stored
     # identity is a stricter StartLive policy; no UID/session equality is added.

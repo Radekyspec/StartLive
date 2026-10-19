@@ -190,4 +190,5 @@ def parse_pk_event(command, payload):
         return PkLeaveEvent(**common, **session, uid=_number(data.get("uid")),
                             close_user_reason=_number(
                                 data.get("close_user_reason")),
-                            toast=_text(data.get("toast")))
+                            toast=_text(data.get("toast")),
+                            biz_label=_text(data.get("biz_label")))

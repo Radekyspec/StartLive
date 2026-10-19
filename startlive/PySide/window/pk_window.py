@@ -1233,6 +1233,29 @@ class PkWindow(QDialog):
                     break
                 view.show_packet(packet)
 
+    def live_stopped(self):
+        """stopLive succeeded: local owner cleanup, no PK end request.
+
+        Closing the owner stops polling and media and makes every later
+        JOIN/PK_INFO/114 fail the closed-owner check, so a delayed push cannot
+        revive PKing or restart the one-second poll after the room is gone.
+        """
+        if self._shutdown:
+            return
+        self._trace("ui.live_stopped")
+        self._cancel_classic_capture_check()
+        self._pending_start = self._candidate_start = None
+        self._classic_audio = False
+        self._stop_preview()
+        if self._candidate_dialog is not None:
+            self._candidate_dialog.reject()
+        if self._session is not None:
+            self._session.close()
+        self.set_active(False)
+        self.set_connection_active(False)
+        self.set_status("直播已停止，PK 会话已关闭")
+        self._refresh_session_controls()
+
     def closeEvent(self, event):
         self._trace("ui.close.requested", active=self._active,
                     connection_active=self._connection_active)

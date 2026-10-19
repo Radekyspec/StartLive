@@ -28,7 +28,7 @@ class PkHandleController:
                      room_id=0):
         context = invitation_context_from_event(event)
         if context.source not in (
-        (4, 7) if self.video_link else (5, 7, 10, 11, 12)):
+                (4, 7) if self.video_link else (5, 7, 10, 11, 12)):
             raise PkError("当前邀请来源尚未接入")
         if context.source == 12:
             if app_room is None:
@@ -60,9 +60,10 @@ class PkHandleController:
             room_id=room_id,
             **({"include_trace": False} if self.video_link else {}))
         self.busy = True
-        if self.video_link:
-            serial = self._attempt.serial
-            worker.request_allowed = lambda: serial == self._attempt.serial
+        # Every mode gets the generation gate, not only video-link: stopLive
+        # or a replacement invitation must stop a queued Handle from sending.
+        serial = self._attempt.serial
+        worker.request_allowed = lambda: serial == self._attempt.serial
         try:
             self.manager.submit(worker)
         except Exception as error:

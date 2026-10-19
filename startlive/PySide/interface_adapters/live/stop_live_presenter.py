@@ -6,7 +6,10 @@ class StopLivePresenter(Presenter):
         super().__init__()
         self._view = view
 
-    def prepare_success_view(self, *args, **kwargs): ...
+    def prepare_success_view(self, *args, **kwargs):
+        # The room is already closed. PK must retire its local owner here and
+        # never send cancel/exit/handle/quit for this shutdown path.
+        self._view.on_live_stopped()
 
     def prepare_fail_view(self, exception: Exception):
         self._view.start_btn.setEnabled(False)

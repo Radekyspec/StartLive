@@ -89,6 +89,8 @@ class PkLeaveEvent(PkEvent):
     uid: int | None
     close_user_reason: int | None
     toast: str | None = field(repr=False)
+    # 114 carries the business family; keep it optional for older captures.
+    biz_label: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

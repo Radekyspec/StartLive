@@ -93,6 +93,12 @@ class PkMatchController:
         self.phase = PkPhase.CONNECTING
         self.attempt.cancel_requested = False
 
+    def retire(self):
+        """Retire this flow: discard callbacks and block queued sends."""
+        self.attempt.invalidate()
+        self.phase = PkPhase.FINISHED
+        self.attempt.inflight = self.attempt.cancel_requested = False
+
     def match_timed_out(self):
         """The owner has accepted Contract43's matching-state/family guard."""
         self.attempt.invalidate()
