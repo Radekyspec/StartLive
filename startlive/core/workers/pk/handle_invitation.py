@@ -22,9 +22,9 @@ class _PkHandleInvitationWorker(PkRequestWorker):
                          after_sign={
                              "client_traceid": context.trace_id} if include_trace else {})
 
-    def parse_result(self, response):
-        return PkHandleResult(response,
-                              join_from_handle_response(response.data))
+    def parse_result(self, result):
+        return PkHandleResult(result,
+                              join_from_handle_response(result.data))
 
 
 class PkAcceptInvitationWorker(_PkHandleInvitationWorker):

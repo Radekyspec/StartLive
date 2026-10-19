@@ -15,6 +15,6 @@ class PkPublicationReadyWorker(PkRequestWorker):
             "source": "0", "biz_session_id": "",
         })
 
-    def parse_result(self, response):
-        return PkHandleResult(response,
-                              join_from_handle_response(response.data))
+    def parse_result(self, result):
+        return PkHandleResult(result,
+                              join_from_handle_response(result.data))

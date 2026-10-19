@@ -80,12 +80,15 @@ class PkSearchDialog(QDialog):
         self._update_controls()
         self.status.setText("正在查找对手…")
         presenter = PkPresenter(finished=self._loaded, failed=self._failed)
-        worker_type = PkSearchCandidatesWorker
         if self.video_link:
             from startlive.core.workers.pk.video_link import PkLinkPanelWorker
-            worker_type = PkLinkPanelWorker
-        worker = worker_type(presenter, self.identity,
-                             self._search, page=page)
+            # The link panel is a readiness probe for the fixed candidate
+            # map; it has no search/page parameters. Do not pass the search
+            # worker's arguments to this constructor.
+            worker = PkLinkPanelWorker(presenter, self.identity)
+        else:
+            worker = PkSearchCandidatesWorker(presenter, self.identity,
+                                              self._search, page=page)
         try:
             self.manager.submit(worker)
         except Exception as error:

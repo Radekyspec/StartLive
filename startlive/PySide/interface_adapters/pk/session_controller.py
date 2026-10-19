@@ -381,7 +381,9 @@ class PkSessionController:
         self._trace("session.business.start",
                     requested_peer_uid=self.expected_peer_uid)
         if self.options.mode == PkMode.VIDEO_LINK:
-            self.flow.invite(self.options.candidate, trace_id=self.trace_id)
+            # PkVideoLinkController.invite() has no trace_id parameter; its
+            # Connect worker does not send a client_traceid.
+            self.flow.invite(self.options.candidate)
             return
         self.round_state.state = NativePkState.STARTING
         self.presentation.info = self.presentation.peer_uid = None
