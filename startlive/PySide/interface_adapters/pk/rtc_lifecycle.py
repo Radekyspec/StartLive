@@ -53,7 +53,8 @@ class PkRtcLifecycle:
                 raise PkError("视频连线与已接受的邀请不符")
         publication = publication_channels(event)
         business_controls = session.options.mode in (PkMode.TRADITIONAL,
-                                                     PkMode.VIDEO_LINK)
+                                                     PkMode.VIDEO_LINK,
+                                                     PkMode.VIDEO)
         if event.biz_label == "classic_pk":
             if publication.video or not publication.audio:
                 raise PkError("经典 PK JOIN 不是音频发布模式")
@@ -70,7 +71,7 @@ class PkRtcLifecycle:
                                                   event.rtc_channel_id),
                                rtc_preference=default_media_preference(
                                    event.default_sub_mode)
-                               if business_controls else None)
+                               if business_controls and session.options.mode != PkMode.VIDEO else None)
         room = PkRoomInfoController(session.manager, session.identity,
                                     PkRoomInfoSession(event),
                                     changed=self.room_changed,
@@ -306,7 +307,10 @@ class PkRtcLifecycle:
     def set_muted(self, media, muted):
         """Explicit PK control; OBS capture and business HTTP Mute are separate."""
         session = self.session
-        if self.business_mute is not None:
+        # Preserve the pre-existing video-PK publisher control through its
+        # RTC path. It must not produce the unsupported HTTP ct=2/mct=1.
+        if self.business_mute is not None and not (
+                session.options.mode == PkMode.VIDEO and media == "video"):
             return self.business_mute.local(media, muted)
         session._trace("session.mute.requested", media=media, muted=muted)
         if media not in self.mute_states or type(muted) is not bool:

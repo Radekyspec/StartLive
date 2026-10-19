@@ -77,6 +77,10 @@ def mute_fields(biz_session_id, target_uid, *, media, remote, muted, room_id=0):
             or type(muted) is not bool or type(
                 room_id) is not int or room_id < 0):
         raise PkProtocolError("连线静音参数无效")
+    # PC 1v1 has no evidenced local-video HTTP Mute operation. Keep the
+    # pre-existing video-PK publisher control on its separate RTC path.
+    if media == "video" and not remote:
+        raise PkProtocolError("不支持本端视频业务静音")
     result = {"biz_session_id": biz_session_id, "target_uid": str(target_uid),
               "mute_control_type": "2" if remote else "1",
               "connect_type": "1" if media == "audio" else "2",

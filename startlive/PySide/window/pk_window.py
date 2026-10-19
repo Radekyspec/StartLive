@@ -338,10 +338,12 @@ class PkWindow(QDialog):
             self._stop_preview()
 
     def _request_remote_mute(self, media, muted):
-        if self.mode.currentData() == PkMode.VIDEO:
-            if media == "audio":
-                self.remote_view.set_muted(muted)
-            return
+        # clicked has already toggled the checkbox. Keep the applied state
+        # until the controller has successfully queued the SDK operation.
+        rtc = getattr(self._session, "rtc", None)
+        business_mute = getattr(rtc, "business_mute", None)
+        if business_mute is not None:
+            self.set_remote_mute_state(**business_mute.remote)
         self._session_action("set_remote_muted", media, muted)
 
     def set_remote_mute_state(self, *, audio, video):
@@ -518,7 +520,8 @@ class PkWindow(QDialog):
         self._continuous_editable = editable
         self._refresh_session_controls()
 
-    def _output_readiness(self, mode):
+    @staticmethod
+    def _output_readiness(mode):
         from startlive.core import app_state
         from startlive.core.pk.output_readiness import output_readiness
         return output_readiness(app_state.obs_output_status, mode)
@@ -784,14 +787,13 @@ class PkWindow(QDialog):
                 self._publisher_available[media] and not
                 self._publisher_mute_states[media].pending)
         if hasattr(self, "remote_video_mute"):
-            remote_ready = self._connection_active
-            if self.mode.currentData() != PkMode.VIDEO:
-                rtc = getattr(self._session, "rtc", None)
-                remote_ready = remote_ready and bool(
+            rtc = getattr(self._session, "rtc", None)
+            remote_ready = (
+                        self._session_enabled and self._connection_active and bool(
                     getattr(getattr(rtc, "business_mute", None), "initialized",
-                            False))
+                            False)))
             self.remote_video_mute.setVisible(
-                self.mode.currentData() == PkMode.VIDEO_LINK)
+                self.mode.currentData() in (PkMode.VIDEO_LINK, PkMode.VIDEO))
             self.remote_video_mute.setEnabled(remote_ready)
             self.remote_mute.setEnabled(remote_ready)
 
@@ -942,14 +944,14 @@ class PkWindow(QDialog):
         if video:
             self._ensure_video_ui()
         if self.local_view is not None:
+            self.publisher_video_mute.setVisible(
+                self.mode.currentData() == PkMode.VIDEO)
             for widget in (self.local_view, self.remote_view, self._video_hint):
                 widget.setVisible(video)
             if video:
                 self.local_view.video.show()
                 self.remote_view.video.show()
                 self.crop_button.show()
-                self.publisher_video_mute.setVisible(
-                    self.mode.currentData() == PkMode.VIDEO)
                 self._prepare_video_preview()
             else:
                 self.provider_readiness.cancel(self._preview_owner)

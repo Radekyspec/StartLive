@@ -43,7 +43,7 @@ class PkMuteController:
 
     def local(self, media, muted, *, send=True):
         if media != "audio" or type(muted) is not bool:
-            raise PkError("此连线仅提供本端音频静音")
+            raise PkError("业务静音仅支持本端音频")
         rtc = self.rtc
         if self.closed or not rtc.publisher_ready:
             raise PkError("本端音频尚未发布")
@@ -65,6 +65,8 @@ class PkMuteController:
             raise PkError("对方媒体尚未订阅")
         if media not in self.remote or type(muted) is not bool:
             raise PkError("远端静音参数无效")
+        if send and media == "video" and self.rtc.event.biz_label == "classic_pk":
+            raise PkError("经典 PK 没有对方画面")
         if self.remote[media] == muted and (media,
                                             True) not in self.failed_muted:
             return
