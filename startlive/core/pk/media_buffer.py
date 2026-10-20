@@ -1,8 +1,8 @@
 """Bounded thread-to-asyncio OBS handoff: one video frame, 100 ms of audio."""
+import asyncio
 from collections import deque
 from threading import Lock
 from time import monotonic
-import asyncio
 
 from startlive.core.pk.states.video_crop import VideoCrop
 

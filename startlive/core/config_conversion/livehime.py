@@ -3,6 +3,13 @@
 The supported schema is the observed untitled[v2].json / Scene Collection
 format. Unknown plugin IDs are deliberately omitted, never guessed.
 """
+import json
+import math
+import os
+import re
+from copy import deepcopy
+from pathlib import Path
+
 from startlive.core.constant.config_conversion import (
     MAX_CONFIG_BYTES,
     FILTERED_SCENE_PREFIXES,
@@ -13,14 +20,7 @@ from startlive.core.constant.config_conversion import (
     SOURCE_FIELDS,
     ITEM_FIELDS,
 )
-
-from copy import deepcopy
 from .states.result import ConversionResult
-import json
-import math
-import os
-from pathlib import Path
-import re
 
 
 class ConversionError(ValueError):
@@ -123,7 +123,7 @@ def infer_resolution(data: dict) -> tuple[int, int] | None:
         settings = source.get("settings", {})
         if source.get("id") != "scene" or not isinstance(settings,
                                                          dict) or settings.get(
-                "custom_size"):
+            "custom_size"):
             continue
         for item in _objects(settings.get("items", []), "场景 items"):
             size = item.get("scale_ref", {})

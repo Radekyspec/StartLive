@@ -1,9 +1,9 @@
 """Contract31/32 ordering for StartLive's explicit PK publication controls."""
-from dataclasses import replace
 import asyncio
+from dataclasses import replace
 
-from startlive.core.pk.states.mute import RtcMuteState
 from startlive.core.exceptions import PkError, PkProtocolError
+from startlive.core.pk.states.mute import RtcMuteState
 
 
 class RtcPublisherMute:
@@ -34,7 +34,7 @@ class RtcPublisherMute:
             raise PkError("RTC 发布尚未就绪或当前会话已结束")
         self.signaling._require_joined()
 
-    async def set_muted(self, media, muted, *, changed=None):
+    async def set_muted(self, media, muted, *, changed=None, signal=True):
         if media not in self._states or type(muted) is not bool:
             raise PkProtocolError("RTC 静音请求需指定音频或视频及布尔值")
         self._require_ready()
@@ -49,7 +49,8 @@ class RtcPublisherMute:
                                                   local_muted=True)
                 if changed is not None:
                     changed(self._states[media])
-                await self.signaling.mute(media, muted)
+                if signal:
+                    await self.signaling.mute(media, muted)
                 self._require_ready()
                 if not muted:
                     self.apply_local(media, False)

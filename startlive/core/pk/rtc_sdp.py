@@ -4,13 +4,13 @@ The rules follow actual-DLL vectors from contract-7. Keep SDP as text so that
 codec, transport and extension attributes survive parsing unchanged. Build a
 fresh result and never commit a partially reconciled remote description.
 """
-from dataclasses import replace
 import re
+from dataclasses import replace
 
-from startlive.core.pk.states.sdp import RtcSdpMedia
 from startlive.core.constant.pk_sdp import SDP_DIRECTIONS, SDP_DIRECTION_PAIRS, \
     SDP_SIMULCAST_RE
 from startlive.core.exceptions import PkProtocolError
+from startlive.core.pk.states.sdp import RtcSdpMedia
 
 
 def _clean(text: str) -> str:

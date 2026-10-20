@@ -12,7 +12,8 @@ from startlive.core.workers.pk.search_candidates import PkSearchCandidatesWorker
 class PkSearchDialog(QDialog):
     candidateSelected = Signal(object)
 
-    def __init__(self, manager, identity, search, parent=None):
+    def __init__(self, manager, identity, search, parent=None, *,
+                 video_link=False):
         super().__init__(parent)
         self.manager, self.identity = manager, identity
         self._closed = False
@@ -20,6 +21,7 @@ class PkSearchDialog(QDialog):
         self._page = 0
         self._has_next = False
         self._search = ""
+        self.video_link = video_link
         self.setWindowTitle("选择视频 PK 对手")
         self.setWindowModality(Qt.WindowModality.WindowModal)
         self.resize(440, 360)
@@ -52,13 +54,19 @@ class PkSearchDialog(QDialog):
             row.addWidget(button)
         layout.addLayout(row)
         self._update_controls()
+        if video_link:
+            self.setWindowTitle("选择视频连线对手")
+            self.query.hide()
+            self.more_button.hide()
+            self.search_button.setText("刷新列表")
 
     def search(self):
         if self._busy or self._closed:
             return
         self._search = self.query.text().strip()
-        if not self._search.isascii() or not self._search.isdecimal() or not 0 < int(
-                self._search) < 1 << 64:
+        if not self.video_link and (
+                not self._search.isascii() or not self._search.isdecimal() or not 0 < int(
+            self._search) < 1 << 64):
             self.status.setText("请输入有效的主播 UID 或房间号")
             return
         self._page, self._has_next = 0, False
@@ -72,8 +80,15 @@ class PkSearchDialog(QDialog):
         self._update_controls()
         self.status.setText("正在查找对手…")
         presenter = PkPresenter(finished=self._loaded, failed=self._failed)
-        worker = PkSearchCandidatesWorker(presenter, self.identity,
-                                          self._search, page=page)
+        if self.video_link:
+            from startlive.core.workers.pk.video_link import PkLinkPanelWorker
+            # The link panel is a readiness probe for the fixed candidate
+            # map; it has no search/page parameters. Do not pass the search
+            # worker's arguments to this constructor.
+            worker = PkLinkPanelWorker(presenter, self.identity)
+        else:
+            worker = PkSearchCandidatesWorker(presenter, self.identity,
+                                              self._search, page=page)
         try:
             self.manager.submit(worker)
         except Exception as error:
@@ -85,6 +100,11 @@ class PkSearchDialog(QDialog):
         self._busy = False
         self._page, self._has_next = page.page, page.has_next
         for candidate in page.users:
+            if self.video_link and (
+                    candidate.uid == self.identity.uid or not candidate.label_type
+                    or candidate.biz_session_id or candidate.raw.get(
+                "other_users_num", 0)):
+                continue
             title = f"{candidate.uname or '未命名用户'}  ·  UID {candidate.uid}"
             if candidate.label:
                 title += f"\n{candidate.label}"

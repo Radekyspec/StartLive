@@ -1,13 +1,16 @@
 """Business parameters confirmed by native callers, separate from HTTP signing."""
-from startlive.core.pk.states.session import PkContinuousStatus
 from startlive.core.constant.pk import NativePkType
 from startlive.core.exceptions import PkProtocolError
+from startlive.core.pk.states.session import PkContinuousStatus
 
 
 def precheck_fields(identity, kind: NativePkType):
-    return {"room_id": str(identity.room_id),
-            "pk_version": str(kind.server_type),
-            "mobi_app": "pc_link"}
+    result = {"room_id": str(identity.room_id),
+              "pk_version": str(kind.server_type),
+              "mobi_app": "pc_link"}
+    if kind == NativePkType.DOUBLE_CLASSIC:
+        result["uid"] = str(identity.uid)
+    return result
 
 
 def match_fields(identity, kind: NativePkType):
@@ -44,6 +47,46 @@ def video_invite_fields(peer_search: int, *, invited_type_label: str):
               "invited_type": "1"}
     if invited_type_label:
         result["invited_type_label"] = invited_type_label
+    return result
+
+
+def connect_fields(peer_uid: int, *, invited_type_label: str):
+    if type(peer_uid) is not int or peer_uid <= 0 or not isinstance(
+            invited_type_label, str) or not invited_type_label:
+        raise PkProtocolError("连线邀请需要候选人的 UID 和来源标签")
+    return {"business_label": "universal_multi_conn", "cancel_current": "0",
+            "invited_type": "3", "invited_type_label": invited_type_label,
+            "peer_uid": str(peer_uid)}
+
+
+def cancel_connect_fields(peer_uid: int):
+    result = cancel_video_invite_fields(peer_uid)
+    return result | {"action_type": "0"}
+
+
+def connection_pk_fields(biz_session_id: str):
+    if not isinstance(biz_session_id, str) or not biz_session_id:
+        raise PkProtocolError("转 PK 缺少当前连线会话")
+    return {"biz_session_id": biz_session_id, "mutipk_type": "0"}
+
+
+def mute_fields(biz_session_id, target_uid, *, media, remote, muted, room_id=0):
+    if (not isinstance(biz_session_id, str) or not biz_session_id
+            or type(target_uid) is not int or target_uid <= 0
+            or media not in ("audio", "video") or type(remote) is not bool
+            or type(muted) is not bool or type(
+                room_id) is not int or room_id < 0):
+        raise PkProtocolError("连线静音参数无效")
+    # PC 1v1 has no evidenced local-video HTTP Mute operation. Keep the
+    # pre-existing video-PK publisher control on its separate RTC path.
+    if media == "video" and not remote:
+        raise PkProtocolError("不支持本端视频业务静音")
+    result = {"biz_session_id": biz_session_id, "target_uid": str(target_uid),
+              "mute_control_type": "2" if remote else "1",
+              "connect_type": "1" if media == "audio" else "2",
+              "active": "1" if muted else "0"}
+    if not remote and room_id > 0:
+        result["room_id"] = str(room_id)
     return result
 
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(obs-startlive-pk VERSION 0.2.0 LANGUAGES CXX)
+project(obs-startlive-pk VERSION 0.3.0 LANGUAGES CXX)
 
 find_package(Threads REQUIRED)
 # Older Linux libc versions provide shm_open in librt; macOS has it in libc.

@@ -75,9 +75,9 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication
     from qdarktheme import enable_hi_dpi
 
+    from startlive.core import app_state
     from startlive.PySide.classes import ErrorCenter, install_exception_handlers
     from startlive.PySide.window import MainWindow
-    from startlive.core import app_state
 
     if MainWindow.is_another_instance_running():
         return 0

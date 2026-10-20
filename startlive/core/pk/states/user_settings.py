@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from startlive.core.pk.states.preferences import PkPreferenceValues
 from startlive.core.constant.pk_user_settings import PK_SETTING_SWITCH_FIELDS
+from startlive.core.pk.states.preferences import PkPreferenceValues
 
 
 @dataclass(frozen=True, slots=True)

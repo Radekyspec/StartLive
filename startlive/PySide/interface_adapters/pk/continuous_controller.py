@@ -8,27 +8,36 @@ from .pk_presenter import PkPresenter
 
 
 class PkContinuousController:
-    """Read the server switch back after updates; never invent local requeue."""
+    """Video-random continuous PK reader; classic never owns one."""
 
     def __init__(self, manager, identity, kind, *, changed, failed,
                  trace_id=None, requeue_checked=None):
-        if kind not in (NativePkType.DOUBLE_CLASSIC,
-                        NativePkType.DOUBLE_RANDOM):
-            raise PkError("该模式尚未接入连续 PK 开关")
+        if kind is not NativePkType.DOUBLE_RANDOM:
+            raise PkError("连续 PK 仅支持视频随机 PK")
         self.manager, self.identity, self.kind = manager, identity, kind
         self.changed, self.failed = changed, failed
         self.requeue_checked = requeue_checked
         self.trace_id = trace_id or new_trace_id()
         self.status = None
         self.busy = False
+        self.closed = False
+
+    def close(self):
+        """Retire this reader; a later read must not leave the closed owner."""
+        self.closed = True
+        self.busy = False
 
     def load(self, *, check_requeue=False):
+        if self.closed:
+            raise PkError("连续 PK 状态读取已关闭")
         if self.busy:
             raise PkError("正在读取或更新连续 PK 状态")
         self.busy = True
         self._read(check_requeue=check_requeue)
 
     def set_enabled(self, enabled):
+        if self.closed:
+            raise PkError("连续 PK 状态读取已关闭")
         if self.busy:
             raise PkError("正在读取或更新连续 PK 状态")
         if self.status is None:
@@ -58,6 +67,7 @@ class PkContinuousController:
         self.failed(error)
 
     def _submit(self, worker):
+        worker.request_allowed = lambda: not self.closed
         try:
             self.manager.submit(worker)
         except Exception as error:

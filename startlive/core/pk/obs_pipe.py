@@ -1,12 +1,12 @@
 """Cancellable Windows named-pipe reader; imports Windows APIs only on use."""
-from ctypes import wintypes
-from time import monotonic, sleep
 import ctypes
 import os
+from ctypes import wintypes
+from time import monotonic, sleep
 
 from startlive.core.constant.pk_media import PIPE_NAME
-from startlive.core.exceptions import TaskCancelled
 from startlive.core.exceptions import PkError
+from startlive.core.exceptions import TaskCancelled
 
 
 class ObsPipe:
@@ -47,20 +47,21 @@ class ObsPipe:
                                                  wintypes.BOOL]
         self.api.CancelIoEx.argtypes = [wintypes.HANDLE,
                                         ctypes.POINTER(Overlapped)]
+        self.api.WriteFile.argtypes = self.api.ReadFile.argtypes
 
     def connect(self, timeout=10):
         deadline = monotonic() + timeout
         while monotonic() < deadline:
             self._check_cancelled()
             # Identification-only prevents a spoofed pipe server impersonating this client.
-            handle = self.api.CreateFileW(PIPE_NAME, 0x80000000, 0, None, 3,
+            handle = self.api.CreateFileW(PIPE_NAME, 0xC0000000, 0, None, 3,
                                           0x40000000 | 0x100000 | 0x10000, None)
             if handle != wintypes.HANDLE(-1).value:
                 self.handle = handle
                 return
             if ctypes.get_last_error() not in (2, 231):
                 raise PkError(
-                    "无法打开 OBS 媒体管道，请检查插件和当前 Windows 用户")
+                    "无法打开 OBS 媒体管道，请重新安装 OBS PK 插件并重启 OBS，确认两端使用同一 Windows 用户")
             sleep(0.05)
         raise PkError(
             "未收到 OBS 媒体连接，请在 OBS 工具菜单启动 StartLive PK 采集")
@@ -73,6 +74,14 @@ class ObsPipe:
         # One owned allocation avoids repeated megabyte copies while holding
         # Python's GIL, which otherwise starves audio when capturing 1080p.
         output = ctypes.create_string_buffer(size)
+        self._transfer(output, size, self.api.ReadFile)
+        return output.raw
+
+    def write_exact(self, data):
+        output = ctypes.create_string_buffer(data)
+        self._transfer(output, len(data), self.api.WriteFile)
+
+    def _transfer(self, output, size, operation):
         received = 0
         while received < size:
             self._check_cancelled()
@@ -83,11 +92,11 @@ class ObsPipe:
             count = wintypes.DWORD()
             pending = False
             try:
-                ok = self.api.ReadFile(self.handle,
-                                       ctypes.byref(output, received),
-                                       size - received,
-                                       ctypes.byref(count),
-                                       ctypes.byref(overlap))
+                ok = operation(self.handle,
+                               ctypes.byref(output, received),
+                               size - received,
+                               ctypes.byref(count),
+                               ctypes.byref(overlap))
                 if not ok:
                     if ctypes.get_last_error() != 997:
                         raise PkError("OBS 媒体连接已断开")
@@ -114,7 +123,6 @@ class ObsPipe:
                     self.api.CancelIoEx(self.handle, ctypes.byref(overlap))
                     self.api.WaitForSingleObject(overlap.hEvent, 0xFFFFFFFF)
                 self.api.CloseHandle(overlap.hEvent)
-        return output.raw
 
     def close(self):
         if self.handle is not None:

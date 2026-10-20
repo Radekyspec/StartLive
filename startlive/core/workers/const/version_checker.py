@@ -18,6 +18,8 @@ class VersionCheckerWorker(BaseWorker):
         self._latest_version = None
 
     def run(self, report_progress: Callable | None, *args, **kwargs):
+        if VERSION.split("+", 1)[0] == "0.0.0.dev0":
+            return None
         # url = "https://gcore.jsdelivr.net/gh/Radekyspec/StartLive@master/resources/version.json"
         url = "https://gh.bydfk.com/https://api.github.com/repos/Radekyspec/StartLive/releases/latest"
         self.logger.info(f"releases Request")

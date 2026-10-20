@@ -9,16 +9,16 @@ format.level. The initial offer retains the proven Baseline 3.1 codec seed.
 Adapting the sending copy to negotiated limits remains StartLive policy, not
 a claim of identical native capture/backend behavior.
 """
-from math import isqrt
 import re
+from math import isqrt
 
 from aiortc.sdp import H264Profile, parse_h264_profile_level_id
 
+from startlive.core.constant.pk_h264 import H264_LEVELS
 from startlive.core.constant.pk_video_config import DEFAULT_VIDEO_CONFIG
+from startlive.core.exceptions import PkError, PkProtocolError
 from startlive.core.pk.states.h264 import H264Limits
 from startlive.core.pk.states.video import VideoEncodingPlan
-from startlive.core.constant.pk_h264 import H264_LEVELS
-from startlive.core.exceptions import PkError, PkProtocolError
 
 
 def level_rank(level):
@@ -149,7 +149,7 @@ def negotiated_limits(offered, parameters):
             raise PkProtocolError(
                 "服务端 H264 max-recv-level 的 level 1b 标记无效")
         receive_level = 9 if level_idc == 9 or (
-                    level_idc == 11 and iop & 16) else level_idc
+                level_idc == 11 and iop & 16) else level_idc
         level_limits(receive_level)
         if level_rank(receive_level) <= level_rank(default_level):
             raise PkProtocolError("服务端 H264 max-recv-level 未高于默认 level")

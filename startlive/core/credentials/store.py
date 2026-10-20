@@ -6,7 +6,6 @@ from typing import Any, Mapping
 import keyring
 
 from startlive.core import app_state
-from .states.results import StoredCredential, RemovedCredential
 from startlive.core.constant import (
     KEYRING_COOKIES,
     KEYRING_COOKIES_INDEX,
@@ -19,6 +18,7 @@ from startlive.core.exceptions import (
     CredentialTransactionError,
     CredentialIndexCorruptedError
 )
+from .states import StoredCredential, RemovedCredential
 
 
 class CredentialStore:

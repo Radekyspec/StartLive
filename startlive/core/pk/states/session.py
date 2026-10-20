@@ -1,11 +1,13 @@
 from dataclasses import dataclass, field
 
-from startlive.core.danmaku.states.models import (
-    DanmakuIdentity as PkIdentity,
-    DanmakuResult as PkResult,
-)
-from startlive.core.pk.states.candidates import PkCandidate
 from startlive.core.constant.pk import PkMode, NativePkType
+from startlive.core.danmaku.states.models import DanmakuIdentity, DanmakuResult
+from startlive.core.pk.states.candidates import PkCandidate
+
+# Public aliases are assignments, not import re-exports, so an import
+# optimizer cannot silently delete this module's external contract.
+PkIdentity = DanmakuIdentity
+PkResult = DanmakuResult
 
 
 @dataclass(frozen=True, slots=True)

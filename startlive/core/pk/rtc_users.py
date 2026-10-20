@@ -2,8 +2,8 @@
 from copy import deepcopy
 from dataclasses import replace
 
-from startlive.core.pk.states.peers import RtcStream, RtcUserEvent, RtcUserState
 from startlive.core.exceptions import PkProtocolError
+from startlive.core.pk.states.peers import RtcStream, RtcUserEvent, RtcUserState
 
 
 def _stream(value):

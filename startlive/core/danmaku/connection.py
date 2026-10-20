@@ -1,9 +1,9 @@
-from startlive.core.exceptions import DanmakuError
-from .settings import settings_for_identity
 from startlive.core.constant.danmaku import DanmakuState
+from startlive.core.exceptions import DanmakuError
 from startlive.core.workers.base.CallbackPresenter import CallbackPresenter
 from startlive.core.workers.danmaku.acknowledge import DanmakuAckWorker
 from startlive.core.workers.danmaku.connection import DanmakuWorker
+from .settings import settings_for_identity
 
 
 class DanmakuConnection:

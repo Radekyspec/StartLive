@@ -112,7 +112,7 @@ class SharedVideoReader:
         # Darwin shm fstat omits S_IFREG and reports a page-rounded length;
         # Linux reports S_IFREG and the exact ftruncate length.
         rounded_capacity = (
-                                       SHARED_CAPACITY + mmap.PAGESIZE - 1) // mmap.PAGESIZE * mmap.PAGESIZE
+                                   SHARED_CAPACITY + mmap.PAGESIZE - 1) // mmap.PAGESIZE * mmap.PAGESIZE
         if (stat.S_IFMT(info.st_mode) not in (0,
                                               stat.S_IFREG) or info.st_uid != os.getuid()
                 or info.st_mode & 0o077 or not SHARED_CAPACITY <= info.st_size <= rounded_capacity):
@@ -163,10 +163,10 @@ class SharedVideoReader:
             magic, version, sequence, stamp, width, height, fmt, cs, color_range, size = SHARED_HEADER.unpack_from(
                 self.view)
             valid = (
-                        magic == b"SLVF" and version == 2 and sequence >= notice_sequence
-                        and 0 < width <= 3840 and 0 < height <= 2160
-                        and fmt in (1, 2) and cs in (1, 2) and color_range in (
-                            1, 2))
+                    magic == b"SLVF" and version == 2 and sequence >= notice_sequence
+                    and 0 < width <= 3840 and 0 < height <= 2160
+                    and fmt in (1, 2) and cs in (1, 2) and color_range in (
+                        1, 2))
             expected = width * height * 4 if fmt == 1 else width * height * 3 // 2
             if not valid or size != expected or (
                     fmt == 2 and (width % 2 or height % 2)):

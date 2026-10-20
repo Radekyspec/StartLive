@@ -1,17 +1,21 @@
 from time import monotonic
 
-from .pk_presenter import PkPresenter
-from startlive.core.pk.states.events import PkInfoEvent, PkMatchTimeoutEvent
-from startlive.core.pk.states.info import PkClassicInfoResult
 from startlive.core.constant.pk import NativePkType
 from startlive.core.constant.pk_api import PK_CLASSIC_INFO_UNAVAILABLE
 from startlive.core.constant.pk_info import NativePkState, PkInfoAction
 from startlive.core.exceptions import PkError
 from startlive.core.pk.identity import require_current_identity
 from startlive.core.pk.pk_info import classic_pk_info, queried_pk_info
+from startlive.core.pk.states.events import (
+    PkBattleEndEvent,
+    PkInfoEvent,
+    PkMatchTimeoutEvent,
+)
+from startlive.core.pk.states.info import PkClassicInfoResult
 from startlive.core.pk.trace import pk_trace
 from startlive.core.workers.pk.fetch_classic_info import PkClassicInfoWorker
 from startlive.core.workers.pk.fetch_info import PkInfoWorker
+from .pk_presenter import PkPresenter
 
 
 class PkRoundController:
@@ -98,10 +102,14 @@ class PkRoundController:
             return False
 
     def handle_event(self, event):
-        if self._closed or not isinstance(event, PkInfoEvent):
+        if self._closed:
+            return False
+        if not isinstance(event, (PkInfoEvent, PkBattleEndEvent)):
             return False
         try:
             self.identity_guard(self.identity)
+            if isinstance(event, PkBattleEndEvent):
+                return self.handle_battle_end(event)
             previous_timestamp = self.state.timestamp
             return self._dispatch(self.state.from_push(event.info),
                                   previous_timestamp=previous_timestamp)
@@ -110,6 +118,49 @@ class PkRoundController:
                         error_type=type(error).__name__, error=str(error))
             self.failed(error)
             return False
+
+    def handle_battle_end(self, event):
+        """Contract21 Push PKEnd: Freezing -> stop polling -> Idle.
+
+        The push is authoritative for the local round boundary; HTTP is not a
+        completion barrier and no PK exit/cancel request is manufactured.
+        """
+        state = self.state
+        if state.kind != NativePkType.DOUBLE_CLASSIC:
+            self._trace("round.battle_end.ignored", reason="not_classic",
+                        battle_type=event.battle_type, event_pk_id=event.pk_id)
+            return False
+        if event.battle_type not in (0, 1):
+            self._trace("round.battle_end.ignored",
+                        reason="battle_type_mismatch",
+                        battle_type=event.battle_type, event_pk_id=event.pk_id)
+            return False
+        current = state.round_id
+        if event.pk_id and current and event.pk_id != current:
+            self._trace("round.battle_end.ignored", reason="different_round",
+                        battle_type=event.battle_type, event_pk_id=event.pk_id,
+                        current_pk_id=current)
+            return False
+        if event.pk_id and event.pk_id == state.last_ended_round_id:
+            self._trace("round.battle_end.ignored", reason="already_ended",
+                        battle_type=event.battle_type, event_pk_id=event.pk_id)
+            return False
+        if state.state in (NativePkState.IDLE, NativePkState.STARTING,
+                           NativePkState.MATCHING,
+                           NativePkState.SELECTING_USER):
+            self._trace("round.battle_end.ignored", reason="no_active_round",
+                        battle_type=event.battle_type, event_pk_id=event.pk_id,
+                        previous_state=state.state)
+            return False
+        previous = state.state
+        # Native logs Freezing before QuitPkForce. The transient state is not
+        # presented; trace it so the verified order stays auditable.
+        state.state = NativePkState.FREEZING
+        self._trace("round.battle_end.freezing", previous_state=previous,
+                    battle_type=event.battle_type, event_pk_id=event.pk_id)
+        decision = state.end_from_battle(event.pk_id)
+        return self._dispatch(decision,
+                              previous_timestamp=state.timestamp)
 
     def handle_match_timeout(self, event):
         """Contract43: retire only a matching attempt in a supported family.
@@ -153,7 +204,7 @@ class PkRoundController:
         if self.state.kind != NativePkType.DOUBLE_CLASSIC:
             raise PkError("此模式尚未接入状态查询")
         if type(pk_id) is not int or pk_id <= 0:
-            raise PkError("传统 PK 回合查询需要有效的回合 ID")
+            raise PkError("经典 PK 回合查询需要有效的回合 ID")
         return self._query(pk_id, classic=True, replace=replace)
 
     def query_classic_current(self, *, replace=False):
@@ -161,7 +212,7 @@ class PkRoundController:
         if self._closed:
             return False
         if self.state.kind != NativePkType.DOUBLE_CLASSIC:
-            raise PkError("此模式尚未接入传统 PK 当前状态查询")
+            raise PkError("此模式尚未接入经典 PK 当前状态查询")
         return self._query(0, classic=True, replace=replace)
 
     def query_current(self, pk_id, *, replace=False):
@@ -191,7 +242,6 @@ class PkRoundController:
         self._pending_classic = classic
         self._trace("round.query.started", requested_pk_id=pk_id,
                     classic=classic)
-        worker = None
         try:
             worker_class = PkClassicInfoWorker if classic else PkInfoWorker
             worker = worker_class(PkPresenter(
@@ -202,6 +252,7 @@ class PkRoundController:
                                                         classic=classic)),
                 self.identity, pk_id,
                 **({"current_state": pk_id == 0} if classic else {}))
+            worker.request_allowed = lambda: not self._closed and serial == self._query_serial and self._polling_allowed()
             self.manager.submit(worker)
         except Exception as error:
             self._query_failed(serial, error, pk_id=pk_id, classic=classic)
@@ -248,7 +299,7 @@ class PkRoundController:
             if classic:
                 response = result.data
                 if not isinstance(response, PkClassicInfoResult):
-                    raise PkError("传统 PK 查询响应无效")
+                    raise PkError("经典 PK 查询响应无效")
                 if response.code == PK_CLASSIC_INFO_UNAVAILABLE:
                     self._trace("round.classic.recovery", code=response.code,
                                 auto_match_status=response.auto_match_status)

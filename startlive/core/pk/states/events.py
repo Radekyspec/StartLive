@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from startlive.core.pk.states.session import PkResult
 from startlive.core.pk.states.info import PkInfo
+from startlive.core.pk.states.session import PkResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +14,14 @@ class PkEvent:
 @dataclass(frozen=True, slots=True)
 class PkInfoEvent(PkEvent):
     info: PkInfo
+
+
+@dataclass(frozen=True, slots=True)
+class PkInfoHintEvent(PkEvent):
+    """Compact ICPK notification; HTTP supplies the authoritative round DTO."""
+    pk_id: int | None
+    pk_status: int | None
+    biz_session_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +67,19 @@ class PkOperationEvent(PkEvent):
     peer_search: int | None
     own_side: bool | None
     source: int | None = None
+    uid: int | None = None
+    initiator: int | None = None
+    biz_label: str | None = None
+    invitation_timeout: int | None = None
+    user_info: dict[str, Any] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class PkStreamControlEvent(PkEvent):
+    biz_session_id: str | None
+    rtc_channel_id: str | None
+    uid: int | None
+    stream_control: Any = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +89,8 @@ class PkLeaveEvent(PkEvent):
     uid: int | None
     close_user_reason: int | None
     toast: str | None = field(repr=False)
+    # 114 carries the business family; keep it optional for older captures.
+    biz_label: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

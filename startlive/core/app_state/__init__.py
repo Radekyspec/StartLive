@@ -1,5 +1,4 @@
-from startlive.core.constant.settings import SettingsName, _SETTINGS_FILES, \
-    _LEGACY_SETTINGS_KEYS
+import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import partial
@@ -10,7 +9,6 @@ from queue import Queue
 from tempfile import NamedTemporaryFile
 from threading import RLock
 from typing import Optional, Any, List
-import logging
 
 from keyring import get_password, set_password, delete_password
 from keyring.errors import KeyringError, PasswordDeleteError
@@ -18,16 +16,18 @@ from obsws_python import ReqClient
 from requests import Session
 from requests.cookies import cookiejar_from_dict
 
+from startlive.core.constant.settings import SettingsName, _SETTINGS_FILES, \
+    _LEGACY_SETTINGS_KEYS
+from startlive.core.credentials.states import AccountSnapshot
+from startlive.core.exceptions import TaskCancelled
+from startlive.core.obs.states import ObsOutputStatus
+from startlive.core.pk.states.encoder import VideoEncodingConfig
+from .app_state_base import StateBase
+from .observable_state import ObservableState
 from .. import constant
 from ..cache import get_cache_path
 from ..constant import *
 from ..sign import gen_buvid
-from .app_state_base import StateBase
-from .observable_state import ObservableState
-from startlive.core.pk.states.encoder import VideoEncodingConfig
-from startlive.core.obs.states.output import ObsOutputStatus
-from startlive.core.credentials.states.account_snapshot import AccountSnapshot
-from startlive.core.exceptions import TaskCancelled
 
 dumps = partial(dumps, ensure_ascii=False,
                 separators=(",", ":"))
@@ -243,7 +243,7 @@ def _load_settings(name: SettingsName):
             state.update(
                 {key: values[key] for key in state.keys() if key in values})
     except (OSError, UnicodeError, ValueError, TypeError, KeyError,
-            KeyringError) as error:
+            KeyringError):
         _settings_logger.warning("Could not load %s settings", name,
                                  exc_info=True)
         return
@@ -315,7 +315,6 @@ def replace_account_cookies(cookies: dict[str, str]) -> None:
         room_info.reset()
         cookies_dict.clear()
         cookies_dict.update(values)
-
 
 
 def create_session(h_type: HeadersType, *,

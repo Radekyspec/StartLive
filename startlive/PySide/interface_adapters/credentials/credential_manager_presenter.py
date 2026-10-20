@@ -48,4 +48,5 @@ class CredentialManagerPresenter(Presenter):
         panel.obs_auto_connect_checkbox.setChecked(
             app_state.obs_settings.get("auto_connect", False))
 
-    def prepare_progress_view(self, *args, **kwargs): ...
+    def prepare_progress_view(self, *args, **kwargs):
+        ...

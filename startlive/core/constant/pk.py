@@ -4,6 +4,7 @@ from enum import IntEnum, StrEnum
 class PkMode(StrEnum):
     TRADITIONAL = "traditional"
     VIDEO = "video"
+    VIDEO_LINK = "video_link"
 
 
 class NativePkType(IntEnum):

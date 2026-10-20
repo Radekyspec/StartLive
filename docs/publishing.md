@@ -1,8 +1,12 @@
 # 发布到 PyPI
 
 项目使用 `pyproject.toml` 和 setuptools 构建，发行名及安装后的命令均为
-`startlive`。版本唯一来源是 `startlive/core/constant/_version.py`，
-依赖来源是 `requirements.txt`，无需另加 `setup.py`。
+`startlive`。源码中的 `startlive/core/constant/_version.py` 保持
+`0.0.0.dev0`，应用和 Python 包共用这一个版本来源，无需手动维护发布版本，
+`pip install -e .` 可以直接使用。普通开发分支编译会追加 `+提交号`，
+原生文件版本使用 `0.0.0`。开发版本跳过应用内的版本更新检查。
+正式版本由 CI 调用 `tools/write_version.py` 写入，仅改变构建工作目录，
+不会提交回仓库。依赖来源是 `requirements.txt`，无需另加 `setup.py`。
 
 ## 本地构建和验证
 
@@ -12,7 +16,7 @@
 python -m pip install --upgrade build twine
 python -m build
 python -m twine check --strict dist/*
-python tools/check_distribution.py dist/startlive-1.2.1-py3-none-any.whl
+python tools/check_distribution.py dist/startlive-0.0.0.dev0-py3-none-any.whl
 ```
 
 替换文件名中的版本号。也可以使用 `uv build` 构建。
@@ -22,7 +26,7 @@ python tools/check_distribution.py dist/startlive-1.2.1-py3-none-any.whl
 因此还需在桌面环境中验证真实启动：
 
 ```shell
-uv tool install --force ./dist/startlive-1.2.1-py3-none-any.whl
+uv tool install --force ./dist/startlive-0.0.0.dev0-py3-none-any.whl
 startlive
 ```
 
@@ -53,13 +57,14 @@ wheel 只包含应用代码、图标、版本资源和许可证；不包含本�
     - Environment: `pypi`
 3. 在 GitHub 仓库中创建 `pypi` environment。建议设置发布审批人，
    并将允许发布的分支或标签限制到正式发布来源。
-4. 修改版本文件并提交，创建同版本的 GitHub Release，例如版本
-   `1.2.1` 对应 tag `1.2.1`，Release 标题也可以填写 `1.2.1`。
-   tag 兼容可选的 `v` 前缀，因此 `v1.2.1` 同样有效。
-   工作流读取 `github.event.release.tag_name`，去掉可选的 `v` 前缀后，
-   必须与包版本完全一致；Release 标题不参与 PyPI 版本校验。
-   包版本来自该 tag 所指提交中的 `startlive/core/constant/_version.py`，
-   不会根据 tag 或标题自动修改。
+4. 为要发布的提交创建 GitHub Release，例如 tag `1.3.1` 或 `v1.3.1`。
+   工作流读取 `github.event.release.tag_name`，去掉可选的 `v` 前缀，
+   校验版本格式后自动写入构建目录的版本文件。无需修改源码版本再提交，
+   Release 标题不参与 PyPI 版本处理。包版本经过 Python 版本规范化后
+   与 tag 比较，例如 `1.4.0-beta.1` 对应包版本 `1.4.0b1`。
+
+Windows/macOS 安装包仍由合并的 `Release-v<版本号>` PR 驱动，
+从 PR 标题自动写入版本；与同一版本对应的 GitHub Release 应使用一致的 tag。
 
 工作流在 PR、master 推送时只构建、检查；
 发布 GitHub Release 或手动触发工作流时上传 PyPI。构建后在 Windows、macOS、Linux
@@ -72,15 +77,15 @@ wheel 只包含应用代码、图标、版本资源和许可证；不包含本�
 ## 在 GitHub Actions 中手动发布
 
 1. 将工作流提交到仓库默认分支，以显示手动运行入口。
-2. 在要发布的分支中更新 `startlive/core/constant/_version.py` 并提交，
-   确保版本号尚未发布到 PyPI，且该分支包含支持手动发布的工作流。
+2. 确认要发布的分支包含支持手动发布的工作流，准备一个尚未发布到 PyPI 的版本号。
 3. 打开 **Actions → Build and publish Python package → Run workflow**，
-   选择要发布的分支，然后点击 **Run workflow**。
+   选择要发布的分支，在 `version` 中填写版本号，然后点击 **Run workflow**。
 4. 构建和三个平台的安装检查通过后，`publish` 任务会上传 PyPI。
    如果 `pypi` environment 配置了审批或分支限制，仍需满足这些条件。
 
-手动发布不要求创建 Release；包版本直接取所选分支中的版本文件，
-不会执行 Release tag 校验。手动运行会实际发布，不再只是构建检查。
+手动发布不要求创建 Release；工作流自动将输入版本写入构建目录，
+不会执行 Release tag 校验，也不会修改仓库内的版本文件。
+手动运行会实际发布，不再只是构建检查。
 
 ## 手动上传
 

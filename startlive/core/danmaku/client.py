@@ -3,11 +3,13 @@
 Reconnect keeps the dedupe context; token refresh replaces it. HTTP sequence
 ACKs are enqueued to a different worker. Only this loop touches/closes sockets.
 """
-from dataclasses import replace
 import json
+from dataclasses import replace
 from time import monotonic
 from uuid import uuid4
 
+from startlive.core.constant.danmaku import DanmakuState
+from startlive.core.constant.danmaku_wire import HEARTBEAT_INTERVAL_SECONDS
 from startlive.core.exceptions import (
     DanmakuError,
     DanmakuAuthenticationError,
@@ -19,8 +21,6 @@ from .identity import require_current_identity
 from .protocol import DanmakuProtocol
 from .socket import DanmakuSocket
 from .trace import danmaku_trace
-from startlive.core.constant.danmaku_wire import HEARTBEAT_INTERVAL_SECONDS
-from startlive.core.constant.danmaku import DanmakuState
 
 
 class DanmakuClient:
@@ -60,7 +60,7 @@ class DanmakuClient:
                       response=getattr(error, "response", None),
                       error_type=type(error).__name__, reason=str(error))
 
-    def run(self, report_progress, *args, **kwargs):
+    def run(self, report_progress):
         def report(value):
             if isinstance(value, DanmakuState):
                 danmaku_trace("connection.state", uid=self.identity.uid,

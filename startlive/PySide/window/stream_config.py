@@ -338,6 +338,18 @@ class StreamConfigPanel(QWidget):
                 app_state.obs_req_queue.put(("StopStream", {}))
         self.parent_window.add_thread(StopLiveWorker(StopLivePresenter(self)))
 
+    @Slot()
+    def on_live_stopped(self):
+        """Retire the separate PK owner after stopLive succeeds.
+
+        Only local cleanup happens here; the PK module must not send any end
+        request because the room is already closed. Late JOIN/PK_INFO/114 are
+        rejected by the closed owner.
+        """
+        menu = getattr(self.parent_window, "menu_bar", None)
+        if menu is not None:
+            menu.stop_pk_for_live_stop()
+
     def fill_stream_info(self, addr: str, key: str):
         if app_state.obs_connecting:
             return

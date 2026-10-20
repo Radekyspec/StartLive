@@ -14,6 +14,8 @@ class RtcMuteState:
 class RtcMuteRequest:
     media: Literal["audio", "video"]
     muted: bool
+    signal: bool = True
+    request_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,3 +23,4 @@ class RtcMuteUpdate:
     media: Literal["audio", "video"]
     state: RtcMuteState
     error: str | None = None
+    request_id: int | None = None

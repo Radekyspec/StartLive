@@ -1,6 +1,6 @@
-from .pk_request import PkRequestWorker
-from startlive.core.pk.states.candidates import PkCandidate
 from startlive.core.pk.parameters import video_invite_fields
+from startlive.core.pk.states.candidates import PkCandidate
+from .pk_request import PkRequestWorker
 
 
 class PkInviteWorker(PkRequestWorker):

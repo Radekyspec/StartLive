@@ -11,7 +11,7 @@ from startlive.core.workers.base import LongLiveWorker
 
 
 class RtcMediaWorker(LongLiveWorker):
-    """One PC/loop. The owner selects a peer from business + SDK publication.
+    """One PC/loop. The owner selects a peer from scoped SDK publication.
 
     Queued messages retain owned bytes (contract25). No inferred Unpub/Unsub.
     Contract38 controller returns are not connectivity evidence. CONNECTED
@@ -22,13 +22,14 @@ class RtcMediaWorker(LongLiveWorker):
     def __init__(self, presenter, identity, connector, local_buffer,
                  remote_buffer, /,
                  *, publication, identity_guard=require_current_identity,
-                 media_factory=None):
+                 media_factory=None, audio_muted=False):
         super().__init__(name="视频 PK 音视频", presenter=presenter,
                          with_session=False)
         self.identity, self.connector, self.identity_guard = identity, connector, identity_guard
         self.local_buffer, self.remote_buffer = local_buffer, remote_buffer
         self.media_factory = media_factory
         self.publication = publication
+        self.audio_muted = audio_muted
         self._commands = Queue(maxsize=32)
         self._mute_commands = Queue(maxsize=8)
         self._closing = False
@@ -41,14 +42,15 @@ class RtcMediaWorker(LongLiveWorker):
         except Full:
             raise PkError("RTC 订阅请求积压，无法继续连线") from None
 
-    def set_muted(self, media, muted):
+    def set_muted(self, media, muted, *, signal=True, request_id=None):
         """GUI-safe submission; tracks and signaling stay on the worker loop."""
         if media not in ("audio", "video") or type(muted) is not bool:
             raise PkError("静音请求需指定音频或视频及布尔值")
         if self._closing or not self.is_running:
             raise PkError("RTC 会话已结束")
         try:
-            self._mute_commands.put_nowait(RtcMuteRequest(media, muted))
+            self._mute_commands.put_nowait(
+                RtcMuteRequest(media, muted, signal, request_id))
         except Full:
             raise PkError("静音请求尚未处理完成，请稍后重试") from None
 
@@ -58,17 +60,21 @@ class RtcMediaWorker(LongLiveWorker):
         self.identity_guard(self.identity)
         return True
 
-    async def _set_muted(self, media, command, report):
+    @staticmethod
+    async def _set_muted(media, command, report):
         try:
             state = await media.set_muted(command.media, command.muted,
+                                          signal=command.signal,
                                           changed=lambda state: report(
                                               RtcMuteUpdate(command.media,
-                                                            state)))
+                                                            state,
+                                                            request_id=command.request_id)))
         except Exception as error:
             report(RtcMuteUpdate(command.media, media.mute_state(command.media),
-                                 str(error)))
+                                 str(error), request_id=command.request_id))
         else:
-            report(RtcMuteUpdate(command.media, state))
+            report(RtcMuteUpdate(command.media, state,
+                                 request_id=command.request_id))
 
     def run(self, report_progress, *args, **kwargs):
         self.identity_guard(self.identity)
@@ -108,7 +114,10 @@ class RtcMediaWorker(LongLiveWorker):
         report = report_progress
         connection = None
         try:
-            async with self.connector() as connection:
+            connector = self.connector()
+            if hasattr(connector, "on_joined"):
+                connector.on_joined = lambda: report(RtcMediaStage.JOINED)
+            async with connector as connection:
                 media = media_class(connection.signaling, self.local_buffer,
                                     self.remote_buffer,
                                     peer_connection=connection.pc,
@@ -117,8 +126,20 @@ class RtcMediaWorker(LongLiveWorker):
                 ready = selected = mute_task = None
                 try:
                     report(RtcMediaStage.CONNECTED)
+                    if self.publication.audio and not self.publication.video:
+                        # Classic capture starts only after JOIN. Wait for its
+                        # first PCM packet without requiring a video encoder.
+                        try:
+                            async with asyncio.timeout(5):
+                                while not self.local_buffer.freshness()[1]:
+                                    await asyncio.sleep(0.02)
+                        except TimeoutError:
+                            raise PkError(
+                                "等待经典 PK 音频采集超时，请确认 OBS 的 PK 采集已启动") from None
                     await media.publish(video=self.publication.video,
-                                        audio=self.publication.audio)
+                                        audio=self.publication.audio,
+                                        **({
+                                               "audio_muted": True} if self.audio_muted else {}))
                     report(RtcMediaStage.PUBLISHED)
                     while self.is_running:
                         while not connection.user_events.empty():
@@ -134,11 +155,21 @@ class RtcMediaWorker(LongLiveWorker):
                             desired = None
                         if desired is not None and desired != selected:
                             if selected is not None:
-                                raise PkError(
-                                    "对方媒体订阅发生变化，需要重新建立连线")
-                            await media.subscribe(desired.uid,
-                                                  video=desired.video,
-                                                  audio=desired.audio)
+                                if selected.uid != desired.uid:
+                                    raise PkError(
+                                        "对方 RTC 身份发生变化，需要重新建立连线")
+                                if ready is not None:
+                                    ready.cancel()
+                                    await asyncio.gather(ready,
+                                                         return_exceptions=True)
+                                    ready = None
+                                await media.update_subscription(desired.uid,
+                                                                video=desired.video,
+                                                                audio=desired.audio)
+                            else:
+                                await media.subscribe(desired.uid,
+                                                      video=desired.video,
+                                                      audio=desired.audio)
                             selected = desired
                             report(RtcMediaStage.SUBSCRIBED)
                             if desired.video or desired.audio:

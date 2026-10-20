@@ -5,9 +5,11 @@
 
 # StartLive
 
-Bypass the requirement to use Bilibili’s official "LiveHime" client to start streaming.
+Bypass the requirement to use Bilibili’s official "LiveHime" client to start
+streaming.
 
-Download / Update / Q&A QQ Group: <a href="https://qm.qq.com/q/fPBktdfdrG">1022778201</a>
+Download / Update / Q&A QQ Group: <a href="https://qm.qq.com/q/fPBktdfdrG">
+1022778201</a>
 
 <a href="https://github.com/Radekyspec/StartLive/blob/master/docs/README_zh.md">
 🇨🇳 简体中文版</a>
@@ -17,12 +19,18 @@ Download / Update / Q&A QQ Group: <a href="https://qm.qq.com/q/fPBktdfdrG">10227
 
 ## Disclaimer
 
-- This software is open-sourced under the [GNU General Public License 3.0](https://www.gnu.org/licenses/gpl-3.0.en.html).
-- The software **logo is not licensed under GPL-3.0**. All rights are reserved by the artist [花漫酱](https://space.bilibili.com/49468802) and the software developer. You may not claim GPL-3.0 authorization to use the logo without permission, nor use it for any commercial purpose without authorization.
+- This software is open-sourced under
+  the [GNU General Public License 3.0](https://www.gnu.org/licenses/gpl-3.0.en.html).
+- The software **logo is not licensed under GPL-3.0**. All rights are reserved
+  by the artist [花漫酱](https://space.bilibili.com/49468802) and the software
+  developer. You may not claim GPL-3.0 authorization to use the logo without
+  permission, nor use it for any commercial purpose without authorization.
 
 ### Download via Releases
 
-Download link: **[Click here to download](https://github.com/Radekyspec/StartLive/releases/latest)**
+Download link: *
+*[Click here to download](https://github.com/Radekyspec/StartLive/releases/latest)
+**
 
 ### Install via Windows Package Manager (winget)
 
@@ -78,7 +86,10 @@ does not need to be installed separately.
 
 ## How to Use
 
-**[Open the step-by-step guide (Tencent Docs)](https://docs.qq.com/doc/DTHVMdkhtUWJjRFhv?scene=4edcd4a61e4d506148e0f879bN4Lu1)**
+*
+
+*[Open the step-by-step guide (Tencent Docs)](https://docs.qq.com/doc/DTHVMdkhtUWJjRFhv?scene=4edcd4a61e4d506148e0f879bN4Lu1)
+**
 
 ## Run from Source / Development
 
@@ -89,10 +100,15 @@ does not need to be installed separately.
 - `3.11 <= Python <= 3.14`
 - Tested on **Python 3.14.6**; **Python 3.12.10** recommended
 - Desktop environment
-- `PySide6 (Qt for Python)` [supported platforms/architectures](https://wiki.qt.io/Qt_for_Python)
-- A keyring backend supported by the [`keyring`](https://pypi.org/project/keyring/) package  
-  - On **Windows**: typically the built-in [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)  
-  - On **macOS**: typically the system `Keychain`  
+-
+
+`PySide6 (Qt for Python)` [supported platforms/architectures](https://wiki.qt.io/Qt_for_Python)
+
+- A keyring backend supported by the [
+  `keyring`](https://pypi.org/project/keyring/) package
+  - On **Windows**: typically the
+    built-in [Windows Credential Locker](https://learn.microsoft.com/en-us/windows/apps/develop/security/credential-locker)
+  - On **macOS**: typically the system `Keychain`
 
 ### Install & Run
 
@@ -102,7 +118,7 @@ Create a virtual environment:
 python -m venv venv
 ```
 
-- **Windows**: 
+- **Windows**:
 
 ```shell
 .\venv\Scripts\pip.exe install -e .
@@ -118,4 +134,10 @@ python -m venv venv
 ./venv/bin/python ./StartLive.py
 ```
 
-> Note: Bilibili does **not** enable **HEVC (High Efficiency Video Coding)** streaming for all users. If pushing the stream fails, please check your encoder/codec settings.
+The source version stays at `0.0.0.dev0`, so editable installs work without
+maintaining a version number. Release CI writes
+the version from the release PR title or GitHub Release tag during the build.
+
+> Note: Bilibili does **not** enable **HEVC (High Efficiency Video Coding)**
+> streaming for all users. If pushing the stream fails, please check your
+> encoder/codec settings.

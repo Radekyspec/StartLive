@@ -6,10 +6,7 @@ transport. No retries: several GET endpoints also mutate server state.
 from contextlib import contextmanager
 from time import time
 
-from startlive.core.workers.base.json_http import JsonHttpApi
-
 from startlive.core import constant
-from startlive.core.pk.states.session import PkIdentity, PkResult
 from startlive.core.constant.pk_api import (
     PK_SUCCESS,
     PK_CLASSIC_INFO_UNAVAILABLE,
@@ -17,6 +14,7 @@ from startlive.core.constant.pk_api import (
 )
 from startlive.core.exceptions import PkError, PkProtocolError
 from startlive.core.pk.pk_info import classic_info_result
+from startlive.core.pk.states.session import PkIdentity, PkResult
 from startlive.core.pk.trace import pk_trace
 from startlive.core.sign.app_sign import (
     base_payload,
@@ -25,6 +23,7 @@ from startlive.core.sign.app_sign import (
     native_canonical,
     order_payload,
 )
+from startlive.core.workers.base.json_http import JsonHttpApi
 
 
 class PkApi(JsonHttpApi):

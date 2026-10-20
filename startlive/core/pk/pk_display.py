@@ -1,10 +1,10 @@
 """Contracts48/49 display projection from accepted round and member snapshots."""
-from startlive.core.pk.states.candidates import PkCandidate
-from startlive.core.pk.states.display import PkRoundDisplay
-from startlive.core.pk.states.info import PkInfo
 from startlive.core.constant.pk import NativePkType
 from startlive.core.constant.pk_info import NativePkState
 from startlive.core.pk.pk_eligibility import pk_type_from_server
+from startlive.core.pk.states.candidates import PkCandidate
+from startlive.core.pk.states.display import PkRoundDisplay
+from startlive.core.pk.states.info import PkInfo
 
 
 def build_round_display(

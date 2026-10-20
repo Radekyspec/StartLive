@@ -1,9 +1,7 @@
-from startlive.core.constant.pk_media import PK_VIEW_AUDIO_BYTES_PER_SECOND, \
-    PK_VIEW_AUDIO_PREFILL_BYTES
-from time import monotonic, perf_counter
 from concurrent.futures import ThreadPoolExecutor
-from threading import local
 from math import ceil
+from threading import local
+from time import monotonic, perf_counter
 
 from PySide6.QtCore import QEvent, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPainter
@@ -11,6 +9,8 @@ from PySide6.QtMultimedia import QAudioFormat, QAudioSink, QMediaDevices, \
     QtAudio
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from startlive.core.constant.pk_media import PK_VIEW_AUDIO_BYTES_PER_SECOND, \
+    PK_VIEW_AUDIO_PREFILL_BYTES
 from startlive.core.pk.trace import pk_trace
 
 _preview_context = local()

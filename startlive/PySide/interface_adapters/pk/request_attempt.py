@@ -23,8 +23,18 @@ class RequestAttempt:
         return PkPresenter(finished=lambda value: deliver(finished, value),
                            failed=lambda error: deliver(failed, error))
 
-    @staticmethod
-    def submit(manager, worker):
+    def submit(self, manager, worker):
+        # Bind the request to this attempt generation. A queued worker that
+        # starts after retire/invalidate must not send: the room may already
+        # be closed. Compose with any caller-supplied send gate.
+        serial = self.serial
+        previous = getattr(worker, "request_allowed", None)
+
+        def allowed():
+            return serial == self.serial and (
+                previous() if previous is not None else True)
+
+        worker.request_allowed = allowed
         try:
             manager.submit(worker)
         except Exception as error:

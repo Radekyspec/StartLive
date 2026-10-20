@@ -2,7 +2,29 @@
 
 English | [简体中文](README_zh.md)
 
-## Version 0.2: NV12 shared video
+## Version 0.3: per-connection audio/video selection
+
+Update the plugin and StartLive together, then restart OBS. The capture menu
+still enables/disables the bridge. StartLive requests audio only for classic
+PK, and audio + video for video PK, video links and preview. Audio-only capture
+does not subscribe to OBS video, create shared video memory, convert pixels or
+copy video frames. Audio stays on OBS track 1 (48 kHz stereo signed 16-bit PCM).
+Video dimensions, formats, frame-rate limit and encoding settings are unchanged.
+Streams are subscribed when a media client connects and released on disconnect.
+
+The same-user v2 pipe/socket now supports a small duplex handshake before any
+media: `SLPC`, version byte `1`, a selection byte (`1` audio, `2` video, `3`
+both),
+and two zero bytes. The plugin replies with the same eight bytes except for
+`SLPA` in the first four bytes. Empty selections, unknown bits and malformed
+requests are rejected. Selection lasts for one connection; reconnect to change
+it.
+The Python entry point is `ObsMediaWorker(..., audio=True, video=True)`.
+New clients require this acknowledgement and report an upgrade error for older
+plugins. Legacy readers that send no request within one second retain both
+streams, without an acknowledgement. SLPK v2 media packets are unchanged.
+
+## NV12 shared video
 
 Update the plugin and StartLive together. SLPK v2 uses a new endpoint; v1 raw
 BGRA packets are intentionally not accepted. BGRA remains an explicit pixel
@@ -346,8 +368,9 @@ selects Python 3.11.
    changes
    to **StartLive PK 采集：已开启** after capture starts and returns to **已关闭
    **
-   when capture stops. A failed start leaves it closed; this indicates OBS
-   capture status, not whether a StartLive client is connected.
+   when the bridge stops. A failed start leaves it closed; this indicates that
+   the local capture service is enabled, not that a client has connected or
+   received media. StartLive checks actual media readiness separately.
 3. Open the **PK / OBS media window** from StartLive's File menu. It connects
    automatically and displays OBS program output.
 4. Route the intended outgoing audio sources to OBS track 1 and remote playback
@@ -361,9 +384,10 @@ Run OBS and StartLive as the same OS user. Each capture endpoint accepts one
 media client. The capture toggle controls the local media connection;
 StartLive handles online PK accounts, signaling and networking.
 
-If capture does not start, check the OBS output resolution and color space,
-and confirm that another OBS instance is not using the endpoint. In the OBS
-log, a successful start reports
+If the service does not start, confirm that another OBS instance is not using
+the endpoint. For video capture, also check the OBS output resolution and color
+space. Successful audio-only capture logs `Capture selection: audio=1 video=0`.
+Successful video capture reports
 `[StartLive PK] Capture ... NV12 shared-memory v2`
 or `BGRA shared-memory v2`. If capture starts but StartLive receives no frames,
 check that both sides were updated, run as the same OS user, and that no other

@@ -1,6 +1,7 @@
 """Check a built wheel and smoke-test its installed command outside the checkout."""
 
 import argparse
+import ast
 import configparser
 import email
 import os
@@ -31,9 +32,20 @@ def main():
         if metadata["Name"] != "startlive":
             raise ValueError("Unexpected distribution name")
         version = metadata["Version"]
-        if args.tag and args.tag.removeprefix("v") != version:
-            raise ValueError(
-                f"Release tag {args.tag!r} does not match {version!r}")
+        if args.tag:
+            from packaging.version import Version
+
+            if Version(args.tag.removeprefix("v")) != Version(version):
+                raise ValueError(
+                    f"Release tag {args.tag!r} does not match {version!r}")
+        source = ast.parse(archive.read("startlive/core/constant/_version.py"))
+        app_version = next(
+            ast.literal_eval(node.value)
+            for node in source.body
+            if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "__version__"
+                    for target in node.targets)
+        )
         entrypoints = configparser.ConfigParser()
         entrypoints.read_string(archive.read(
             metadata_name.replace("METADATA", "entry_points.txt")
@@ -92,7 +104,7 @@ def main():
             [str(command), "--version"], cwd=directory, env=env,
             check=True, capture_output=True, text=True,
         )
-        if result.stdout.strip() != f"StartLive {version}":
+        if result.stdout.strip() != f"StartLive {app_version}":
             raise ValueError(f"Incorrect installed version: {result.stdout!r}")
         run(str(python), "-I", "-c", """
 from pathlib import Path

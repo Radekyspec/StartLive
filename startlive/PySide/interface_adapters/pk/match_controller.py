@@ -93,6 +93,12 @@ class PkMatchController:
         self.phase = PkPhase.CONNECTING
         self.attempt.cancel_requested = False
 
+    def retire(self):
+        """Retire this flow: discard callbacks and block queued sends."""
+        self.attempt.invalidate()
+        self.phase = PkPhase.FINISHED
+        self.attempt.inflight = self.attempt.cancel_requested = False
+
     def match_timed_out(self):
         """The owner has accepted Contract43's matching-state/family guard."""
         self.attempt.invalidate()
@@ -102,7 +108,7 @@ class PkMatchController:
     def observe_server_matching(self):
         """Classic current-info confirms server matching; send no new join."""
         if self.kind != NativePkType.DOUBLE_CLASSIC:
-            raise PkError("此状态同步仅适用于传统 PK")
+            raise PkError("此状态同步仅适用于经典 PK")
         if self.phase in (PkPhase.MATCHING,
                           PkPhase.STOPPING) or self.attempt.cancel_requested:
             return

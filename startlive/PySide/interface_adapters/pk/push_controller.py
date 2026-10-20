@@ -1,7 +1,7 @@
 """PK selects its business decoder; danmaku owns the connection workers."""
 from startlive.core.danmaku.connection import DanmakuConnection
-from startlive.core.workers.pk.push import PkPushWorker
 from startlive.core.workers.danmaku.acknowledge import DanmakuAckWorker
+from startlive.core.workers.pk.push import PkPushWorker
 
 
 class PkPushController(DanmakuConnection):

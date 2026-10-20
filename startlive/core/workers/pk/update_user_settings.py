@@ -1,8 +1,8 @@
-from .pk_request import PkRequestWorker
-from startlive.core.pk.states.user_settings import PkUserSettingsSaved, \
-    PkUserSettingsSnapshot
 from startlive.core.exceptions import PkProtocolError
 from startlive.core.pk.identity import require_current_identity
+from startlive.core.pk.states.user_settings import PkUserSettingsSaved, \
+    PkUserSettingsSnapshot
+from .pk_request import PkRequestWorker
 
 
 class UpdatePkUserSettingsWorker(PkRequestWorker):

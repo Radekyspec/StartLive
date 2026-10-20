@@ -1,4 +1,5 @@
 """Scoped PK video encoding and RTCP refresh-request compatibility."""
+from abc import abstractmethod
 from collections import deque
 from fractions import Fraction
 from math import ceil
@@ -13,15 +14,15 @@ from av.codec.codec import UnknownCodecError
 from av.error import FFmpegError
 from av.video.reformatter import VideoReformatter
 
+from startlive.core.constant.pk_video import MAX_ENCODER_LATENCY_SECONDS
+from startlive.core.exceptions import PkError
+from startlive.core.pk.states.encoder import VideoEncodingConfig
+from startlive.core.pk.states.video_publication import VideoPublication
+from startlive.core.pk.video_encoder_config import configured_plan
 from .rtc_h264 import source_capability, validate_encoder_sps
 from .rtc_video_pacer import configure_video_pacing
 from .trace import pk_trace
 from .video_encoder_backend import encoder_attempts, make_video_context
-from startlive.core.pk.states.encoder import VideoEncodingConfig
-from startlive.core.pk.states.video_publication import VideoPublication
-from startlive.core.constant.pk_video import MAX_ENCODER_LATENCY_SECONDS
-from startlive.core.exceptions import PkError
-from startlive.core.pk.video_encoder_config import configured_plan
 
 
 # Live output must make progress within a quarter-second of submitted media.
@@ -38,6 +39,17 @@ class PkVideoEncoder(Encoder):
     Bitrate is fixed by the session configuration and negotiated codec limits.
     REMB is recorded by the feedback adapter without changing this target.
     """
+
+    @staticmethod
+    @abstractmethod
+    def _source_capability(width, height):
+        """Return codec limits for a source geometry.
+
+        Subclasses must accept both dimensions even when their codec ceiling is
+        fixed. Live sending and encoder probing deliberately share this one
+        signature; do not hide a missing argument behind defaults.
+        """
+        pass
 
     def __init__(self, *, require_negotiation=False, video_config=None,
                  allow_fallback=True, use_codec_defaults=False):
@@ -269,7 +281,10 @@ class PkVideoEncoder(Encoder):
 
 
 class PkH264Encoder(PkVideoEncoder):
-    _source_capability = staticmethod(source_capability)
+    @staticmethod
+    def _source_capability(width, height):
+        return source_capability(width, height)
+
     _packetize = staticmethod(H264Encoder._packetize)
     _split_bitstream = staticmethod(H264Encoder._split_bitstream)
 
@@ -277,7 +292,10 @@ class PkH264Encoder(PkVideoEncoder):
     def _parameters(limits):
         return {"profile-level-id": limits.profile_level_id}
 
-    def _split_picture(self, data, keyframe, frame, plan, limits):
+    def _split_picture(self, data, _, frame, plan, limits):
+        # _ is the keyframe packet hint; H264 refresh is authoritative only when
+        # the bitstream contains an IDR (type 5). Keep the shared five-argument
+        # signature used by the AV1 encoder and the caller.
         if not data.startswith((b"\x00\x00\x01", b"\x00\x00\x00\x01")):
             raise PkError("H264 output is not Annex-B")
         nals = list(self._split_bitstream(data))
@@ -309,6 +327,10 @@ class PkH264Encoder(PkVideoEncoder):
 class PkAv1Encoder(PkVideoEncoder):
     @staticmethod
     def _source_capability(width, height):
+        # AV1's sender ceiling is a fixed level, independent of source size.
+        # Keep the shared parameter names so keyword callers stay compatible;
+        # the live/probe paths intentionally still pass both dimensions.
+        del width, height
         from .rtc_av1 import source_capability
         return source_capability()
 

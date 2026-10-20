@@ -1,6 +1,7 @@
-from startlive.core.pk.states.session import PkIdentity
+from startlive.core.exceptions import TaskCancelled
 from startlive.core.pk.api import PkApi
 from startlive.core.pk.identity import require_current_identity
+from startlive.core.pk.states.session import PkIdentity
 from startlive.core.workers.base import BaseWorker, Presenter
 
 
@@ -16,13 +17,19 @@ class PkRequestWorker(BaseWorker):
         self.identity = identity
         self.fields = dict(fields)
         self.after_sign = dict(after_sign or {})
+        self.request_allowed = lambda: True
+
+    def _before_send(self):
+        if not self.request_allowed():
+            raise TaskCancelled()
+        require_current_identity(self.identity)
 
     def run(self, report_progress, *args, **kwargs):
         return PkApi(self._session, self.identity,
                      logger_name=type(self).__name__).request(
             self.operation, self.fields, after_sign=self.after_sign,
             parse_result=self.parse_result,
-            before_send=lambda: require_current_identity(self.identity))
+            before_send=self._before_send)
 
     def parse_result(self, result):
         """Parse while the transport still owns this request's log context."""

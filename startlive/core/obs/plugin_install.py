@@ -41,8 +41,8 @@ def install_pk_plugin(resources_path: Path) -> Path:
                 "Contents/Info.plist", "Contents/MacOS/obs-startlive-pk")):
             raise MissingPkPluginError(str(source))
         destination = (
-                    Path.home() / "Library/Application Support/obs-studio/plugins"
-                    / source.name)
+                Path.home() / "Library/Application Support/obs-studio/plugins"
+                / source.name)
         shutil.copytree(source, destination, dirs_exist_ok=True, symlinks=True,
                         copy_function=_copy_binary)
         return destination

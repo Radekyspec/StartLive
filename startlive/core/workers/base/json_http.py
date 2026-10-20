@@ -62,7 +62,7 @@ class JsonHttpApi(ABC):
     @abstractmethod
     def _http_failure_fields(error: Exception, response: Response | None,
                              stage: str, elapsed: float, *, network: bool) -> \
-    dict[str, Any]:
+            dict[str, Any]:
         """Describe failures without exposing signed URLs or credentials."""
         raise NotImplementedError
 

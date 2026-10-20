@@ -3,6 +3,9 @@ from copy import deepcopy
 from dataclasses import replace
 from math import isfinite
 
+from startlive.core.constant.pk_api import PK_SUCCESS, \
+    PK_CLASSIC_INFO_UNAVAILABLE
+from startlive.core.exceptions import PkProtocolError
 from startlive.core.pk.states.info import (
     PkBasicInfo,
     PkClassicInfoResult,
@@ -10,9 +13,6 @@ from startlive.core.pk.states.info import (
     PkMatchInfo,
     PkMemberInfo,
 )
-from startlive.core.constant.pk_api import PK_SUCCESS, \
-    PK_CLASSIC_INFO_UNAVAILABLE
-from startlive.core.exceptions import PkProtocolError
 
 
 def _number(data, key, *, bits=64):
@@ -83,7 +83,7 @@ def parse_pk_info(data):
     numbers = {name: _number(basic, name) for name in (
         "pk_id", "init_id", "status", "type", "sub_type", "start_time",
         "end_time",
-        "punish_end_time", "sprint_duration", "mutipk_type")}
+        "punish_end_time", "sprint_duration", "muti_pk_type")}
     texts = {name: _text(basic, name) for name in
              ("biz_session_id", "punish_text", "status_msg")}
     members = data.get("members", [])
@@ -113,7 +113,7 @@ def classic_info_result(code, data):
     """Contract44 keeps the classic callback code and separate auto status."""
     if code not in (PK_SUCCESS, PK_CLASSIC_INFO_UNAVAILABLE) or not isinstance(
             data, dict):
-        raise PkProtocolError("传统 PK 查询缺少有效的状态响应")
+        raise PkProtocolError("经典 PK 查询缺少有效的状态响应")
     return PkClassicInfoResult(code,
                                _number(data, "auto_match_status", bits=32),
                                deepcopy(data))
@@ -122,7 +122,7 @@ def classic_info_result(code, data):
 def classic_pk_info(data, *, auto_matching=False, cached_timestamp=0):
     """Convert actual fields; auto_matching requires Contract44's6204 gate."""
     if not isinstance(data, dict):
-        raise PkProtocolError("传统 PK 查询缺少状态信息")
+        raise PkProtocolError("经典 PK 查询缺少状态信息")
     timestamp = _number(data, "timestamp")
     if auto_matching:
         timestamp = timestamp or cached_timestamp + 1
@@ -136,7 +136,7 @@ def classic_pk_info(data, *, auto_matching=False, cached_timestamp=0):
                                  status=_number(data, "status", bits=32),
                                  type=_number(data, "battle_type", bits=32),
                                  sub_type=_number(data, "battle_sub_type",
-                                                  bits=32), mutipk_type=-1,
+                                                  bits=32), muti_pk_type=-1,
                                  start_time=_number(data, "pk_start_time"),
                                  end_time=end or 0,
                                  sprint_duration=end - sprint_start if end is not None and sprint_start is not None else 0,

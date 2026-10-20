@@ -1,5 +1,5 @@
-from .pk_request import PkRequestWorker
 from startlive.core.pk.parameters import parse_continuous_status
+from .pk_request import PkRequestWorker
 
 
 class FetchContinuousPkStatusWorker(PkRequestWorker):

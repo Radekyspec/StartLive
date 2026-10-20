@@ -1,7 +1,7 @@
 from startlive.core import app_state
-from startlive.core.credentials.states.account_snapshot import AccountSnapshot
-from startlive.core.pk.states.session import PkIdentity
+from startlive.core.credentials.states import AccountSnapshot
 from startlive.core.exceptions import PkAuthenticationError
+from startlive.core.pk.states.session import PkIdentity
 
 
 def current_identity() -> PkIdentity:

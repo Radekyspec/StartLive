@@ -5,8 +5,8 @@ policy. The authenticated business worker must supply those verified policies.
 """
 import socket
 
-from startlive.core.exceptions import TaskCancelled
 from startlive.core.exceptions import DanmakuError, DanmakuConnectionError
+from startlive.core.exceptions import TaskCancelled
 from .wire import DanmakuDecoder, encode_packet, expand_packet
 
 

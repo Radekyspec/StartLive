@@ -4,9 +4,9 @@ The verified, deliberately partial schema remains in ``constant.pk_schema``. Bui
 message types at import time rather than maintaining another wire codec or a
 second, potentially out-of-sync generated .proto definition.
 """
-from struct import pack
 import base64
 import binascii
+from struct import pack
 
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 from google.protobuf.internal.encoder import _VarintBytes

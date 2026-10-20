@@ -110,7 +110,8 @@ class PkSettingsDialog(QDialog):
                     control.setChecked(getattr(self._values, field))
                 else:
                     control.setCheckState(Qt.CheckState.PartiallyChecked)
-            control.setEnabled(editable)
+            control.setEnabled(editable and (
+                    field != "classic_opponent_voice" or self._values.classic_pk))
         with QSignalBlocker(self.duration):
             self.duration.clear()
             for value, label in self._duration_options:
@@ -135,6 +136,9 @@ class PkSettingsDialog(QDialog):
         # The controller owns coupling and persistence. Keep the confirmed
         # snapshot visible until it confirms fetched or saved values with set_values.
         self._render()
+        if (field == "classic_opponent_voice"
+                and not self.checkboxes[field].isEnabled()):
+            return
         if (self._values is not None and not self._busy
                 and value != getattr(self._values, field)):
             self.changeRequested.emit(field, value)

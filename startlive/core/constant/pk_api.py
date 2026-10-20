@@ -14,6 +14,33 @@ class PkOperation:
 
 # CSRF and trace fields are appended after signing, even for selected GETs.
 OPERATIONS = {
+    'get_match_select': PkOperation(
+        'GET', '/xlive/app-blink/v2/universalInteract/GetMatchSelect',
+        '读取连线选项', csrf=True),
+    'in_conn_panel': PkOperation(
+        'GET', '/xlive/app-blink/v1/universalInteract/InConnPanel',
+        '读取连线玩法', csrf=True),
+    'batch_recommend_list': PkOperation(
+        'GET', '/xlive/app-blink/v2/universalInteract/BatchRecommendList',
+        '读取连线候选人', csrf=True),
+    'connect': PkOperation(
+        'POST', '/xlive/app-blink/v2/universalInteract/Connect', '发起视频连线',
+        csrf=True),
+    'interact_list': PkOperation(
+        'GET', '/xlive/app-blink/v2/universalInteract/InteractList',
+        '读取互动列表',
+        csrf=True),
+    'layout_data': PkOperation(
+        'GET', '/xlive/app-blink/v2/universalInteract/LayoutData',
+        '读取连线布局',
+        csrf=True),
+    'match_list': PkOperation(
+        'POST', '/xlive/app-blink/v2/universalInteract/MatchList',
+        '读取连线匹配列表',
+        csrf=True, post_sign_fields=frozenset(('type', 'last_id'))),
+    'mute': PkOperation(
+        'POST', '/xlive/app-blink/v1/universalInteract/Mute', '同步连线静音',
+        csrf=True),
     'user_settings': PkOperation(
         'GET', '/xlive/app-blink/v2/universalInteract/Config', '读取 PK 设置',
         csrf=True),
@@ -48,7 +75,7 @@ OPERATIONS = {
         csrf=True),
     'classic_info': PkOperation(
         'GET', '/xlive/general-interface/v1/battle/getInfoById',
-        '查询传统 PK 信息'),
+        '查询经典 PK 信息'),
     'universal_info': PkOperation(
         'GET', '/xlive/app-blink/v2/universalInteract/UniversalInfo',
         '查询连线房间', csrf=True),

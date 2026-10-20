@@ -50,8 +50,8 @@ def translate_preset(encoder, value):
         raise ValueError("invalid PK encoder preset")
     if encoder in ("libx264", "auto"):
         return \
-        {"performance": "veryfast", "balanced": "fast", "quality": "slow"}[
-            value]
+            {"performance": "veryfast", "balanced": "fast", "quality": "slow"}[
+                value]
     if encoder in ("h264_nvenc", "av1_nvenc"):
         return {"performance": "p1", "balanced": "p4", "quality": "p7"}[value]
     return value

@@ -34,3 +34,8 @@ STATUS_STATES = {
     601: NativePkState.PUNISHING, 602: NativePkState.PUNISHING,
     610: NativePkState.PUNISHING,
 }
+
+VIDEO_STATUS_STATES = {
+    101: NativePkState.PREPARING, 201: NativePkState.PKING,
+    304: NativePkState.EXIT, 404: NativePkState.FREEZING,
+}

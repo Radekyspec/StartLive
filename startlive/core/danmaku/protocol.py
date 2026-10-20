@@ -4,15 +4,15 @@ StartLive requires code0 before delivering events, unlike the permissive native
 auth consumer. The separate sequence ACK callback submits an HTTP request.
 Sequence and msg_id caches belong to the context, not an individual socket.
 """
+import json
 from collections import OrderedDict
 from contextlib import contextmanager
-import json
 
+from startlive.core.danmaku.states.models import DanmakuPacket, DanmakuMessage
 from startlive.core.exceptions import DanmakuAuthenticationError, \
     DanmakuProtocolError, DanmakuTokenExpired
 from .trace import danmaku_trace
 from .wire import login_packet
-from startlive.core.danmaku.states.models import DanmakuPacket, DanmakuMessage
 
 
 def _object(payload):
@@ -203,7 +203,7 @@ class DanmakuProtocol:
                     if type(message_type) is not int or not -(
                             1 << 63) <= message_type < 1 << 63:
                         message_type = 0
-                    if envelope.get("p_is_ack") is True:
+                    if envelope.get("p_is_ack"):
                         body = json.dumps({"msg_id": message_id, "cmd": command,
                                            "p_msg_type": message_type},
                                           ensure_ascii=False,

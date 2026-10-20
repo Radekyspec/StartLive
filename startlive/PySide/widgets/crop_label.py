@@ -1,8 +1,3 @@
-from startlive.core.constant.ui import (
-    CROP_LABEL_HANDLE_LENGTH,
-    CROP_LABEL_HANDLE_WIDTH,
-    CROP_LABEL_SNAP_MARGIN,
-)
 from PySide6.QtCore import (
     Qt, QRect, QPoint, QSize, QVariantAnimation, QEasingCurve, QTimer, Signal,
     Slot
@@ -10,6 +5,12 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QGuiApplication
 from PySide6.QtWidgets import (
     QLabel, QRubberBand
+)
+
+from startlive.core.constant.ui import (
+    CROP_LABEL_HANDLE_LENGTH,
+    CROP_LABEL_HANDLE_WIDTH,
+    CROP_LABEL_SNAP_MARGIN,
 )
 
 
@@ -62,7 +63,7 @@ class CropLabel(QLabel):
             return self.windowHandle().screen()
         return QGuiApplication.primaryScreen()
 
-    def _apply_refresh_rate(self, *args, **kwargs):
+    def _apply_refresh_rate(self):
         screen = self._current_screen()
         rate = screen.refreshRate() or 60.0
         # 以 1x 帧率节流

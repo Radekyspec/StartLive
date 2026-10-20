@@ -2,9 +2,20 @@
 from dataclasses import dataclass
 from struct import unpack
 
-from startlive.core.pk.states.session import MediaPacket
 from startlive.core.constant.pk_media import HEADER
 from startlive.core.exceptions import PkProtocolError
+from startlive.core.pk.states.session import MediaPacket
+
+
+def select_capture(connection, *, audio=True, video=True):
+    """Select raw streams before the plugin allocates capture resources."""
+    mask = int(bool(audio)) | (int(bool(video)) << 1)
+    if not mask:
+        raise ValueError("At least one OBS capture stream must be enabled")
+    request = b"SLPC" + bytes((1, mask, 0, 0))
+    connection.write_exact(request)
+    if connection.read_exact(8) != b"SLPA" + request[4:]:
+        raise PkProtocolError("OBS PK 插件不支持采集选择，请更新插件并重启 OBS")
 
 
 @dataclass(frozen=True, slots=True)

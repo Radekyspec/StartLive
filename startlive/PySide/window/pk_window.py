@@ -1,4 +1,5 @@
-from startlive.core.constant.ui import PK_WINDOW_FONT_SIZE_OFFSET_PT
+from time import monotonic
+
 from PySide6.QtCore import QSignalBlocker, QTimer, Qt, Signal, Slot
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
@@ -19,27 +20,23 @@ from PySide6.QtWidgets import (
 
 from startlive.PySide.interface_adapters.gui_dispatcher import GUIDispatcher
 from startlive.PySide.interface_adapters.pk.pk_presenter import PkPresenter
-from startlive.PySide.interface_adapters.pk.provider_readiness import \
-    VideoProviderReadiness
-from startlive.PySide.widgets.pk_crop_selector import PkCropSelector
-from startlive.PySide.widgets.pk_media_view import PkMediaView
-from startlive.PySide.window.pk_search_dialog import PkSearchDialog
-from startlive.core.pk.states.session import PkOptions
-from startlive.core.pk.states.display import PkRoundDisplay
-from startlive.core.pk.states.mute import RtcMuteState
-from startlive.core.constant.pk import PkMode
+from startlive.core.constant.pk import PkMode, PkPhase
 from startlive.core.constant.pk_info import NativePkState
+from startlive.core.constant.ui import PK_WINDOW_FONT_SIZE_OFFSET_PT
 from startlive.core.exceptions import PkError
 from startlive.core.pk.identity import current_identity
-from startlive.core.pk.media_buffer import MediaBuffer
+from startlive.core.pk.states.display import PkRoundDisplay
+from startlive.core.pk.states.session import PkOptions
 from startlive.core.pk.trace import pk_trace
-from startlive.core.workers.pk.obs_media import ObsMediaWorker
 from startlive.core.workers.worker_manager import WorkerManager
 
 
 class PkWindow(QDialog):
-    """Fixed-size PK view owning OBS capture while the window is open."""
+    """PK controls with video preview and classic audio admission checks."""
     FONT_SIZE_OFFSET_PT = PK_WINDOW_FONT_SIZE_OFFSET_PT
+    CLASSIC_CAPTURE_HINT = (
+        "经典 PK 语音采集未就绪。请在 OBS 的「工具」菜单启动「StartLive PK 采集」，"
+        "确认采集音频后重新点击「开始 PK」")
 
     startRequested = Signal(object)
     stopRequested = Signal()
@@ -57,11 +54,15 @@ class PkWindow(QDialog):
         # OBS, RTC, push and HTTP ACK remain alive alongside short API tasks.
         self._workers = WorkerManager(self._dispatcher, max_workers=6)
         self._preview_worker = None
+        self._classic_audio = False
+        self._classic_capture_check = None
+        self._preview_owner = object()
         self._candidate_dialog = None
         self._candidate_start = None
         self._search_listener = None
         self._pending_start = None
         self._invitation_reception = None  # No server-setting value is inferred here.
+        self._invitation_reception_by_mode = {}
         self._invitation_reception_identity = None
         self._settings_dialog = self._settings_controller = None
         self._encoder_dialog = None
@@ -69,40 +70,38 @@ class PkWindow(QDialog):
         self._invitation_dialog = None
         self._invitation_waiting = False
         self._preview_future = None
-        self._preview_retry = QTimer(self)
-        self._preview_retry.setSingleShot(True)
-        self._preview_retry.setInterval(2000)
-        self._preview_retry.timeout.connect(self._start_preview)
+        self._preview_retry = None
         self._shutdown = False
         self._session = None
         self._session_factory = session_factory
-        self.provider_readiness = VideoProviderReadiness(self._workers,
-                                                         provider_preflight)
+        self.provider_readiness = None
+        self._provider_preflight = provider_preflight
         self._identity_provider = identity_provider or (
             lambda: current_identity())
         if session_factory is not None:
             self.startRequested.connect(self._start_session)
-            self.stopRequested.connect(
-                lambda: self._session_action("stop_round"))
-            self.disconnectRequested.connect(
-                lambda: self._session_action("disconnect"))
+            self.stopRequested.connect(self._request_stop)
+            self.disconnectRequested.connect(self._request_disconnect)
             self.continuousChanged.connect(self._change_continuous)
         QApplication.instance().aboutToQuit.connect(self.shutdown)
         self._session_enabled = False
         self._active = False
         self._connection_active = False
-        self._publisher_available = {"audio": False, "video": False}
-        self._publisher_mute_states = {media: RtcMuteState() for media in
-                                       ("audio", "video")}
-        self.local_buffer, self.remote_buffer = MediaBuffer(), MediaBuffer()
-        self.publish_buffer = MediaBuffer()
+        self._publisher_available = {}
+        self._publisher_mute_states = {}
+        self._publisher_controls = {}
+        self.local_view = self.remote_view = self.crop_selector = None
+        self.local_buffer = self.remote_buffer = self.publish_buffer = None
+        self.audio_timer = self._media_timer = None
+        self._video_hint = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 0)
         layout.setSpacing(8)
         controls = QHBoxLayout()
         self.mode = QComboBox()
-        self.mode.addItem("传统 PK", PkMode.TRADITIONAL)
+        self.mode.addItem("经典 PK", PkMode.TRADITIONAL)
         self.mode.addItem("视频 PK", PkMode.VIDEO)
+        self.mode.addItem("视频连线", PkMode.VIDEO_LINK)
         self.peer_search = QLineEdit()
         self.peer_search.setPlaceholderText("主播名称 / 房间号")
         self.random_match = QCheckBox("随机 PK")
@@ -125,6 +124,9 @@ class PkWindow(QDialog):
         self.settings_button.clicked.connect(self._open_settings)
         self.stop_button = QPushButton("结束 PK")
         self.disconnect_button = QPushButton("断开连线")
+        self.convert_pk_button = QPushButton("转为 PK")
+        self.convert_pk_button.clicked.connect(
+            lambda: self._session_action("start_connection_pk"))
         self.start_button.clicked.connect(self._request_start)
         self.wait_invitation_button.clicked.connect(
             self._request_invitation_wait)
@@ -149,6 +151,7 @@ class PkWindow(QDialog):
         actions.setSpacing(8)
         actions.addWidget(self.wait_invitation_button)
         actions.addWidget(self.disconnect_button)
+        actions.addWidget(self.convert_pk_button)
         actions.addStretch()
         actions.addWidget(self.settings_button)
         actions.addWidget(self.encoder_settings_button)
@@ -162,7 +165,7 @@ class PkWindow(QDialog):
                                         button.text()) + 24),
                                 control_height)
             policy = button.sizePolicy()
-            policy.setRetainSizeWhenHidden(True)
+            policy.setRetainSizeWhenHidden(False)
             button.setSizePolicy(policy)
         self._refresh_match_options()
         self.round_info = QLabel()
@@ -171,55 +174,6 @@ class PkWindow(QDialog):
         self.round_info.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.round_info.hide()
-        views = QHBoxLayout()
-        views.setSpacing(12)
-        self.local_view = PkMediaView(self, title="我的 OBS 画面")
-        self.remote_view = PkMediaView(self, title="对方画面")
-        self.remote_view.set_muted(False)
-        self.local_view.set_crop(self.publish_buffer.video_crop)
-        self.crop_selector = PkCropSelector(self)
-        self.crop_selector.thumbnail.set_crop(self.publish_buffer.video_crop)
-        self.local_view.imageChanged.connect(
-            self.crop_selector.thumbnail.set_image)
-        self.crop_selector.cropChanged.connect(self._set_video_crop)
-        views.addWidget(self.local_view, 0, Qt.AlignmentFlag.AlignTop)
-        views.addWidget(self.remote_view, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(views)
-        audio_controls = QHBoxLayout()
-        self.crop_button = QPushButton("画面截取")
-        self.crop_button.setAutoDefault(False)
-        self.crop_button.setFixedSize(104, control_height)
-        self.crop_button.clicked.connect(
-            lambda: self.crop_selector.show_above(self.crop_button))
-        audio_controls.addWidget(self.crop_button)
-        self.local_monitor = QCheckBox("监听本机声音")
-        self.local_monitor.toggled.connect(
-            lambda checked: self.local_view.set_muted(not checked))
-        self.remote_mute = QCheckBox("静音对方")
-        self.remote_mute.toggled.connect(self.remote_view.set_muted)
-        audio_controls.addWidget(self.local_monitor)
-        self.publisher_audio_mute = QCheckBox("静音我的声音")
-        self.publisher_video_mute = QCheckBox("隐藏我的画面")
-        self._publisher_controls = {"audio": self.publisher_audio_mute,
-                                    "video": self.publisher_video_mute}
-        for media, control in self._publisher_controls.items():
-            control.setToolTip(
-                "仅影响发送给 PK 对方的内容，不改变 OBS 推流或本地预览")
-            control.clicked.connect(
-                lambda checked, kind=media: self._request_publisher_mute(kind,
-                                                                         checked))
-            audio_controls.addWidget(control)
-            policy = control.sizePolicy()
-            policy.setRetainSizeWhenHidden(True)
-            control.setSizePolicy(policy)
-        audio_controls.addStretch()
-        self.local_view.layout().addLayout(audio_controls)
-        remote_controls = QHBoxLayout()
-        remote_controls.addWidget(self.remote_mute)
-        remote_controls.addStretch()
-        remote_controls.setContentsMargins(0, 0, 0, 0)
-        self.remote_mute.setMinimumHeight(control_height)
-        self.remote_view.layout().addLayout(remote_controls)
         details = QWidget()
         details_layout = QHBoxLayout(details)
         details_layout.setContentsMargins(10, 8, 10, 8)
@@ -243,12 +197,7 @@ class PkWindow(QDialog):
             "来自 OBS 当前推流状态，以及采集插件最近收到的画面和声音")
         self.output_status.setTextFormat(Qt.TextFormat.PlainText)
         messages.addWidget(self.output_status)
-        hint = QLabel(
-            "请在 OBS 的工具菜单启动 StartLive PK 采集。使用耳机，并避免在发送音轨中采集对方声音。")
-        hint.setWordWrap(True)
-        hint.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        messages.addWidget(hint)
+        self._messages = messages
         details_scroll = QScrollArea()
         details_scroll.setWidgetResizable(True)
         details_scroll.setWidget(details)
@@ -259,18 +208,231 @@ class PkWindow(QDialog):
         layout.addWidget(details_scroll, 1)
         self.set_session_available(session_factory is not None,
                                    "选择 PK 模式后开始，或等待对方邀请。")
-        self._fit_to_screen()
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.timer.setInterval(33)
-        self.timer.timeout.connect(self._refresh_media)
+        self.timer.setInterval(250)
+        self.timer.timeout.connect(self._refresh_state)
         self.timer.start()
+        self.mode.currentIndexChanged.connect(self._update_video_mode)
+        self._update_video_mode()
+        self._trace("ui.window_created")
+
+    def _ensure_video_ui(self):
+        if self.local_view is not None:
+            return
+        from startlive.PySide.interface_adapters.pk.provider_readiness import \
+            VideoProviderReadiness
+        from startlive.PySide.widgets.pk_crop_selector import PkCropSelector
+        from startlive.PySide.widgets.pk_media_view import PkMediaView
+        from startlive.core.pk.media_buffer import MediaBuffer
+        from startlive.core.pk.states.mute import RtcMuteState
+
+        self.provider_readiness = VideoProviderReadiness(
+            self._workers, self._provider_preflight)
+        self._publisher_available = {"audio": False, "video": False}
+        self._publisher_mute_states = {media: RtcMuteState() for media in
+                                       ("audio", "video")}
+        self.local_buffer, self.remote_buffer = MediaBuffer(), MediaBuffer()
+        self.publish_buffer = MediaBuffer()
+        control_height = max(32, self.fontMetrics().height() + 12)
+        views = QHBoxLayout()
+        views.setSpacing(12)
+        self.local_view = PkMediaView(self, title="我的 OBS 画面")
+        self.remote_view = PkMediaView(self, title="对方画面")
+        self.remote_view.set_muted(False)
+        self.local_view.set_crop(self.publish_buffer.video_crop)
+        self.crop_selector = PkCropSelector(self)
+        self.crop_selector.thumbnail.set_crop(self.publish_buffer.video_crop)
+        self.local_view.imageChanged.connect(
+            self.crop_selector.thumbnail.set_image)
+        self.crop_selector.cropChanged.connect(self._set_video_crop)
+        views.addWidget(self.local_view, 0, Qt.AlignmentFlag.AlignTop)
+        views.addWidget(self.remote_view, 0, Qt.AlignmentFlag.AlignTop)
+        self.layout().insertLayout(2, views)
+        audio_controls = QHBoxLayout()
+        self.crop_button = QPushButton("画面截取")
+        self.crop_button.setAutoDefault(False)
+        self.crop_button.setFixedSize(104, control_height)
+        self.crop_button.clicked.connect(
+            lambda: self.crop_selector.show_above(self.crop_button))
+        audio_controls.addWidget(self.crop_button)
+        self.local_monitor = QCheckBox("监听本机声音")
+        self.local_monitor.toggled.connect(
+            lambda checked: self.local_view.set_muted(not checked))
+        self.remote_mute = QCheckBox("静音对方")
+        self.remote_mute.clicked.connect(
+            lambda checked: self._request_remote_mute("audio", checked))
+        self.remote_video_mute = QCheckBox("隐藏对方画面")
+        self.remote_video_mute.clicked.connect(
+            lambda checked: self._request_remote_mute("video", checked))
+        audio_controls.addWidget(self.local_monitor)
+        self.publisher_audio_mute = QCheckBox("静音我的声音")
+        self.publisher_video_mute = QCheckBox("隐藏我的画面")
+        self._publisher_controls = {"audio": self.publisher_audio_mute,
+                                    "video": self.publisher_video_mute}
+        for media, control in self._publisher_controls.items():
+            control.setToolTip(
+                "仅影响发送给 PK 对方的内容，不改变 OBS 推流或本地预览")
+            control.clicked.connect(
+                lambda checked, kind=media: self._request_publisher_mute(kind,
+                                                                         checked))
+            audio_controls.addWidget(control)
+            policy = control.sizePolicy()
+            policy.setRetainSizeWhenHidden(True)
+            control.setSizePolicy(policy)
+        audio_controls.addStretch()
+        self.local_view.layout().addLayout(audio_controls)
+        remote_controls = QHBoxLayout()
+        remote_controls.addWidget(self.remote_mute)
+        remote_controls.addWidget(self.remote_video_mute)
+        remote_controls.addStretch()
+        remote_controls.setContentsMargins(0, 0, 0, 0)
+        self.remote_mute.setMinimumHeight(control_height)
+        self.remote_view.layout().addLayout(remote_controls)
+        hint = QLabel(
+            "请在 OBS 的工具菜单启动 StartLive PK 采集。使用耳机，并避免在发送音轨中采集对方声音。")
+        hint.setWordWrap(True)
+        self._video_hint = hint
+        hint.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self._messages.addWidget(hint)
+        self._preview_retry = QTimer(self)
+        self._preview_retry.setSingleShot(True)
+        self._preview_retry.setInterval(2000)
+        self._preview_retry.timeout.connect(self._start_preview)
         self.audio_timer = QTimer(self)
         self.audio_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.audio_timer.setInterval(10)
         self.audio_timer.timeout.connect(self._refresh_audio)
+        self._media_timer = QTimer(self)
+        self._media_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._media_timer.setInterval(33)
+        self._media_timer.timeout.connect(self._refresh_media)
+        self._refresh_publisher_controls()
+
+    def prepare_classic_audio(self):
+        """Reuse audio capture from preflight through an admitted classic JOIN."""
+        self._ensure_video_ui()
+        self._classic_audio = True
+        for view in (self.local_view, self.remote_view):
+            view.title.hide()
+            view.video.hide()
+            view.show()
+        for widget in (self.crop_button, self.publisher_video_mute,
+                       self.remote_video_mute):
+            widget.hide()
+        self._video_hint.show()
+        self._start_classic_capture()
+        self._fit_to_screen()
+
+    def _start_classic_capture(self):
+        if not self._classic_audio or self._shutdown or self._preview_worker is not None:
+            return
+        from startlive.core.workers.pk.obs_media import ObsMediaWorker
+        worker = ObsMediaWorker(PkPresenter(
+            finished=lambda: self._preview_stopped(worker),
+            failed=lambda error: self._preview_failed(error, worker),
+            progress=lambda _: self._preview_connected(worker)),
+            (self.local_buffer, self.publish_buffer), audio=True, video=False)
+        self._preview_worker = worker
         self.audio_timer.start()
-        self._trace("ui.window_created")
+        try:
+            self._preview_future = self._workers.submit(worker,
+                                                        on_progress=True)
+        except Exception:
+            self._preview_worker = self._preview_future = None
+            self.stop_classic_audio()
+            raise
+
+    def stop_classic_audio(self):
+        if self._classic_audio:
+            self._classic_audio = False
+            self._stop_preview()
+
+    def _classic_capture_ready(self):
+        return bool(self._classic_audio and self._preview_worker is not None
+                    and self._preview_worker.is_running
+                    and self._preview_future is not None and not self._preview_future.done()
+                    and self.publish_buffer is not None
+                    and self.publish_buffer.freshness()[1])
+
+    def require_classic_audio_ready(self):
+        if not self._classic_capture_ready():
+            raise PkError(self.CLASSIC_CAPTURE_HINT)
+
+    def _check_classic_capture(self, identity, resume):
+        if self._classic_capture_ready():
+            return True
+        if self._classic_capture_check is not None:
+            return False
+        facts = self._output_readiness(PkMode.TRADITIONAL)
+        if facts.output_ready is not True or facts.live_output_active is not True:
+            raise PkError(facts.reason)
+        self._classic_capture_check = (identity, self._session, resume,
+                                       monotonic() + 5)
+        try:
+            self.prepare_classic_audio()
+        except Exception:
+            self._cancel_classic_capture_check()
+            raise
+        self.set_status(
+            "正在检查 OBS PK 音频采集；请在 OBS 工具菜单启动 StartLive PK 采集…")
+        self._refresh_session_controls()
+        return False
+
+    def _cancel_classic_capture_check(self, message=None):
+        if self._classic_capture_check is None:
+            return
+        self._classic_capture_check = None
+        self.stop_classic_audio()
+        if message:
+            self.set_status(message)
+        self._refresh_session_controls()
+
+    def _drain_classic_capture_check(self):
+        pending = self._classic_capture_check
+        if pending is None:
+            return
+        identity, previous, resume, deadline = pending
+        try:
+            if (self._shutdown or not self._session_enabled
+                    or self.mode.currentData() != PkMode.TRADITIONAL
+                    or self._session is not previous):
+                self._cancel_classic_capture_check()
+                return
+            if self._identity_provider() != identity:
+                raise PkError("账号或直播间已变更，已取消经典 PK 采集检查")
+            facts = self._output_readiness(PkMode.TRADITIONAL)
+            if facts.output_ready is not True or facts.live_output_active is not True:
+                raise PkError(facts.reason)
+            if self._classic_capture_ready():
+                self._classic_capture_check = None
+                resume()
+                self._refresh_session_controls()
+            elif monotonic() >= deadline:
+                self._cancel_classic_capture_check(self.CLASSIC_CAPTURE_HINT)
+        except Exception as error:
+            self._cancel_classic_capture_check()
+            self.stop_classic_audio()
+            self.set_status(str(error))
+            self._refresh_session_controls()
+
+    def _request_remote_mute(self, media, muted):
+        # clicked has already toggled the checkbox. Keep the applied state
+        # until the controller has successfully queued the SDK operation.
+        rtc = getattr(self._session, "rtc", None)
+        business_mute = getattr(rtc, "business_mute", None)
+        if business_mute is not None:
+            self.set_remote_mute_state(**business_mute.remote)
+        self._session_action("set_remote_muted", media, muted)
+
+    def set_remote_mute_state(self, *, audio, video):
+        with QSignalBlocker(self.remote_mute), QSignalBlocker(
+                self.remote_video_mute):
+            self.remote_mute.setChecked(audio)
+            self.remote_video_mute.setChecked(video)
+        self.remote_view.set_muted(audio)
+        self.remote_view.video.setVisible(not video and not self._classic_audio)
 
     @Slot(QFont)
     def _apply_font_offset(self):
@@ -307,16 +469,27 @@ class PkWindow(QDialog):
     def set_session_available(self, available, reason=""):
         self._session_enabled = available
         if not available:
+            self._cancel_classic_capture_check()
             self._pending_start = None
             self._candidate_start = None
-            self.provider_readiness.cancel(self)
+            if self.provider_readiness is not None:
+                self.provider_readiness.cancel(self)
             self._close_settings()
         self._refresh_session_controls()
         if reason:
             self.status.setText(reason)
 
+    def refresh_controls(self):
+        """Re-evaluate phase-derived controls without changing status text."""
+        self._refresh_session_controls()
+
     def set_status(self, text):
         self.status.setText(text)
+        # Phase changes often surface as a status update (waiting, cancelled,
+        # handoff). Refresh the phase-derived stop button immediately instead
+        # of waiting for the next 250 ms window tick.
+        if not self._shutdown:
+            self._refresh_session_controls()
 
     def _open_settings(self):
         if self._shutdown or not self._session_enabled:
@@ -340,7 +513,7 @@ class PkWindow(QDialog):
         self._settings_controller.refresh()
 
     def _open_encoder_settings(self):
-        if self._shutdown:
+        if self._shutdown or self.mode.currentData() == PkMode.TRADITIONAL:
             return
         if self._encoder_dialog is None:
             from startlive.PySide.widgets.pk_encoder_settings import \
@@ -365,9 +538,11 @@ class PkWindow(QDialog):
         controller = self._settings_controller
         if self._shutdown or not self._session_enabled or controller is None or controller.closed:
             return
-        # Only the PK acceptance preference controls PK presentation here.
-        # Connection settings do not imply a new source filter or auto-Handle.
-        self.set_invitation_reception(snapshot.preferences.accept_pk)
+        self._invitation_reception_by_mode.update({
+            PkMode.VIDEO: snapshot.preferences.accept_pk,
+            PkMode.VIDEO_LINK: snapshot.preferences.accept_connection})
+        self.set_invitation_reception(snapshot.preferences.accept_connection
+                                      if self.mode.currentData() == PkMode.VIDEO_LINK else snapshot.preferences.accept_pk)
         self._invitation_reception_identity = controller.identity
 
     def _close_settings(self):
@@ -380,10 +555,12 @@ class PkWindow(QDialog):
             self._settings_dialog = None
         self._invitation_reception_identity = None
         self._invitation_reception = None
+        self._invitation_reception_by_mode.clear()
 
     def _check_reception_account(self, identity):
         if self._invitation_reception_identity is not None and identity != self._invitation_reception_identity:
             self._invitation_reception = None
+            self._invitation_reception_by_mode.clear()
             self._invitation_reception_identity = None
 
     def set_round_info(self, info: PkRoundDisplay | None):
@@ -406,12 +583,11 @@ class PkWindow(QDialog):
         heading = f"{stage} · 回合 {info.round_id}" if info.round_id else stage
         if info.remaining_seconds is not None:
             heading += f" · 剩余约 {info.remaining_seconds} 秒"
-        own = f"我方 UID：{info.own_uid}"
-        if info.own_name:
-            own += f"（{info.own_name}）"
-        peer = f"对方 UID：{info.peer_search}" if info.peer_search else "对方：等待确认"
-        if info.peer_name:
-            peer += f"（{info.peer_name}）"
+        # PK user information is presented by name only. UIDs remain internal
+        # identifiers for protocol/state correlation, not display text.
+        own = info.own_name or "我方"
+        peer = info.peer_name or (
+            "对方（等待确认）" if info.peer_search else "对方")
         lines = [heading]
         for identity, votes, votes_text, result in (
                 (own, info.own_votes, info.own_votes_text, info.own_result),
@@ -433,13 +609,17 @@ class PkWindow(QDialog):
         self._continuous_editable = editable
         self._refresh_session_controls()
 
-    def _output_readiness(self, mode):
+    @staticmethod
+    def _output_readiness(mode):
         from startlive.core import app_state
         from startlive.core.pk.output_readiness import output_readiness
         return output_readiness(app_state.obs_output_status, mode)
 
     def _check_video_provider(self, mode, resume):
-        if mode != PkMode.VIDEO or self.provider_readiness.ready:
+        if mode == PkMode.TRADITIONAL:
+            return True
+        self._ensure_video_ui()
+        if self.provider_readiness.ready:
             return True
         if self.provider_readiness.waiting(self):
             return False
@@ -519,20 +699,29 @@ class PkWindow(QDialog):
             self._refresh_session_controls()
 
     def _create_session(self, options, identity, *, invitation_only):
-        self._check_reception_account(identity)
-        owner = self._session_factory(self._workers, identity, options, self,
-                                      readiness=self._output_readiness,
-                                      provider_readiness=self.provider_readiness,
-                                      invitation_only=invitation_only)
-        self._session = owner
-        self._continuous_editable = True
-        self._trace("ui.session_created")
+        if options.mode == PkMode.TRADITIONAL and not self._check_classic_capture(
+                identity, lambda: self._create_session(options, identity,
+                                                       invitation_only=invitation_only)):
+            return
+        owner = None
         try:
+            self._check_reception_account(identity)
+            owner = self._session_factory(self._workers, identity, options,
+                                          self,
+                                          readiness=self._output_readiness,
+                                          provider_readiness=self.provider_readiness,
+                                          invitation_only=invitation_only)
+            self._session = owner
+            self._continuous_editable = True
+            self._trace("ui.session_created")
             if self._invitation_reception is not None:
                 self._apply_reception(owner, self._invitation_reception)
             owner.start()
         except Exception:
-            owner.close()
+            if options.mode == PkMode.TRADITIONAL:
+                self.stop_classic_audio()
+            if owner is not None:
+                owner.close()
             raise
 
     def _drain_pending_start(self):
@@ -560,32 +749,57 @@ class PkWindow(QDialog):
         self._refresh_session_controls()
 
     def _idle_listener(self):
-        return bool(getattr(self._session, "idle_invitation_listener", False))
+        return bool(self._session is not None
+                    and self._session.idle_invitation_listener)
 
     def _controls_busy(self):
         return ((
                         self._active and not self._idle_listener()) or self._connection_active
+                or self._classic_capture_check is not None
                 or self._pending_start is not None or self._candidate_dialog is not None
-                or self._invitation_dialog is not None or self.provider_readiness.waiting(
-                    self))
+                or self._invitation_dialog is not None
+                or (
+                        self.provider_readiness is not None and self.provider_readiness.waiting(
+                    self)))
 
     @staticmethod
     def _apply_reception(owner, enabled):
-        setter = getattr(owner, "set_invitation_reception", None)
-        if setter is not None and not owner.closed:
-            setter(enabled)
+        if not owner.closed:
+            owner.set_invitation_reception(enabled)
 
     def set_invitation_reception(self, enabled):
         """Apply a local reception preference without starting or ending a call."""
         if type(enabled) is not bool:
             raise PkError("邀请接收状态必须是开或关")
         self._invitation_reception = enabled
+        self._invitation_reception_by_mode[self.mode.currentData()] = enabled
         self._trace("ui.invitation_reception.changed", enabled=enabled)
         if self._session is not None:
             self._apply_reception(self._session,
                                   enabled and self._candidate_dialog is None
                                   and self._pending_start is None)
         self._refresh_session_controls()
+
+    def _request_stop(self):
+        self._trace("ui.stop.requested")
+        if (self.mode.currentData() == PkMode.TRADITIONAL
+                and not self._classic_matching()):
+            self._trace("ui.stop.ignored",
+                        reason="classic_manual_end_disabled")
+            self.status.setText(
+                "经典 PK 不支持手动结束；请等待回合自然结束或停止直播")
+            return
+        self._session_action("stop_round")
+
+    def _request_disconnect(self):
+        self._trace("ui.disconnect.requested")
+        if self.mode.currentData() == PkMode.TRADITIONAL:
+            self._trace("ui.disconnect.ignored",
+                        reason="classic_manual_end_disabled")
+            self.status.setText(
+                "经典 PK 不支持手动断开；请停止直播或等待回合自然结束")
+            return
+        self._session_action("disconnect")
 
     def _session_action(self, method, *args):
         self._trace("ui.session_action", action=method)
@@ -599,6 +813,10 @@ class PkWindow(QDialog):
 
     def _change_continuous(self, enabled):
         self._trace("ui.continuous_selected", enabled=enabled)
+        if self.mode.currentData() != PkMode.VIDEO:
+            self._trace("ui.continuous.ignored",
+                        reason="continuous_not_supported")
+            return
         if (self._session is not None and not self._session.closed
                 and not getattr(self._session, "invitation_only", False)):
             self._session_action("set_continuous", enabled)
@@ -607,8 +825,9 @@ class PkWindow(QDialog):
         self._trace("ui.invitation_wait.requested")
         if (
                 self._session_factory is not None and self._session_enabled and not self._controls_busy()
-                and self.mode.currentData() == PkMode.VIDEO):
-            self._start_session(PkOptions(PkMode.VIDEO), invitation_only=True)
+                and self.mode.currentData() != PkMode.TRADITIONAL):
+            self._start_session(PkOptions(self.mode.currentData()),
+                                invitation_only=True)
 
     def set_invitation_waiting(self, waiting):
         self._invitation_waiting = waiting
@@ -619,8 +838,9 @@ class PkWindow(QDialog):
             return
         owner = self._session
         peer_search = event.peer_search if event.peer_search is not None and event.peer_search > 0 else event.initiator
-        dialog = QMessageBox(QMessageBox.Icon.Question, "视频 PK 邀请",
-                             f"是否接受 UID {peer_search} 的视频 PK 邀请？",
+        label = "视频连线" if self.mode.currentData() == PkMode.VIDEO_LINK else "视频 PK"
+        dialog = QMessageBox(QMessageBox.Icon.Question, label + "邀请",
+                             f"是否接受 UID {peer_search} 的{label}邀请？",
                              QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                              self)
         self._invitation_dialog = dialog
@@ -655,13 +875,14 @@ class PkWindow(QDialog):
 
     def set_connection_active(self, active):
         """Round completion must not clear a still-live interaction/RTC link."""
-        if self._connection_active and not active:
+        if self._connection_active and not active and self.remote_buffer is not None:
             self.remote_buffer.clear()
             self.remote_view.reset()
         self._connection_active = active
         self._refresh_session_controls()
 
     def set_publisher_available(self, *, audio, video):
+        from startlive.core.pk.states.mute import RtcMuteState
         self._publisher_available = {"audio": audio, "video": video}
         for media, available in self._publisher_available.items():
             if not available:
@@ -685,12 +906,70 @@ class PkWindow(QDialog):
 
     def _refresh_publisher_controls(self):
         for media, control in self._publisher_controls.items():
-            control.setVisible(
-                self._connection_active or self.mode.currentData() == PkMode.VIDEO)
             control.setEnabled(
                 self._session_enabled and self._connection_active and
                 self._publisher_available[media] and not
                 self._publisher_mute_states[media].pending)
+        if hasattr(self, "remote_video_mute"):
+            rtc = getattr(self._session, "rtc", None)
+            remote_ready = (
+                    self._session_enabled and self._connection_active and bool(
+                getattr(getattr(rtc, "business_mute", None), "initialized",
+                        False)))
+            self.remote_video_mute.setVisible(
+                self.mode.currentData() in (PkMode.VIDEO_LINK, PkMode.VIDEO))
+            self.remote_video_mute.setEnabled(remote_ready)
+            self.remote_mute.setEnabled(remote_ready)
+
+    def _flow_phase(self):
+        session = self._session
+        if session is None or session.closed:
+            return None
+        return session.flow.phase
+
+    def _classic_matching(self):
+        return (self.mode.currentData() == PkMode.TRADITIONAL
+                and self._flow_phase() in (PkPhase.PREPARING,
+                                           PkPhase.MATCHING))
+
+    def _stop_text(self):
+        if self._idle_listener():
+            return "停止监听"
+        mode, phase = self.mode.currentData(), self._flow_phase()
+        if mode == PkMode.VIDEO_LINK:
+            return "结束 PK"
+        if phase in (PkPhase.PREPARING, PkPhase.MATCHING):
+            return "取消匹配"
+        if mode == PkMode.VIDEO and phase == PkPhase.INVITING:
+            return "取消邀请"
+        return "结束本轮" if mode == PkMode.VIDEO else "结束 PK"
+
+    def _stop_tooltip(self):
+        mode, phase = self.mode.currentData(), self._flow_phase()
+        if mode == PkMode.TRADITIONAL:
+            if phase in (PkPhase.PREPARING, PkPhase.MATCHING):
+                return "取消匹配不会结束对局；匹配成功后需等待回合自然结束"
+            return "匹配成功后需等待回合自然结束"
+        if mode == PkMode.VIDEO:
+            if phase in (PkPhase.PREPARING, PkPhase.MATCHING):
+                return "取消当前匹配"
+            if phase == PkPhase.INVITING:
+                return "取消当前邀请"
+        return ""
+
+    def _stop_enabled(self):
+        if not self._session_enabled:
+            return False
+        mode, phase = self.mode.currentData(), self._flow_phase()
+        if mode == PkMode.VIDEO_LINK:
+            return bool(self._active or self._idle_listener()
+                        or self._classic_capture_check is not None)
+        if mode == PkMode.TRADITIONAL:
+            return phase in (PkPhase.PREPARING, PkPhase.MATCHING)
+        return bool(self._active or self._idle_listener()
+                    or self._classic_capture_check is not None
+                    or phase in (PkPhase.PREPARING, PkPhase.MATCHING,
+                                 PkPhase.INVITING))
 
     def _refresh_session_controls(self):
         self.settings_button.setEnabled(
@@ -701,22 +980,37 @@ class PkWindow(QDialog):
         self.start_button.setEnabled(self._session_enabled and not busy)
         self.wait_invitation_button.setEnabled(
             self._session_enabled and not busy
-            and self.mode.currentData() == PkMode.VIDEO)
-        self.stop_button.setEnabled(
-            self._session_enabled and (self._active or self._idle_listener()))
+            and self.mode.currentData() != PkMode.TRADITIONAL)
+        # Classic can cancel while a match request is in flight; an active
+        # classic round still has no verified manual end entry.
+        self.stop_button.setEnabled(self._stop_enabled())
         self.disconnect_button.setEnabled(
-            self._session_enabled and self._connection_active)
+            self._session_enabled and self._connection_active
+            and self.mode.currentData() != PkMode.TRADITIONAL)
+        self.convert_pk_button.setEnabled(
+            self._session_enabled and self._connection_active
+            and self._session is not None and self._session.round_state.state == NativePkState.IDLE
+            and self._session.rtc.publisher_ready
+            and not getattr(self._session.flow, "starting_pk", False))
+        video = self.mode.currentData() == PkMode.VIDEO
         if self._session is None or self._session.closed or self._idle_listener():
-            self.continuous.setEnabled(self._session_enabled and not busy)
+            self.continuous.setEnabled(
+                self._session_enabled and not busy and video)
         else:
             self.continuous.setEnabled(
-                self._session_enabled and self._continuous_editable
-                and not getattr(self._session, "invitation_only", False)
+                self._session_enabled and video and self._continuous_editable
+                and not self._session.invitation_only
                 and self._pending_start is None and self._candidate_dialog is None)
-        self._refresh_publisher_controls()
 
     def _refresh_match_options(self):
         video = self.mode.currentData() == PkMode.VIDEO
+        link = self.mode.currentData() == PkMode.VIDEO_LINK
+        self.random_match.setVisible(video)
+        self.peer_search.setVisible(video)
+        self.encoder_settings_button.setVisible(video or link)
+        self.convert_pk_button.setVisible(link)
+        self.continuous.setVisible(not link)
+        self.start_button.setText("邀请连线" if link else "开始 PK")
         self.continuous.setText("连续随机 PK" if video else "连续 PK")
         if not video:
             with QSignalBlocker(self.random_match):
@@ -725,18 +1019,25 @@ class PkWindow(QDialog):
         self.random_match.setEnabled(video and not busy)
         self.peer_search.setEnabled(
             video and not busy and not self.random_match.isChecked())
-        self.disconnect_button.setVisible(video or self._connection_active)
-        self.wait_invitation_button.setVisible(video)
+        self.disconnect_button.setVisible(video or link)
+        if self.mode.currentData() == PkMode.TRADITIONAL:
+            with QSignalBlocker(self.continuous):
+                self.continuous.setChecked(False)
+            self.continuous.setToolTip("经典 PK 不支持连续 PK")
+        else:
+            self.continuous.setToolTip("")
+        self.wait_invitation_button.setVisible(video or link)
         self.wait_invitation_button.setEnabled(
-            self._session_enabled and video and not busy)
-        self.stop_button.setText(
-            "停止监听" if self._idle_listener() else "结束本轮" if video else "结束 PK")
-        if hasattr(self, "_publisher_controls"):
-            self._refresh_publisher_controls()
+            self._session_enabled and (video or link) and not busy)
+        self.stop_button.setText(self._stop_text())
+        self.stop_button.setToolTip(self._stop_tooltip())
+        self._refresh_publisher_controls()
 
     def _request_start(self):
+        continuous = (self.continuous.isChecked()
+                      and self.mode.currentData() == PkMode.VIDEO)
         self._trace("ui.start.requested", random=self.random_match.isChecked(),
-                    continuous=self.continuous.isChecked())
+                    continuous=continuous)
         if self._shutdown or not self._session_enabled or self._controls_busy():
             return
         uid = None
@@ -749,8 +1050,9 @@ class PkWindow(QDialog):
                 return
             uid = int(value)
         options = PkOptions(PkMode(self.mode.currentData()), uid,
-                            self.continuous.isChecked())
-        if options.mode is PkMode.VIDEO and uid is not None:
+                            continuous)
+        if (
+                options.mode is PkMode.VIDEO and uid is not None) or options.mode is PkMode.VIDEO_LINK:
             if self._candidate_dialog is not None:
                 self._candidate_dialog.raise_()
                 return
@@ -764,8 +1066,10 @@ class PkWindow(QDialog):
                             error_type=type(error).__name__, error=str(error))
                 self.status.setText(str(error))
                 return
+            from startlive.PySide.window.pk_search_dialog import PkSearchDialog
             dialog = PkSearchDialog(self._workers, identity,
-                                    self.peer_search.text().strip(), self)
+                                    self.peer_search.text().strip(), self,
+                                    video_link=options.mode == PkMode.VIDEO_LINK)
             self._trace("ui.candidate_search.opened", uid=identity.uid,
                         room_id=identity.room_id,
                         requested_search=self.peer_search.text().strip())
@@ -780,7 +1084,7 @@ class PkWindow(QDialog):
             dialog.candidateSelected.connect(
                 lambda candidate: self._candidate_selected(
                     dialog,
-                    PkOptions(PkMode.VIDEO, candidate.uid, options.continuous,
+                    PkOptions(options.mode, candidate.uid, options.continuous,
                               candidate), identity))
             dialog.finished.connect(lambda _: self._candidate_closed(dialog))
             dialog.show()
@@ -818,9 +1122,73 @@ class PkWindow(QDialog):
         self.publish_buffer.video_crop = crop
         self.local_view.set_crop(crop)
 
+    def _update_video_mode(self):
+        self._invitation_reception = self._invitation_reception_by_mode.get(
+            self.mode.currentData())
+        video = self.mode.currentData() != PkMode.TRADITIONAL
+        if video:
+            self._ensure_video_ui()
+        if self.local_view is not None:
+            self.publisher_video_mute.setVisible(
+                self.mode.currentData() == PkMode.VIDEO)
+            for widget in (self.local_view, self.remote_view, self._video_hint):
+                widget.setVisible(video)
+            for view in (self.local_view, self.remote_view):
+                view.title.setVisible(video)
+            if video:
+                self.local_view.video.show()
+                self.remote_view.video.show()
+                self.crop_button.show()
+                self._prepare_video_preview()
+            else:
+                self.provider_readiness.cancel(self._preview_owner)
+                self._stop_preview()
+                self.close_encoder_settings()
+        if not video:
+            self.set_status("选择经典 PK 开始。")
+        self._fit_to_screen()
+        if self.isVisible():
+            self._center_on_screen()
+
+    def _stop_preview(self):
+        if self.local_view is None:
+            return
+        self._preview_retry.stop()
+        self._media_timer.stop()
+        self.audio_timer.stop()
+        if self._preview_worker is not None:
+            self._preview_worker.stop()
+        self.crop_selector.hide()
+        self.local_view.reset()
+        self.remote_view.reset()
+        for buffer in (self.local_buffer, self.remote_buffer,
+                       self.publish_buffer):
+            buffer.clear()
+
+    def _prepare_video_preview(self):
+        if self._shutdown or self.mode.currentData() == PkMode.TRADITIONAL:
+            return
+        self.set_status("正在检查视频 PK 组件…")
+        self.provider_readiness.ensure(
+            self._preview_owner, self._start_preview,
+            self._preview_dependency_failed)
+
+    def _preview_dependency_failed(self, error):
+        if not self._shutdown and self.mode.currentData() != PkMode.TRADITIONAL:
+            self.set_status(str(error))
+
     def _fit_to_screen(self):
         """Fit equal 5:4 previews to logical screen pixels, preserving source frames."""
         self.ensurePolished()
+        if self.mode.currentData() == PkMode.TRADITIONAL:
+            layout = self.layout()
+            for index in range(layout.count()):
+                child = layout.itemAt(index).layout()
+                if child is not None:
+                    child.invalidate()
+            layout.invalidate()
+            self.setFixedSize(layout.sizeHint())
+            return
         for view in (self.local_view, self.remote_view):
             view.video.setFixedSize(600, 480)
             view.layout().invalidate()
@@ -856,54 +1224,91 @@ class PkWindow(QDialog):
         self._fit_to_screen()
         super().showEvent(event)
         if not event.spontaneous():
-            frame = self.frameGeometry()
-            frame.moveCenter(self.screen().availableGeometry().center())
-            self.move(frame.topLeft())
-        self._start_preview()
+            self._center_on_screen()
+        if self.mode.currentData() != PkMode.TRADITIONAL:
+            self._prepare_video_preview()
+
+    def _center_on_screen(self):
+        frame = self.frameGeometry()
+        frame.moveCenter(self.screen().availableGeometry().center())
+        self.move(frame.topLeft())
 
     def _start_preview(self):
-        if self._shutdown or not self.isVisible() or self._preview_worker is not None:
+        if (self._shutdown or not self.isVisible()
+                or self.mode.currentData() == PkMode.TRADITIONAL
+                or not self.provider_readiness.ready
+                or self._preview_worker is not None):
             return
+        from startlive.core.workers.pk.obs_media import ObsMediaWorker
+
         self._preview_retry.stop()
+        self._media_timer.start()
+        self.audio_timer.start()
         self._trace("ui.preview.requested", enabled=True)
-        presenter = PkPresenter(finished=self._preview_stopped,
-                                failed=self._preview_failed,
-                                progress=lambda _: self.status.setText(
-                                    "OBS 已连接"))
-        self._preview_worker = ObsMediaWorker(presenter, (self.local_buffer,
-                                                          self.publish_buffer))
+        presenter = PkPresenter(
+            finished=lambda: self._preview_stopped(worker),
+            failed=lambda error: self._preview_failed(error, worker),
+            progress=lambda _: self._preview_connected(worker))
+        worker = self._preview_worker = ObsMediaWorker(
+            presenter, (self.local_buffer, self.publish_buffer))
         try:
             self._preview_future = self._workers.submit(self._preview_worker,
                                                         on_progress=True)
         except Exception as error:
-            self._preview_failed(error)
+            self._preview_failed(error, worker)
             return
         self.status.setText("正在等待 OBS 采集插件…")
 
-    def _preview_stopped(self):
+    def _preview_connected(self, worker):
+        if worker is self._preview_worker and self._classic_capture_check is not None:
+            self.set_status("OBS PK 插件已连接，正在等待音频…")
+            return
+        if (worker is self._preview_worker and worker.is_running
+                and not self._shutdown and self.mode.currentData() != PkMode.TRADITIONAL):
+            self.status.setText("OBS 已连接")
+
+    def _preview_stopped(self, worker):
+        if worker is not self._preview_worker:
+            return
         self._preview_worker = self._preview_future = None
         self.local_view.reset()
-        if not self._shutdown:
+        self.local_buffer.clear()
+        self.publish_buffer.clear()
+        if self._classic_audio:
+            self._start_classic_capture()
+        elif not self._shutdown and self.mode.currentData() != PkMode.TRADITIONAL:
             self._preview_retry.start()
 
-    def _preview_failed(self, error):
-        self._preview_stopped()
-        if not self._shutdown:
+    def _preview_failed(self, error, worker):
+        if worker is not self._preview_worker:
+            return
+        if self._classic_capture_check is not None:
+            self._cancel_classic_capture_check(
+                f"{self.CLASSIC_CAPTURE_HINT}（{error}）")
+            self._preview_stopped(worker)
+            return
+        self._preview_stopped(worker)
+        if not self._shutdown and self.mode.currentData() != PkMode.TRADITIONAL:
             self.status.setText(f"{error}；将自动重试连接 OBS。")
 
-    def _refresh_media(self):
+    def _refresh_state(self):
         self.output_status.setText("直播输出：" + self._output_readiness(
             self.mode.currentData()).reason)
         if self._session is not None:
             self._session.tick()
+        self._refresh_session_controls()
         self._drain_pending_start()
         # Cancellation does not trigger prepare_success_view in WorkerManager.
         if self._preview_future and self._preview_future.done() and self._preview_worker and not self._preview_worker.is_running:
-            self._preview_stopped()
+            self._preview_stopped(self._preview_worker)
+        self._drain_classic_capture_check()
+
+    def _refresh_media(self):
         for buffer, view in ((self.local_buffer, self.local_view),
                              (self.remote_buffer, self.remote_view)):
             packet = buffer.take(1)
-            if packet:
+            if packet and not (
+                    view is self.remote_view and self.remote_video_mute.isChecked()):
                 view.show_packet(packet)
 
     def _refresh_audio(self):
@@ -916,13 +1321,42 @@ class PkWindow(QDialog):
                     break
                 view.show_packet(packet)
 
+    def live_stopped(self):
+        """stopLive succeeded: local owner cleanup, no PK end request.
+
+        Closing the owner stops polling and media and makes every later
+        JOIN/PK_INFO/114 fail the closed-owner check, so a delayed push cannot
+        revive PKing or restart the one-second poll after the room is gone.
+        """
+        if self._shutdown:
+            return
+        self._trace("ui.live_stopped")
+        self._cancel_classic_capture_check()
+        self._pending_start = self._candidate_start = None
+        self._classic_audio = False
+        self._stop_preview()
+        if self._candidate_dialog is not None:
+            self._candidate_dialog.reject()
+        if self._session is not None:
+            self._session.close()
+        self.set_active(False)
+        self.set_connection_active(False)
+        self.set_status("直播已停止，PK 会话已关闭")
+        self._refresh_session_controls()
+
+    def _active_close_hint(self):
+        if self.mode.currentData() == PkMode.TRADITIONAL:
+            if self._classic_matching():
+                return "请先取消匹配，或停止直播"
+            return "经典 PK 不支持手动结束；请等待回合自然结束或停止直播"
+        return ("请先断开视频连线，再关闭窗口" if self._connection_active
+                else "请先结束 PK，再关闭窗口")
+
     def closeEvent(self, event):
         self._trace("ui.close.requested", active=self._active,
                     connection_active=self._connection_active)
         if not self._shutdown and (self._active or self._connection_active):
-            self.status.setText(
-                "请先断开视频连线，再关闭窗口" if self._connection_active
-                else "请先结束 PK，再关闭窗口")
+            self.status.setText(self._active_close_hint())
             event.ignore()
             return
         self.shutdown()
@@ -932,9 +1366,7 @@ class PkWindow(QDialog):
         self._trace("ui.dismiss.requested", active=self._active,
                     connection_active=self._connection_active)
         if not self._shutdown and (self._active or self._connection_active):
-            self.status.setText(
-                "请先断开视频连线，再关闭窗口" if self._connection_active
-                else "请先结束 PK，再关闭窗口")
+            self.status.setText(self._active_close_hint())
             return
         self.shutdown()
         super().reject()
@@ -944,8 +1376,9 @@ class PkWindow(QDialog):
             return
         self._trace("ui.shutdown")
         self._shutdown = True
-        self._preview_retry.stop()
-        self.crop_selector.hide()
+        self._classic_capture_check = None
+        self._classic_audio = False
+        self._stop_preview()
         self._close_settings()
         self.close_encoder_settings()
         self._pending_start = self._candidate_start = None
@@ -955,9 +1388,7 @@ class PkWindow(QDialog):
         if self._candidate_dialog is not None:
             self._candidate_dialog.reject()
         self.timer.stop()
-        self.audio_timer.stop()
-        self.provider_readiness.close()
+        if self.provider_readiness is not None:
+            self.provider_readiness.close()
         self._dispatcher.close()
         self._workers.shutdown(wait=False)
-        self.local_view.reset()
-        self.remote_view.reset()

@@ -1,5 +1,5 @@
-from startlive.core.exceptions import PkProtocolError
 from startlive.core.constant.pk import NativeInteractionState
+from startlive.core.exceptions import PkProtocolError
 from startlive.core.pk.business_session import require_business_join
 from startlive.core.pk.identity import require_current_identity
 from startlive.core.pk.join_ticket import ticket_from_join
@@ -21,9 +21,13 @@ class PkJoinController:
         self.eligibility_check = eligibility_check
         self.native_state = NativeInteractionState.READY
         self._key = None
+        self._retired_channels = set()
 
     def handle(self, event):
         self.identity_guard(self.identity)
+        if (event.biz_session_id,
+            event.rtc_channel_id) in self._retired_channels:
+            return False
         ticket = ticket_from_join(event, self.identity,
                                   local_buvid=self.identity.buvid,
                                   cookie_buvid3=dict(self.identity.cookies).get(
@@ -50,5 +54,7 @@ class PkJoinController:
 
     def clear(self):
         """Call after the owning session has stopped its current RTC worker."""
+        if self._key is not None:
+            self._retired_channels.add(self._key[:2])
         self._key = None
         self.native_state = NativeInteractionState.READY

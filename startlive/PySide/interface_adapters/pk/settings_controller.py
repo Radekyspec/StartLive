@@ -54,7 +54,6 @@ class PkSettingsController:
         self.busy = True
         self.view.set_error("")
         self.view.set_busy(True)
-        worker = None
         try:
             worker = factory(PkPresenter(
                 finished=lambda result: self._complete(sequence, completed,
@@ -100,10 +99,15 @@ class PkSettingsController:
             self.confirmed(snapshot)
 
     def _saved(self, result):
-        # Contract51 confirms the submitted settings on code0. The response is
-        # a message, not a full Config snapshot, and no forced re-GET is needed.
-        self._loaded(result.snapshot)
         self._trace("settings.saved", message=result.message)
+        expected = result.snapshot.preferences
+
+        def verified(snapshot):
+            self._loaded(snapshot)
+            if snapshot.preferences != expected:
+                raise PkError("PK 设置回读与提交不一致，已显示服务端当前设置")
+
+        self._submit(FetchPkUserSettingsWorker, verified)
 
     def _failed(self, error):
         if self.closed:

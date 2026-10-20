@@ -5,11 +5,17 @@ Callers supply local readiness facts independently of this verified status map.
 Round/session binding and preservation of the timestamp across local cleanup
 are explicit StartLive policies. Create a new owner for a new flow epoch.
 """
-from .pk_eligibility import pk_start_eligibility, pk_type_from_server
-from startlive.core.pk.states.info import PkInfoDecision
 from startlive.core.constant.pk import NativePkType
 from startlive.core.constant.pk_info import STATUS_STATES, NativePkState, \
     PkInfoAction
+from startlive.core.constant.pk_info import VIDEO_STATUS_STATES
+from startlive.core.pk.states.info import (
+    PkBasicInfo,
+    PkInfo,
+    PkInfoDecision,
+    PkMatchInfo,
+)
+from .pk_eligibility import pk_start_eligibility, pk_type_from_server
 
 
 class PkRoundState:
@@ -34,8 +40,8 @@ class PkRoundState:
     def _type_allowed(self, info):
         mapped = pk_type_from_server(info.basic.type, info.basic.sub_type)
         return mapped is not None and (
-                    self.accepts_type is None or self.accepts_type(
-                info.basic) is True)
+                self.accepts_type is None or self.accepts_type(
+            info.basic) is True)
 
     def _idle_allowed(self, info):
         if self.start_state_provider is not None:
@@ -100,8 +106,18 @@ class PkRoundState:
         if not self._type_allowed(info):
             return self._decision(PkInfoAction.BLOCKED, info,
                                   "尚未确认此 PK 类型的状态映射")
-        if self.state == NativePkState.IDLE and basic.status >= 1001:
-            return self._decision(PkInfoAction.IGNORED, info, "idle_terminal")
+        if self.state == NativePkState.IDLE:
+            # A post-terminal current-state query can still return a late
+            # 401/404/1001 snapshot for the round we just ended. Accepting it
+            # revives Freezing and leaves the UI stuck in "PK 进行中"; the
+            # round ID is the durable boundary. A different pk_id is a new
+            # round and remains admissible.
+            if basic.pk_id and basic.pk_id == self.last_ended_round_id:
+                return self._decision(PkInfoAction.IGNORED, info,
+                                      "already_ended")
+            if basic.status >= 1001:
+                return self._decision(PkInfoAction.IGNORED, info,
+                                      "idle_terminal")
         previous = self.state
         self.info, self.timestamp = info, info.timestamp
         # Contract25: accepted common DTO replaces current kind. Request intent
@@ -110,7 +126,8 @@ class PkRoundState:
         self.round_id = basic.pk_id or self.round_id
         self.flag3d0_unknown = basic.status in (301, 501, 602)
         action = PkInfoAction.UPDATED
-        if basic.status >= 1001:
+        statuses = STATUS_STATES if info.legacy else VIDEO_STATUS_STATES
+        if basic.status >= 1001 if info.legacy else basic.status == 1401:
             action = PkInfoAction.ROUND_ENDED
         elif basic.status == 0:
             if info.match.match_status == 0:
@@ -119,13 +136,35 @@ class PkRoundState:
                 if not (
                         self.kind == NativePkType.MULTI_RANDOM and previous == NativePkState.PREPARING):
                     self.state = NativePkState.MATCHING
-        elif basic.status in STATUS_STATES:
-            self.state = STATUS_STATES[basic.status]
+        elif basic.status in statuses:
+            self.state = statuses[basic.status]
         if action in (PkInfoAction.ROUND_IDLE, PkInfoAction.ROUND_ENDED):
             self.last_ended_round_id = self.round_id
             self.state = NativePkState.IDLE
             self.round_id = 0
         return self._decision(action, info, previous_state=previous)
+
+    def end_from_battle(self, pk_id=0):
+        """Project PK_BATTLE_END after the caller observed Freezing.
+
+        The push carries neither a status nor a timestamp. Keep the last
+        accepted snapshot so the final score stays on screen; only synthesize
+        a display-only terminal DTO when no snapshot exists yet.
+        """
+        previous = self.state
+        ended = self.round_id or (
+            pk_id if type(pk_id) is int and pk_id > 0 else 0)
+        if ended:
+            self.last_ended_round_id = ended
+        self.round_id = 0
+        self.state = NativePkState.IDLE
+        info = self.info
+        if info is None:
+            info = PkInfo(4, PkBasicInfo(pk_id=ended, status=1001,
+                                         type=self.kind.server_type),
+                          PkMatchInfo(), 0, {})
+        return self._decision(PkInfoAction.ROUND_ENDED, info,
+                              "battle_end_push", previous_state=previous)
 
     def quit_round(self):
         """Classic6204 Not Matching quits local round state without RTC work."""
