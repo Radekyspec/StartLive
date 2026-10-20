@@ -130,7 +130,7 @@ jobs:
         env:
           MACOS_P12_BASE64: ${{ secrets.MACOS_P12_BASE64 }}
           MACOS_P12_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
-        run: python tools/macos_signing.py import
+        run: python tools/macos_signing.py
       - name: Sign and package with Velopack
         run: bash tools/package_release.sh
       - name: Validate update feeds and select R2 files
@@ -162,9 +162,6 @@ jobs:
           AWS_REQUEST_CHECKSUM_CALCULATION: when_required
           AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
         run: python tools/release.py publish "$PACKER_DIR"
-      - name: Remove temporary signing materials and restore keychains
-        if: always()
-        run: python tools/macos_signing.py cleanup
 
   remove-intermediate:
     # Keep the intermediate on failure so "Re-run failed jobs" can retry packaging.

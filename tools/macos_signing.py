@@ -1,13 +1,10 @@
 """Import the local packer's signing identity into a temporary CI keychain."""
 
-import argparse
 import base64
-import json
 import os
 import re
 import secrets
 import shlex
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -47,7 +44,6 @@ def import_identity(state):
     keychain = state / "signing.keychain-db"
     old = shlex.split(run(["security", "list-keychains", "-d", "user"],
                           label="Read keychain search list"))
-    (state / "search-list.json").write_text(json.dumps(old))
     keychain_password = secrets.token_urlsafe(48)
     # Keep the password out of stdout; run() captures output and reports labels only.
     run(["security", "create-keychain", "-p", keychain_password, keychain],
@@ -85,7 +81,6 @@ def import_identity(state):
              keychain],
             label=f"Find {CERTIFICATE_NAME} certificate",
         ))
-        (state / "admin-trust-added").touch()
         run(["sudo", "-n", "security", "add-trusted-cert", "-d", "-r",
              "trustRoot",
              "-p", "codeSign", "-k", keychain, certificate],
@@ -102,48 +97,9 @@ def import_identity(state):
             f"MACOS_KEYCHAIN_PATH={keychain}\nMACOS_SIGN_IDENTITY={fingerprint}\n")
 
 
-def cleanup(state):
-    if not state.exists():
-        return
-    require_hosted_runner()
-    errors = []
-    certificate = state / "trust-anchor.pem"
-    commands = []
-    if (state / "admin-trust-added").exists():
-        commands.append((["sudo", "-n", "security", "remove-trusted-cert", "-d",
-                          certificate], "Remove temporary Code Signing trust"))
-    if (state / "search-list.json").exists():
-        old = json.loads((state / "search-list.json").read_text())
-        commands.append(
-            (["security", "list-keychains", "-d", "user", "-s", *old],
-             "Restore keychain search list"))
-    keychain = state / "signing.keychain-db"
-    if keychain.exists():
-        commands.append((["security", "delete-keychain", keychain],
-                         "Delete temporary keychain"))
-    for command, label in commands:
-        try:
-            run(command, label=label)
-        except ValueError as error:
-            errors.append(str(error))
-    shutil.rmtree(state)
-    if errors:
-        raise ValueError("; ".join(errors))
-    print(
-        "Temporary trust, certificate files, P12 and keychain removed; search list restored.")
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("import", "cleanup"))
-    args = parser.parse_args()
-    state = Path(os.environ["SIGNING_STATE_DIR"])
-    (import_identity if args.command == "import" else cleanup)(state)
-
-
 if __name__ == "__main__":
     try:
-        main()
+        import_identity(Path(os.environ["SIGNING_STATE_DIR"]))
     except Exception as error:
         # In particular, never print a subprocess traceback containing secrets.
         print(f"macOS signing failed: {error}", file=sys.stderr)

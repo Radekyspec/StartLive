@@ -12,8 +12,7 @@ from pathlib import Path
 from urllib.parse import quote, urlparse
 
 BASE_URL = "https://startlive-soft.vtbs.ai"
-CHANNELS = (("win", "Releases-win", "RELEASES"),
-            ("osx", "Releases", "RELEASES-osx"))
+CHANNELS = (("win", "Releases-win"), ("osx", "Releases"))
 SEMVER = re.compile(
     r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
     r"(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
@@ -118,7 +117,7 @@ def verify_asset(path, asset):
 def check_title():
     version = title_version(os.environ["RELEASE_TITLE"])
     with tempfile.TemporaryDirectory() as tmp:
-        for channel, _, _ in CHANNELS:
+        for channel, _ in CHANNELS:
             path = Path(tmp) / f"releases.{channel}.json"
             download(path.name, path)
             require_newer(version, assets_from(path))
@@ -129,14 +128,13 @@ def check_title():
 
 def prepare(root, version):
     history = {}
-    for channel, directory, legacy in CHANNELS:
+    for channel, directory in CHANNELS:
         output = root / directory
         output.mkdir(parents=True, exist_ok=True)
         feed = output / f"releases.{channel}.json"
         download(feed.name, feed)
         assets = assets_from(feed)
         require_newer(version, assets)
-        download(legacy, output / legacy)
         for asset in assets:
             path = output / asset["FileName"]
             print(f"Downloading {path.name}", flush=True)
@@ -152,7 +150,7 @@ def validate(root, version):
     """Check all history survives and select only this version's full/delta."""
     previous = json.loads((root / "previous-assets.json").read_text())
     packages, feeds = [], []
-    for channel, directory, legacy in CHANNELS:
+    for channel, directory in CHANNELS:
         output = root / directory
         feed = output / f"releases.{channel}.json"
         assets = assets_from(feed)
@@ -170,23 +168,8 @@ def validate(root, version):
         for asset in assets:
             verify_asset(output / asset["FileName"], asset)
         packages.extend(f"{directory}/{a['FileName']}" for a in current)
-        legacy_path = output / legacy
-        if not legacy_path.is_file():
-            raise ValueError(f"Missing legacy update feed: {legacy}")
-        # Velopack's legacy Squirrel format excludes versions containing dotted
-        # prerelease labels or build metadata. The JSON feed retains all versions.
-        legacy_entries = {}
-        for line in legacy_path.read_text().splitlines():
-            sha1, name, size = line.split()
-            legacy_entries[name] = (sha1.upper(), int(size))
-        for asset in assets:
-            match = SEMVER.fullmatch(asset["Version"])
-            if asset["Type"] == "Full" and not match[5] and "." not in (
-                    match[4] or ""):
-                expected = (asset["SHA1"].upper(), asset["Size"])
-                if legacy_entries.get(asset["FileName"]) != expected:
-                    raise ValueError(f"Incomplete legacy feed: {legacy}")
-        feeds.extend((f"{directory}/{legacy}", f"{directory}/{feed.name}"))
+        # RELEASES* files are legacy compatibility output, not published feeds.
+        feeds.append(f"{directory}/{feed.name}")
     for installer in ("Releases/StartLive-osx-Setup.pkg",
                       "Releases-win/StartLive-win-Setup.exe"):
         if not (root / installer).is_file() or (
@@ -228,8 +211,6 @@ def publish(root, version):
             ]
             if path.suffix == ".json":
                 args += ["--content-type", "application/json"]
-            elif category == "feeds":
-                args += ["--content-type", "text/plain"]
             # Avoid including credentials/endpoint in a CalledProcessError traceback.
             if subprocess.run(args).returncode:
                 raise ValueError(
