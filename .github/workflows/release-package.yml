@@ -1,0 +1,192 @@
+name: Package release
+run-name: Package ${{ github.event.pull_request.title }}
+
+on:
+  pull_request:
+    branches: [ master ]
+    types: [ closed ]
+
+permissions:
+  contents: read
+
+# Serialize writers to the shared win/osx update feeds.
+concurrency:
+  group: >-
+    ${{ github.event.pull_request.merged == true &&
+        github.event.pull_request.head.ref == 'dev' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        startsWith(github.event.pull_request.title, 'Release-v') &&
+        'startlive-release-package' || format('non-release-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.ref == 'dev' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.title, 'Release-v')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      source_ref: ${{ github.event.pull_request.merge_commit_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Validate release title and existing channel versions
+        id: version
+        env:
+          RELEASE_TITLE: ${{ github.event.pull_request.title }}
+        run: python tools/release.py version
+
+  compile-standalone:
+    needs: release
+    uses: ./.github/workflows/compile-standalone.yml
+    with:
+      release_version: ${{ needs.release.outputs.version }}
+      source_ref: ${{ needs.release.outputs.source_ref }}
+
+  compile-universal:
+    needs: release
+    uses: ./.github/workflows/compile-universal.yml
+    with:
+      release_version: ${{ needs.release.outputs.version }}
+      source_ref: ${{ needs.release.outputs.source_ref }}
+
+  package:
+    needs: [ release, compile-standalone, compile-universal ]
+    runs-on: macos-15
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+    env:
+      APP_VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - name: Set temporary working directories
+        run: |
+          echo "PACKER_DIR=$RUNNER_TEMP/StartLivePacker" >> "$GITHUB_ENV"
+          echo "SIGNING_STATE_DIR=$RUNNER_TEMP/startlive-signing" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.source_ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Install packaging tools
+        run: |
+          python -m pip install awscli==1.42.61
+          dotnet tool install vpk --version 1.2.0 --tool-path "$RUNNER_TEMP/vpk"
+          echo "$RUNNER_TEMP/vpk" >> "$GITHUB_PATH"
+      - name: Write release version
+        run: |
+          mkdir -p "$PACKER_DIR/tools" "$PACKER_DIR/tools-win" "$PACKER_DIR/Releases" "$PACKER_DIR/Releases-win"
+          printf '%s\n' "$APP_VERSION" > "$PACKER_DIR/version"
+          python tools/write_version.py
+      - name: Download Windows standalone into tools-win
+        uses: actions/download-artifact@v7
+        with:
+          name: StartLive-v${{ env.APP_VERSION }}-Windows-standalone
+          path: ${{ env.PACKER_DIR }}/tools-win
+      - name: Download original macOS ARM64 archive
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const crypto = require('node:crypto');
+            const name = `StartLive-v${process.env.APP_VERSION}-macOS-ARM64.zip`;
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              ...context.repo, run_id: context.runId, per_page: 100,
+            });
+            const matches = artifacts.filter(a => a.name === name && !a.expired);
+            if (matches.length !== 1) throw new Error(`Expected exactly one artifact: ${name}`);
+            // download-artifact auto-extracts raw ZIPs and loses Unix modes/symlinks.
+            // Download the original archive, then use ditto in the next step.
+            const artifact = matches[0];
+            const response = await github.rest.actions.downloadArtifact({
+              ...context.repo, artifact_id: artifact.id, archive_format: 'zip',
+            });
+            const bytes = Buffer.from(response.data);
+            const digest = `sha256:${crypto.createHash('sha256').update(bytes).digest('hex')}`;
+            if (artifact.digest && artifact.digest !== digest) throw new Error('Artifact SHA256 mismatch');
+            fs.writeFileSync(`${process.env.PACKER_DIR}/macos-arm64.zip`, bytes);
+      - name: Extract app and download previous releases and icons
+        run: |
+          ditto -x -k "$PACKER_DIR/macos-arm64.zip" "$PACKER_DIR/tools"
+          test -x "$PACKER_DIR/tools/StartLive.app/Contents/MacOS/StartLive"
+          test -f "$PACKER_DIR/tools-win/StartLive.exe"
+          lipo "$PACKER_DIR/tools/StartLive.app/Contents/MacOS/StartLive" -verify_arch arm64
+          python tools/release.py prepare "$PACKER_DIR"
+      - name: Import and trust the CI signing identity
+        env:
+          MACOS_P12_BASE64: ${{ secrets.MACOS_P12_BASE64 }}
+          MACOS_P12_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
+        run: python tools/macos_signing.py import
+      - name: Sign and package with Velopack
+        run: bash tools/package_release.sh
+      - name: Validate update feeds and select R2 files
+        run: python tools/release.py validate "$PACKER_DIR"
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: StartLive-osx-Setup.pkg
+          path: ${{ env.PACKER_DIR }}/Releases/StartLive-osx-Setup.pkg
+          archive: false
+          overwrite: true
+          if-no-files-found: error
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: StartLive-win-Setup.exe
+          path: ${{ env.PACKER_DIR }}/Releases-win/StartLive-win-Setup.exe
+          archive: false
+          overwrite: true
+          if-no-files-found: error
+      - name: Upload newest packages and update feeds to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: 'true'
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: python tools/release.py publish "$PACKER_DIR"
+      - name: Remove temporary signing materials and restore keychains
+        if: always()
+        run: python tools/macos_signing.py cleanup
+
+  remove-intermediate:
+    # Keep the intermediate on failure so "Re-run failed jobs" can retry packaging.
+    if: needs.package.result == 'success'
+    needs: [ release, package ]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Remove standalone intermediate from release artifacts
+        uses: actions/github-script@v7
+        env:
+          APP_VERSION: ${{ needs.release.outputs.version }}
+        with:
+          script: |
+            const name = `StartLive-v${process.env.APP_VERSION}-Windows-standalone`;
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              ...context.repo, run_id: context.runId, per_page: 100,
+            });
+            for (const artifact of artifacts.filter(a => a.name === name)) {
+              await github.rest.actions.deleteArtifact({...context.repo, artifact_id: artifact.id});
+            }
+            await core.summary.addHeading(`StartLive ${process.env.APP_VERSION}`)
+              .addRaw('Installers and the three original Windows X64 / macOS ARM64 / macOS X64 archives are available in Artifacts. The standalone intermediate was removed. R2 contains the new full/delta packages and complete update feeds.')
+              .write();

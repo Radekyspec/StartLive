@@ -5,6 +5,19 @@ on:
     branches:
       - "dev"
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      release_version:
+        description: SemVer supplied by the merged release PR
+        required: true
+        type: string
+      source_ref:
+        description: Exact merge commit to compile
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -17,6 +30,9 @@ jobs:
     steps:
       - name: Check-out repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          persist-credentials: false
 
       - name: Read version from _version.py
         shell: python
@@ -29,16 +45,20 @@ jobs:
               env_file.write(f'VERSION={__version__}\n')
 
       - name: Set app version
-        shell: bash
+        shell: python
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          echo "APP_VERSION=${VERSION}" >> "$GITHUB_ENV"
-
-      - name: Set VERSION for push
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          SHORT_SHA="${GITHUB_SHA::7}"
-          echo "APP_VERSION=${VERSION}+${SHORT_SHA}" >> "$GITHUB_ENV"
+          import os
+          version = os.environ["RELEASE_VERSION"] or os.environ["VERSION"]
+          app_version = version
+          if not os.environ["RELEASE_VERSION"] and os.environ["GITHUB_EVENT_NAME"] == "push":
+              app_version += "+" + os.environ["GITHUB_SHA"][:7]
+          # Native file/bundle versions require the numeric SemVer core.
+          native_version = version.split("+", 1)[0].split("-", 1)[0]
+          with open(os.environ["GITHUB_ENV"], "a") as env_file:
+              env_file.write(f"APP_VERSION={app_version}\n")
+              env_file.write(f"VERSION={native_version}\n")
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -49,6 +69,13 @@ jobs:
           cache-dependency-path: |
             **/requirements*.txt
             pyproject.toml
+
+      - name: Prepare dependency metadata version
+        env:
+          # setuptools requires PEP 440; the app itself retains the full SemVer.
+          APP_VERSION: ${{ env.VERSION }}
+        run: |
+          python tools/write_version.py
 
       - name: Install Dependencies
         run: |
@@ -73,7 +100,7 @@ jobs:
           echo "$env:UPX_DIR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build Executable for Windows
-        uses: Nuitka/Nuitka-Action@main
+        uses: Nuitka/Nuitka-Action@bb65ca8023bef5f41a2114acd387b5f36d860145 # main, pinned for release builds
         with:
           # 4.3.1 reproduces KeyError('__builtins__') in OpenSSL private-key
           # conversion. Keep the compiler that passes the compiled RTC probe.
@@ -122,3 +149,5 @@ jobs:
           path: |
             output/
           include-hidden-files: true
+          if-no-files-found: error
+          overwrite: ${{ inputs.release_version != '' }}
