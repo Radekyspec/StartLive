@@ -49,7 +49,7 @@ def import_identity(state):
                           label="Read keychain search list"))
     (state / "search-list.json").write_text(json.dumps(old))
     keychain_password = secrets.token_urlsafe(48)
-    print(f"::add-mask::{keychain_password}", flush=True)
+    # Keep the password out of stdout; run() captures output and reports labels only.
     run(["security", "create-keychain", "-p", keychain_password, keychain],
         label="Create temporary keychain")
     run(["security", "set-keychain-settings", "-lut", "21600", keychain],
