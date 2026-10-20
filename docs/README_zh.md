@@ -119,4 +119,8 @@ python -m venv venv
 ./venv/bin/python ./StartLive.py
 ```
 
+源码版本保持 `0.0.0.dev0`，无需手动维护版本号即可使用可编辑安装。
+发布 CI 在构建时从发布 PR 标题或
+GitHub Release tag 写入正式版本。
+
 > 请注意，Bilibili目前没有对所有用户支持HEVC编码推流，如果推流失败可以检查一下编码。

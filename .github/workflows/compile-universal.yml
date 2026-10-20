@@ -54,12 +54,13 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           import os
+          import re
           version = os.environ["RELEASE_VERSION"] or os.environ["VERSION"]
           app_version = version
           if not os.environ["RELEASE_VERSION"] and os.environ["GITHUB_EVENT_NAME"] == "push":
               app_version += "+" + os.environ["GITHUB_SHA"][:7]
-          # Native file/bundle versions require the numeric SemVer core.
-          native_version = version.split("+", 1)[0].split("-", 1)[0]
+          # Native file/bundle versions need only the numeric major.minor.patch.
+          native_version = re.match(r"[0-9]+\.[0-9]+\.[0-9]+", version).group()
           with open(os.environ["GITHUB_ENV"], "a") as env_file:
               env_file.write(f"APP_VERSION={app_version}\n")
               env_file.write(f"VERSION={native_version}\n")

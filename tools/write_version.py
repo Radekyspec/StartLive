@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-version = os.environ.get("APP_VERSION", "0.0.0-dev")
+version = os.environ.get("APP_VERSION", "0.0.0.dev0")
 version_file = Path(__file__).resolve().parents[
                    1] / "startlive" / "core" / "constant" / "_version.py"
-version_file.write_text(f'__version__ = "{version}"\n', encoding="utf-8")
+version_file.write_text(f"__version__ = {version!r}\n", encoding="utf-8")

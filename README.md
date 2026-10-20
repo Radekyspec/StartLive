@@ -134,6 +134,10 @@ python -m venv venv
 ./venv/bin/python ./StartLive.py
 ```
 
+The source version stays at `0.0.0.dev0`, so editable installs work without
+maintaining a version number. Release CI writes
+the version from the release PR title or GitHub Release tag during the build.
+
 > Note: Bilibili does **not** enable **HEVC (High Efficiency Video Coding)**
 > streaming for all users. If pushing the stream fails, please check your
 > encoder/codec settings.
