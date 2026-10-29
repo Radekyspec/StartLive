@@ -1,4 +1,9 @@
-"""Room message transport, independent of PK and the GUI.
+"""Reusable push subsystem, independent of PK and the GUI.
+
+Provides Goim handshake, framing and compression (wire), protocol dispatch
+(protocol), HTTP (api), connections (client and connection), and worker adapters
+(workers/danmaku). Extend it with a DanmakuProtocol subclass supplied through
+protocol_factory. PK is currently the only consumer.
 
 DanmakuConnection owns two WorkerManager jobs: a socket worker and a separate
 HTTP acknowledgement worker. Client owns the Goim TCP connection, authentication,
