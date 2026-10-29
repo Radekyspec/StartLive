@@ -29,7 +29,6 @@ from startlive.core.pk.states.info import PkClassicInfoResult, PkInfoDecision
 from startlive.core.pk.trace import pk_trace
 from startlive.core.pk.trace_id import new_trace_id
 from startlive.core.pk.video_eligibility import video_block_reason
-from startlive.core.workers.pk.session_jobs import PkSessionJobs
 from .continuous_controller import PkContinuousController
 from .directed_invite import PkDirectedInviteController
 from .exit_controller import PkExitController
@@ -40,10 +39,31 @@ from .round_controller import PkRoundController
 from .round_presentation import PkRoundPresentation
 
 
+class _Jobs:
+    """Track a flow's jobs without creating another thread pool or dispatcher."""
+
+    def __init__(self, manager):
+        self.manager = manager
+        self.futures = []
+        self.retired = False
+
+    def submit(self, worker, **kwargs):
+        if self.retired:
+            raise PkError("PK 会话已关闭")
+        self.futures = [future for future in self.futures if not future.done()]
+        future = self.manager.submit(worker, **kwargs)
+        self.futures.append(future)
+        return future
+
+    @property
+    def busy(self):
+        return any(not future.done() for future in self.futures)
+
+
 class PkSessionController:
     def __init__(self, view, identity, options, *, invitation_display_allowed=False,
                  invitation_only=False):
-        manager = PkSessionJobs(view._workers)
+        manager = _Jobs(view._workers)
         self.manager, self.identity, self.options, self.view = manager, identity, options, view
         self.invitation_only = invitation_only
         self.invitation_display_allowed = invitation_display_allowed or invitation_only
