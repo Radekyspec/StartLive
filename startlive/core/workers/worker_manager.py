@@ -79,29 +79,28 @@ class WorkerManager:
             self._worker_typeset.discard(worker_name)
 
         def finalize() -> None:
-            # future canceled before start
-            if future.cancelled():
-                return
-
             try:
-                result = future.result()
-                self.logger.info(
-                    f"{worker_name} finished with result: {result!r}")
-            except (TaskCancelled, CancelledError):
-                pass
-            except Exception as e:
-                self.logger.exception(f"{worker_name} failed")
+                if future.cancelled():
+                    worker.on_cancelled()
+                    return
                 try:
-                    worker.on_exception(e)
-                except Exception:
-                    self.logger.exception(f"{worker_name} on_exception failed:")
-            else:
-                if result is None:
-                    worker.on_finished()
-                elif isinstance(result, tuple):
-                    worker.on_finished(*result)
+                    result = future.result()
+                    self.logger.info(
+                        f"{worker_name} finished with result: {result!r}")
+                except (TaskCancelled, CancelledError):
+                    worker.on_cancelled()
+                except Exception as error:
+                    self.logger.exception(f"{worker_name} failed")
+                    worker.on_exception(error)
                 else:
-                    worker.on_finished(result)
+                    if result is None:
+                        worker.on_finished()
+                    elif isinstance(result, tuple):
+                        worker.on_finished(*result)
+                    else:
+                        worker.on_finished(result)
+            except Exception:
+                self.logger.exception(f"{worker_name} presenter callback failed")
 
         self._dispatcher.post(finalize)
         self.logger.info(

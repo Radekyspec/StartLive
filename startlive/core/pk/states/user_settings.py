@@ -20,9 +20,3 @@ class PkUserSettingsSnapshot:
                          "show_score": str(self.show_score),
                          "pk_punish_time": str(self.punish_time),
                          "show_pk_play_text": "2"}
-
-
-@dataclass(frozen=True, slots=True)
-class PkUserSettingsSaved:
-    snapshot: PkUserSettingsSnapshot
-    message: str = ""

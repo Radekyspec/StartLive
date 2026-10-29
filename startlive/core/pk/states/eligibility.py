@@ -26,9 +26,3 @@ class PkStartEligibilityState:
     live_output_active: bool | None
     voice_microphone_available: bool | None
     pk_state: NativePkState | None
-
-
-@dataclass(frozen=True, slots=True)
-class PkStartEligibility:
-    allowed: bool | None
-    reason: str = ""

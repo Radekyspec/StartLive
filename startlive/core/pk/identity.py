@@ -8,8 +8,9 @@ def current_identity() -> PkIdentity:
     try:
         snapshot = app_state.account_snapshot()
         uid, room_id = snapshot.uid, snapshot.room_id
-    except (ValueError, TypeError):
-        raise PkAuthenticationError("登录用户或直播间信息无效") from None
+    except (ValueError, TypeError) as error:
+        raise PkAuthenticationError(
+            f"登录用户或直播间信息无效：{type(error).__name__}: {error}") from error
     cookies = dict(snapshot.cookies)
     if uid <= 0 or room_id <= 0 or not cookies.get(
             "SESSDATA") or not cookies.get("bili_jct"):

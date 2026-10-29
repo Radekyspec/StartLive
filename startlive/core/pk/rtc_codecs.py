@@ -51,7 +51,7 @@ def av1_codecs():
                                   payloadType=104, parameters={"apt": 103})]
 
 
-def enable_av1_publication(pc):
+def enable_av1_publication(pc: RTCPeerConnection):
     """Give only this PC's offer/answer methods an extended codec catalogue.
 
     aiortc 1.15 hardcodes its module-level CODECS in these two methods. Our
@@ -59,8 +59,7 @@ def enable_av1_publication(pc):
     functions through __code__: Nuitka functions have no executable bytecode.
     Receive transceivers still select only the built-in H.264 decoder.
     """
-    if not isinstance(pc, RTCPeerConnection) or getattr(pc, "_pk_av1_enabled",
-                                                        False):
+    if getattr(pc, "_pk_av1_enabled", False):
         return
     catalogue = deepcopy(CODECS)
     catalogue["video"].extend(av1_codecs())

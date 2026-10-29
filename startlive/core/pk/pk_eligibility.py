@@ -1,7 +1,6 @@
 """Contract24 forward PK type mapper and distinct idle-start eligibility."""
 from startlive.core.constant.pk import NativePkType
 from startlive.core.constant.pk_info import NativePkState
-from startlive.core.pk.states.eligibility import PkStartEligibility
 
 
 def pk_type_from_server(server_type, sub_type):
@@ -26,25 +25,25 @@ def pk_type_from_server(server_type, sub_type):
     return None
 
 
-def pk_start_eligibility(kind, facts, *, continuous_video=False):
+def pk_start_block_reason(kind, facts, *, continuous_video=False) -> str | None:
     """Use for starting/adopting an idle round, never for active updates."""
     if facts is None or facts.output_ready is None:
-        return PkStartEligibility(None, "尚未确认直播输出是否就绪")
+        return "尚未确认直播输出是否就绪"
     if facts.output_ready is not True:
-        return PkStartEligibility(False, "直播输出尚未就绪")
+        return "直播输出尚未就绪"
     # Contract27 fifth_flag=true skips this branch only for automatic video
     # matching. It does not bypass output_ready or the remaining local gates.
     if not (continuous_video and kind == NativePkType.DOUBLE_RANDOM):
         if facts.live_output_active is None:
-            return PkStartEligibility(None, "尚未确认当前直播输出状态")
+            return "尚未确认当前直播输出状态"
         if facts.live_output_active is not True:
-            return PkStartEligibility(False, "请先开始直播再进行 PK")
+            return "请先开始直播再进行 PK"
     if facts.voice_microphone_available is None:
-        return PkStartEligibility(None, "尚未确认语音麦克风是否可用")
+        return "尚未确认语音麦克风是否可用"
     if facts.voice_microphone_available is not True:
-        return PkStartEligibility(False, "当前语音麦克风状态不允许开始 PK")
+        return "当前语音麦克风状态不允许开始 PK"
     if facts.pk_state is None:
-        return PkStartEligibility(None, "尚未确认当前 PK 状态")
+        return "尚未确认当前 PK 状态"
     if facts.pk_state != NativePkState.IDLE:
-        return PkStartEligibility(False, "当前 PK 尚未结束，不能开始新回合")
-    return PkStartEligibility(True)
+        return "当前 PK 尚未结束，不能开始新回合"
+    return None

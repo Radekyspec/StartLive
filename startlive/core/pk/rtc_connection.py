@@ -22,14 +22,11 @@ from aiortc import (
 
 from startlive.core.constant.pk_transport import VERIFIED_RELAY_TRANSPORTS
 from startlive.core.exceptions import PkError, PkProtocolError
-from startlive.core.pk.states.session import RtcTicket
-from startlive.core.pk.states.transport import RtcTransportPolicy
 from .rtc_diagnostics import runtime_details
 from .rtc_dtls import configure_pk_dtls, observe_pk_dtls
 from .rtc_relay import configure_relay, prepare_relay
 from .rtc_signaling import RtcSignaling
 from .rtc_users import RtcUserRegistry
-from .rtc_wire import decode_ticket
 from .trace import enable_dtls_failure_trace, pk_trace, sdp_for_trace
 
 
@@ -73,6 +70,7 @@ def _address(value):
 
 async def _resolve_addresses(addresses):
     result = []
+    failures = []
     for address in addresses:
         host, port = _address(address)
         try:
@@ -81,23 +79,26 @@ async def _resolve_addresses(addresses):
             try:
                 records = await asyncio.get_running_loop().getaddrinfo(
                     host, port, type=socket.SOCK_DGRAM)
-            except OSError:
+            except OSError as error:
+                detail = f"{host}:{port}: {type(error).__name__}: {error}"
+                failures.append(detail)
+                pk_trace("rtc.dns.failed", host=host, port=port,
+                         error_type=type(error).__name__, error=str(error))
                 continue
             hosts = [record[4][0] for record in records]
         for value in hosts:
             if (value, port) not in result:
                 result.append((value, port))
     if not result:
-        raise PkError("无法解析 RTC 服务器地址")
+        raise PkError("无法解析 RTC 服务器地址：" + ("；".join(failures) or "地址列表为空或 DNS 未返回地址"))
     return result
 
 
 def initial_answer(ticket, addresses):
     """Application-only answer with the native UDP candidate priorities.
 
-    This adapter emits only the UDP subset. Native disable_udp=false also has
+    This adapter emits only UDP candidates. The native implementation also has
     passive TCP candidates; adding their text cannot implement ICE-TCP here.
-    Explicit disable_udp=true is rejected before constructing a connection.
     """
     for key in ("token", "password", "fingerprint"):
         if not isinstance(ticket.get(key), str) or any(
@@ -120,22 +121,8 @@ def initial_answer(ticket, addresses):
     return "\r\n".join(lines) + "\r\n"
 
 
-def ice_configuration(ticket, *,
-                      transport_policy: RtcTransportPolicy | None = None):
-    """Enforce remote transport requirements using StartLive's local ICE policy.
-
-    Only disable_udp changes the remote candidate protocol. Native controller
-    and allocator tuning flags remain resource metadata; StartLive uses its
-    maintained provider's gathering and pair selection instead. Ignoring those
-    local tuning hints does not enable direct ICE-TCP or relax relay-only.
-    None selects StartLive's UDP-capable default, not fetched account settings.
-    """
-    unsupported = []
-    if transport_policy is not None:
-        if not isinstance(transport_policy, RtcTransportPolicy):
-            raise PkProtocolError("RTC 传输策略格式无效")
-        if transport_policy.disable_udp:
-            unsupported.append("仅 TCP 的远端候选")
+def ice_configuration(ticket):
+    """Use the fixed UDP-capable ICE policy and the ticket's relay requirements."""
     turn = ticket.get("turn", {})
     required_relay = bool(turn.get("turn_only"))
     transports = turn.get("transport", [])
@@ -144,10 +131,7 @@ def ice_configuration(ticket, *,
                       value in VERIFIED_RELAY_TRANSPORTS]
     if required_relay and not transports:
         # Unverified transport combinations cannot fall back to direct ICE.
-        unsupported.append("仅通过中继连接")
-    if unsupported:
-        raise PkError(
-            "当前 RTC 引擎尚不支持这些连接要求：" + "、".join(unsupported))
+        raise PkError("RTC 票据要求仅通过中继连接，但未提供受支持的 TURN 传输方式")
     urls = []
     for address in turn.get("addr", []):
         host, port = _address(address)
@@ -176,31 +160,24 @@ class RtcConnection:
     # bilibili-rtc.dll!CreateBiliRtcEngine. Keep this adapter's identity honest.
     backend = "aiortc"
 
-    def __init__(self, ticket: RtcTicket, *, notification=None, timeout=15,
-                 leave_timeout=3, peer_connection_factory=RTCPeerConnection,
-                 transport_policy: RtcTransportPolicy | None = None,
-                 on_joined=None):
+    def __init__(self, ticket: dict, *, on_joined, timeout=15,
+                 leave_timeout=3):
         enable_dtls_failure_trace()
         pk_trace("rtc.runtime", **runtime_details())
-        pk_trace("rtc.connection.create", uid=ticket.uid,
-                 channel_id=ticket.channel_id,
-                 transport_policy=transport_policy, thread_id=get_ident())
-        self.ticket = decode_ticket(ticket.access_token, uid=ticket.uid,
-                                    channel_id=ticket.channel_id)
-        self.transport_policy = transport_policy
+        pk_trace("rtc.connection.create", uid=ticket["uid"],
+                 channel_id=ticket["channel_id"], thread_id=get_ident())
+        # JOIN admission already decoded and checked the account/channel.
+        self.ticket = ticket
         # Validate before allocating the PC/channels or starting ICE gathering.
-        self.configuration = ice_configuration(self.ticket,
-                                               transport_policy=transport_policy)
+        self.configuration = ice_configuration(self.ticket)
         self._relay_only = bool(self.ticket.get("turn", {}).get("turn_only"))
         self._configurations = _connection_configurations(
             self.configuration, relay_only=self._relay_only)
-        self._peer_connection_factory = peer_connection_factory
         self._stage = "created"
-        self.notification, self.timeout = notification, timeout
+        self.timeout = timeout
         self.on_joined = on_joined
-        # If no callback is injected, retain notifications received while
-        # awaiting Join so the later session owner can reconcile them. The
-        # bounded queue is StartLive policy, not a recovered native capacity.
+        # Retain notifications received during Join for the media worker.
+        # The bounded queue is StartLive policy, not a recovered native capacity.
         self.notifications = asyncio.Queue(maxsize=256)
         self.user_events = asyncio.Queue(maxsize=256)
         self.users = RtcUserRegistry(self._receive_user_event)
@@ -209,14 +186,13 @@ class RtcConnection:
         self.leave_timeout = leave_timeout
         self.leave_error = None
         self.join_response = None
-        self.members_response = None
         self._close_task = None
         self.signaling = None
         self._create_peer(self._configurations[0])
 
     def _create_peer(self, configuration):
         self.configuration = configuration
-        self.pc = self._peer_connection_factory(configuration)
+        self.pc = RTCPeerConnection(configuration)
         configure_pk_dtls(self.pc)
         if self._relay_only:
             configure_relay(self.pc)
@@ -286,8 +262,9 @@ class RtcConnection:
                                                pair.remote_candidate))}
                      for pair in connection._nominated.values()]
             self._trace("rtc.ice.selected", pairs=pairs)
-        except Exception:
-            pass
+        except Exception as error:
+            self._trace("rtc.diagnostics.failed",
+                        error_type=type(error).__name__, error=str(error))
 
     def _state_changed(self):
         self._trace("rtc.pc.state", state_type="connectionState",
@@ -313,8 +290,9 @@ class RtcConnection:
                                                                 errors="replace") if ssl else None,
                         cipher=ssl.get_cipher_name() if ssl else None,
                         protocol=ssl.get_protocol_version_name() if ssl else None)
-        except Exception:
-            pass
+        except Exception as error:
+            self._trace("rtc.diagnostics.failed",
+                        error_type=type(error).__name__, error=str(error))
 
     def _connection_diagnostics(self):
         """Snapshot before cleanup; never include ICE/TURN credentials or SDP."""
@@ -345,16 +323,13 @@ class RtcConnection:
                  "remote": candidate(pair.remote_candidate),
                  "state": pair.state.name, "nominated": pair.nominated}
                 for pair in connection._check_list]
-        except (AttributeError, TypeError):
-            # Diagnostics must also work with injected offline peers.
-            pass
+        except (AttributeError, TypeError) as error:
+            # Preserve the partial snapshot when provider internals are unavailable.
+            result["diagnostic_error"] = f"{type(error).__name__}: {error}"
         return result
 
     def _receive_notification(self, message):
         handled = self.users.consume(message)
-        if self.notification is not None:
-            self.notification(message)
-            return
         if handled:
             return
         try:
@@ -383,7 +358,8 @@ class RtcConnection:
             self._trace("rtc.connection.timeout", timeout=self.timeout,
                         **self._connection_diagnostics())
             await self.close()
-            raise PkError("RTC 初始连接超时") from None
+            raise PkError(
+                f"RTC 初始连接超时（阶段 {self._stage}，限时 {self.timeout} 秒）") from None
         except BaseException as error:
             self._trace("rtc.connection.failed", error=error,
                         **self._connection_diagnostics())
@@ -434,15 +410,13 @@ class RtcConnection:
         self._stage = "join"
         with self.signaling.block_notifications():
             self.join_response = await self.signaling.join()
-            if self.on_joined is not None:
-                self.on_joined()
+            self.on_joined()
             self._stage = "members"
-            with self.signaling.block_notifications():
-                self.members_response = await self.signaling.refresh_members(
-                    self.join_response.get("callid", 0))
-                self.users.initialize(self.members_response.get("users", []))
+            members = await self.signaling.refresh_members(
+                self.join_response.get("callid", 0))
+            self.users.initialize(members.get("users", []))
         if self.signaling.closed:
-            raise PkError("RTC 初始成员信息同步失败")
+            raise self.signaling.failure
         self._stage = "ready"
 
     async def _open_transport(self, addresses):
@@ -467,7 +441,8 @@ class RtcConnection:
         await self._opened.wait()
         if self._dtls_start_error is not None:
             raise PkError(
-                "RTC 安全连接启动失败（DTLS），详细原因已记录到日志") from self._dtls_start_error
+                f"RTC 安全连接启动失败（DTLS）："
+                f"{type(self._dtls_start_error).__name__}: {self._dtls_start_error}") from self._dtls_start_error
         if self.channel.readyState != "open":
             dtls = getattr(getattr(self.pc, "sctp", None), "transport", None)
             if getattr(dtls, "state", None) == "failed":

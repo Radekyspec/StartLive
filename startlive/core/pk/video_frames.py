@@ -3,7 +3,8 @@ from av import VideoFrame
 
 
 def packet_frame(packet, rectangle=None):
-    left, top, width, height = rectangle or (0, 0, packet.width, packet.height)
+    left, top, width, height = (
+        (0, 0, packet.width, packet.height) if rectangle is None else rectangle)
     fmt = packet.pixel_format
     if fmt not in ("bgra", "nv12"):
         raise ValueError("unsupported raw pixel format")
@@ -37,8 +38,8 @@ def packet_frame(packet, rectangle=None):
                 target[
                     y * plane.line_size:y * plane.line_size + row_bytes] = source[
                     offset + y * stride:offset + y * stride + row_bytes]
-    frame.colorspace = 5 if packet.colorspace == "ITU601" else 1
-    frame.color_range = 1 if packet.color_range == "MPEG" else 2
+    frame.colorspace = {"ITU601": 5, "ITU709": 1}[packet.colorspace]
+    frame.color_range = {"MPEG": 1, "JPEG": 2}[packet.color_range]
     return frame
 
 

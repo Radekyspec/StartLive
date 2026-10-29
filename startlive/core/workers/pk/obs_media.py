@@ -1,3 +1,4 @@
+from contextlib import ExitStack
 from time import perf_counter
 
 from startlive.core.exceptions import PkProtocolError
@@ -11,28 +12,30 @@ from startlive.core.workers.base import LongLiveWorker
 
 class ObsMediaWorker(LongLiveWorker):
     def __init__(self, presenter, buffers, /, *,
-                 connection_factory=create_media_connection, audio=True,
+                 audio=True,
                  video=True):
         super().__init__(name="OBS 原始媒体采集", presenter=presenter,
                          with_session=False)
         self.buffers = tuple(buffers)
-        self.connection_factory = connection_factory
         if not audio and not video:
             raise ValueError("At least one OBS capture stream must be enabled")
         self.audio = audio
         self.video = video
 
     def run(self, report_progress, *args, **kwargs):
-        pipe = self.connection_factory(cancelled=lambda: not self.is_running)
+        pipe = create_media_connection(cancelled=lambda: not self.is_running)
         shared = None
         stats_at = perf_counter()
-        try:
+        with ExitStack() as cleanup:
+            for buffer in reversed(self.buffers):
+                cleanup.callback(buffer.clear)
+            cleanup.callback(pipe.close)
             pipe.connect()
             select_capture(pipe, audio=self.audio, video=self.video)
             if report_progress:
                 report_progress("connected")
             while self.is_running:
-                packet = read_packet(pipe.read_exact)
+                packet = read_packet(pipe)
                 if isinstance(packet, SharedVideoSetup):
                     if not self.video:
                         continue
@@ -40,6 +43,7 @@ class ObsMediaWorker(LongLiveWorker):
                         raise PkProtocolError(
                             "Duplicate OBS shared memory setup")
                     shared = SharedVideoReader(packet.token)
+                    cleanup.callback(shared.close)
                     continue
                 if isinstance(packet, VideoNotice):
                     if not self.video:
@@ -63,9 +67,3 @@ class ObsMediaWorker(LongLiveWorker):
                              bytes_copied=shared.bytes_copied,
                              pool_allocations=shared.pool.allocations,
                              pool_misses=shared.pool.misses)
-        finally:
-            if shared is not None:
-                shared.close()
-            pipe.close()
-            for buffer in self.buffers:
-                buffer.clear()

@@ -40,9 +40,7 @@ class MediaBuffer:
             return self._video_crop
 
     @video_crop.setter
-    def video_crop(self, crop):
-        if not isinstance(crop, VideoCrop):
-            raise TypeError("expected VideoCrop")
+    def video_crop(self, crop: VideoCrop):
         with self._lock:
             self._video_crop = crop
 

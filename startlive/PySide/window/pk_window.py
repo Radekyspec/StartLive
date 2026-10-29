@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from startlive.PySide.interface_adapters.gui_dispatcher import GUIDispatcher
-from startlive.PySide.interface_adapters.pk.pk_presenter import PkPresenter
+from startlive.PySide.controllers.pk.session_controller import PkSessionController
 from startlive.core.constant.pk import PkMode, PkPhase
 from startlive.core.constant.pk_info import NativePkState
 from startlive.core.constant.ui import PK_WINDOW_FONT_SIZE_OFFSET_PT
@@ -29,6 +29,7 @@ from startlive.core.pk.states.display import PkRoundDisplay
 from startlive.core.pk.states.session import PkOptions
 from startlive.core.pk.trace import pk_trace
 from startlive.core.workers.worker_manager import WorkerManager
+from startlive.PySide.interface_adapters.pk.capture_presenter import PkCapturePresenter
 
 
 class PkWindow(QDialog):
@@ -43,17 +44,17 @@ class PkWindow(QDialog):
     disconnectRequested = Signal()
     continuousChanged = Signal(bool)
 
-    def __init__(self, parent=None, *, session_factory=None,
-                 identity_provider=None, provider_preflight=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
         self._apply_font_offset()
         self.setWindowTitle("PK")
         self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
         self.setSizeGripEnabled(False)
         self._dispatcher = GUIDispatcher()
-        # OBS, RTC, push and HTTP ACK remain alive alongside short API tasks.
-        self._workers = WorkerManager(self._dispatcher, max_workers=6)
+        # OBS, RTC, push and preview conversion coexist with short API tasks.
+        self._workers = WorkerManager(self._dispatcher, max_workers=7)
         self._preview_worker = None
+        self._frame_preview_worker = None
         self._classic_audio = False
         self._classic_capture_check = None
         self._preview_owner = object()
@@ -73,16 +74,11 @@ class PkWindow(QDialog):
         self._preview_retry = None
         self._shutdown = False
         self._session = None
-        self._session_factory = session_factory
         self.provider_readiness = None
-        self._provider_preflight = provider_preflight
-        self._identity_provider = identity_provider or (
-            lambda: current_identity())
-        if session_factory is not None:
-            self.startRequested.connect(self._start_session)
-            self.stopRequested.connect(self._request_stop)
-            self.disconnectRequested.connect(self._request_disconnect)
-            self.continuousChanged.connect(self._change_continuous)
+        self.startRequested.connect(self._start_session)
+        self.stopRequested.connect(self._request_stop)
+        self.disconnectRequested.connect(self._request_disconnect)
+        self.continuousChanged.connect(self._change_continuous)
         QApplication.instance().aboutToQuit.connect(self.shutdown)
         self._session_enabled = False
         self._active = False
@@ -206,7 +202,7 @@ class PkWindow(QDialog):
         details_scroll.setSizePolicy(QSizePolicy.Policy.Expanding,
                                      QSizePolicy.Policy.Ignored)
         layout.addWidget(details_scroll, 1)
-        self.set_session_available(session_factory is not None,
+        self.set_session_available(True,
                                    "选择 PK 模式后开始，或等待对方邀请。")
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
@@ -220,7 +216,7 @@ class PkWindow(QDialog):
     def _ensure_video_ui(self):
         if self.local_view is not None:
             return
-        from startlive.PySide.interface_adapters.pk.provider_readiness import \
+        from startlive.PySide.controllers.pk.provider_readiness import \
             VideoProviderReadiness
         from startlive.PySide.widgets.pk_crop_selector import PkCropSelector
         from startlive.PySide.widgets.pk_media_view import PkMediaView
@@ -228,7 +224,7 @@ class PkWindow(QDialog):
         from startlive.core.pk.states.mute import RtcMuteState
 
         self.provider_readiness = VideoProviderReadiness(
-            self._workers, self._provider_preflight)
+            self._workers)
         self._publisher_available = {"audio": False, "video": False}
         self._publisher_mute_states = {media: RtcMuteState() for media in
                                        ("audio", "video")}
@@ -329,11 +325,9 @@ class PkWindow(QDialog):
         if not self._classic_audio or self._shutdown or self._preview_worker is not None:
             return
         from startlive.core.workers.pk.obs_media import ObsMediaWorker
-        worker = ObsMediaWorker(PkPresenter(
-            finished=lambda: self._preview_stopped(worker),
-            failed=lambda error: self._preview_failed(error, worker),
-            progress=lambda _: self._preview_connected(worker)),
-            (self.local_buffer, self.publish_buffer), audio=True, video=False)
+        worker = ObsMediaWorker(
+            None, (self.local_buffer, self.publish_buffer), audio=True, video=False)
+        worker.add_presenter(PkCapturePresenter(self, worker))
         self._preview_worker = worker
         self.audio_timer.start()
         try:
@@ -400,7 +394,7 @@ class PkWindow(QDialog):
                     or self._session is not previous):
                 self._cancel_classic_capture_check()
                 return
-            if self._identity_provider() != identity:
+            if current_identity() != identity:
                 raise PkError("账号或直播间已变更，已取消经典 PK 采集检查")
             facts = self._output_readiness(PkMode.TRADITIONAL)
             if facts.output_ready is not True or facts.live_output_active is not True:
@@ -420,8 +414,8 @@ class PkWindow(QDialog):
     def _request_remote_mute(self, media, muted):
         # clicked has already toggled the checkbox. Keep the applied state
         # until the controller has successfully queued the SDK operation.
-        rtc = getattr(self._session, "rtc", None)
-        business_mute = getattr(rtc, "business_mute", None)
+        rtc = self._session.rtc if self._session is not None else None
+        business_mute = rtc.business_mute if rtc is not None else None
         if business_mute is not None:
             self.set_remote_mute_state(**business_mute.remote)
         self._session_action("set_remote_muted", media, muted)
@@ -452,17 +446,15 @@ class PkWindow(QDialog):
 
     def _trace(self, event, **fields):
         owner = self._session
-        identity = getattr(owner, "identity", None)
-        round_state = getattr(owner, "round_state", None)
-        join = getattr(owner, "join_event", None)
-        pk_trace(event, **({"trace_id": getattr(owner, "trace_id", None),
-                            "uid": getattr(identity, "uid", None),
-                            "room_id": getattr(identity, "room_id", None),
-                            "pk_id": getattr(round_state, "round_id", None),
-                            "biz_session_id": getattr(round_state,
-                                                      "biz_session_id", None),
-                            "rtc_channel_id": getattr(join, "rtc_channel_id",
-                                                      None),
+        identity = owner.identity if owner is not None else None
+        round_state = owner.round_state if owner is not None else None
+        join = owner.join_event if owner is not None else None
+        pk_trace(event, **({"trace_id": owner.trace_id if owner is not None else None,
+                            "uid": identity.uid if identity is not None else None,
+                            "room_id": identity.room_id if identity is not None else None,
+                            "pk_id": round_state.round_id if round_state is not None else None,
+                            "biz_session_id": round_state.biz_session_id if round_state is not None else None,
+                            "rtc_channel_id": join.rtc_channel_id if join is not None else None,
                             "mode": self.mode.currentData(),
                             "session_enabled": self._session_enabled} | fields))
 
@@ -497,13 +489,10 @@ class PkWindow(QDialog):
         if self._settings_dialog is None:
             from startlive.PySide.window.pk_settings_dialog import \
                 PkSettingsDialog
-            from startlive.PySide.interface_adapters.pk.settings_controller import \
+            from startlive.PySide.controllers.pk.settings_controller import \
                 PkSettingsController
             self._settings_dialog = PkSettingsDialog(self)
-            self._settings_controller = PkSettingsController(
-                self._workers, self._settings_dialog,
-                identity_provider=self._identity_provider,
-                confirmed=self._settings_confirmed)
+            self._settings_controller = PkSettingsController(self)
             self._settings_dialog.changeRequested.connect(
                 self._settings_controller.change)
             self._settings_dialog.refreshRequested.connect(
@@ -518,9 +507,7 @@ class PkWindow(QDialog):
         if self._encoder_dialog is None:
             from startlive.PySide.widgets.pk_encoder_settings import \
                 PkEncoderSettingsWidget
-            self._encoder_dialog = PkEncoderSettingsWidget(
-                self, manager=self._workers,
-                is_active=lambda: self._connection_active)
+            self._encoder_dialog = PkEncoderSettingsWidget(self)
             self._encoder_dialog.finished.connect(self._encoder_dialog_finished)
         self._encoder_dialog.show()
         self._encoder_dialog.raise_()
@@ -623,12 +610,12 @@ class PkWindow(QDialog):
             return True
         if self.provider_readiness.waiting(self):
             return False
-        identity = self._identity_provider()
+        identity = current_identity()
 
         def finished():
             if self._shutdown or not self._session_enabled:
                 return
-            if self._identity_provider() != identity:
+            if current_identity() != identity:
                 raise PkError("账号或直播间已变更，请重新发起 PK 操作")
             self._refresh_session_controls()
             resume()
@@ -652,8 +639,7 @@ class PkWindow(QDialog):
             return
         if self._controls_busy() or (
                 self._session is not None and not self._session.closed
-                and getattr(self._session, "invitation_only",
-                            False) and not self._idle_listener()):
+                and self._session.invitation_only and not self._idle_listener()):
             self._trace("ui.session_start.ignored", reason="current_owner_busy")
             return
         try:
@@ -662,7 +648,7 @@ class PkWindow(QDialog):
                                                   options,
                                                   invitation_only=invitation_only)):
                 return
-            identity = self._identity_provider()
+            identity = current_identity()
             if invitation_only:
                 self._check_reception_account(identity)
                 if self._invitation_reception is False:
@@ -682,7 +668,7 @@ class PkWindow(QDialog):
                                        self._session)
                 self._session.close()
                 self._session.tick()
-                if self._session.manager.busy:
+                if self._session.busy:
                     self._trace("ui.session_start.deferred",
                                 reason="previous_owner_retiring")
                     self._refresh_session_controls()
@@ -706,11 +692,8 @@ class PkWindow(QDialog):
         owner = None
         try:
             self._check_reception_account(identity)
-            owner = self._session_factory(self._workers, identity, options,
-                                          self,
-                                          readiness=self._output_readiness,
-                                          provider_readiness=self.provider_readiness,
-                                          invitation_only=invitation_only)
+            owner = PkSessionController(self, identity, options,
+                                        invitation_only=invitation_only)
             self._session = owner
             self._continuous_editable = True
             self._trace("ui.session_created")
@@ -733,10 +716,10 @@ class PkWindow(QDialog):
             self._pending_start = None
             self._refresh_session_controls()
             return
-        if previous.manager.busy:
+        if previous.busy:
             return
         try:
-            if self._identity_provider() != identity:
+            if current_identity() != identity:
                 raise PkError("登录账号已改变，待启动的 PK 已取消，请重新选择")
             self._pending_start = None
             self._create_session(options, identity,
@@ -818,13 +801,13 @@ class PkWindow(QDialog):
                         reason="continuous_not_supported")
             return
         if (self._session is not None and not self._session.closed
-                and not getattr(self._session, "invitation_only", False)):
+                and not self._session.invitation_only):
             self._session_action("set_continuous", enabled)
 
     def _request_invitation_wait(self):
         self._trace("ui.invitation_wait.requested")
         if (
-                self._session_factory is not None and self._session_enabled and not self._controls_busy()
+                self._session_enabled and not self._controls_busy()
                 and self.mode.currentData() != PkMode.TRADITIONAL):
             self._start_session(PkOptions(self.mode.currentData()),
                                 invitation_only=True)
@@ -911,11 +894,11 @@ class PkWindow(QDialog):
                 self._publisher_available[media] and not
                 self._publisher_mute_states[media].pending)
         if hasattr(self, "remote_video_mute"):
-            rtc = getattr(self._session, "rtc", None)
+            rtc = self._session.rtc if self._session is not None else None
             remote_ready = (
-                    self._session_enabled and self._connection_active and bool(
-                getattr(getattr(rtc, "business_mute", None), "initialized",
-                        False)))
+                self._session_enabled and self._connection_active
+                and rtc is not None and rtc.business_mute is not None
+                and rtc.business_mute.initialized)
             self.remote_video_mute.setVisible(
                 self.mode.currentData() in (PkMode.VIDEO_LINK, PkMode.VIDEO))
             self.remote_video_mute.setEnabled(remote_ready)
@@ -989,9 +972,11 @@ class PkWindow(QDialog):
             and self.mode.currentData() != PkMode.TRADITIONAL)
         self.convert_pk_button.setEnabled(
             self._session_enabled and self._connection_active
-            and self._session is not None and self._session.round_state.state == NativePkState.IDLE
+            and self._session is not None
+            and self._session.options.mode == PkMode.VIDEO_LINK
+            and self._session.round_state.state == NativePkState.IDLE
             and self._session.rtc.publisher_ready
-            and not getattr(self._session.flow, "starting_pk", False))
+            and not self._session.flow.starting_pk)
         video = self.mode.currentData() == PkMode.VIDEO
         if self._session is None or self._session.closed or self._idle_listener():
             self.continuous.setEnabled(
@@ -1060,7 +1045,7 @@ class PkWindow(QDialog):
                 if not self._check_video_provider(options.mode,
                                                   self._request_start):
                     return
-                identity = self._identity_provider()
+                identity = current_identity()
             except Exception as error:
                 self._trace("ui.candidate_search.failed",
                             error_type=type(error).__name__, error=str(error))
@@ -1076,9 +1061,8 @@ class PkWindow(QDialog):
             self._candidate_dialog = dialog
             self._candidate_start = None
             if self._idle_listener():
-                self._search_listener = (self._session, getattr(self._session,
-                                                                "invitation_display_allowed",
-                                                                True))
+                self._search_listener = (
+                    self._session, self._session.invitation_display_allowed)
                 self._apply_reception(self._session, False)
             self._refresh_session_controls()
             dialog.candidateSelected.connect(
@@ -1105,7 +1089,7 @@ class PkWindow(QDialog):
         try:
             if selected is not None and not self._shutdown and self._session_enabled:
                 options, identity = selected
-                if self._identity_provider() != identity:
+                if current_identity() != identity:
                     raise PkError("登录账号已改变，请重新查找 PK 对手")
                 self.startRequested.emit(options)
         except Exception as error:
@@ -1245,12 +1229,9 @@ class PkWindow(QDialog):
         self._media_timer.start()
         self.audio_timer.start()
         self._trace("ui.preview.requested", enabled=True)
-        presenter = PkPresenter(
-            finished=lambda: self._preview_stopped(worker),
-            failed=lambda error: self._preview_failed(error, worker),
-            progress=lambda _: self._preview_connected(worker))
         worker = self._preview_worker = ObsMediaWorker(
-            presenter, (self.local_buffer, self.publish_buffer))
+            None, (self.local_buffer, self.publish_buffer))
+        worker.add_presenter(PkCapturePresenter(self, worker))
         try:
             self._preview_future = self._workers.submit(self._preview_worker,
                                                         on_progress=True)
@@ -1298,10 +1279,35 @@ class PkWindow(QDialog):
             self._session.tick()
         self._refresh_session_controls()
         self._drain_pending_start()
-        # Cancellation does not trigger prepare_success_view in WorkerManager.
-        if self._preview_future and self._preview_future.done() and self._preview_worker and not self._preview_worker.is_running:
-            self._preview_stopped(self._preview_worker)
         self._drain_classic_capture_check()
+
+    def _request_frame_preview(self, view, generation, packet, rectangle, pixels):
+        if self._shutdown:
+            return
+        if self._frame_preview_worker is None:
+            from startlive.core.workers.pk.frame_preview import PkFramePreviewWorker
+            from startlive.PySide.interface_adapters.pk.frame_preview_presenter import PkFramePreviewPresenter
+            worker = PkFramePreviewWorker(None)
+            worker.add_presenter(PkFramePreviewPresenter(self, worker))
+            self._frame_preview_worker = worker
+            try:
+                self._workers.submit(worker, on_progress=True)
+            except Exception:
+                self._frame_preview_worker = None
+                raise
+        self._frame_preview_worker.request(
+            0 if view is self.local_view else 1, generation, packet, rectangle, pixels)
+
+    def _frame_preview_finished(self, worker, error=None):
+        if worker is not self._frame_preview_worker:
+            return
+        self._frame_preview_worker = None
+        if self._shutdown:
+            return
+        for view in (self.local_view, self.remote_view):
+            view._preview_busy = False
+            if error is not None:
+                view._preview_conversion_failed(error)
 
     def _refresh_media(self):
         for buffer, view in ((self.local_buffer, self.local_view),
@@ -1390,5 +1396,8 @@ class PkWindow(QDialog):
         self.timer.stop()
         if self.provider_readiness is not None:
             self.provider_readiness.close()
+        if self._frame_preview_worker is not None:
+            self._frame_preview_worker.stop()
+            self._frame_preview_worker = None
         self._dispatcher.close()
         self._workers.shutdown(wait=False)

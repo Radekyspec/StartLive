@@ -22,28 +22,25 @@ def _number(data, key, *, bits=64):
         value = int(value)
     if type(value) is not int or not -(1 << (bits - 1)) <= value < 1 << (
             bits - 1):
-        raise PkProtocolError("PK 状态的数值格式无效")
+        raise PkProtocolError(f"PK 状态 {key} 的数值格式无效：{value!r}")
     return value
 
 
 def _text(data, key):
     value = data.get(key, "")
     if not isinstance(value, str):
-        raise PkProtocolError("PK 状态的文本格式无效")
+        raise PkProtocolError(f"PK 状态 {key} 必须为文本，实际为 {type(value).__name__}")
     return value
 
 
 def _optional_number(data, key, *, bits=64):
-    if key not in data:
+    if key not in data or data[key] is None:
         return None
     value = data[key]
     # Native member DTOs also accept finite doubles and truncate them.
     if type(value) is float and isfinite(value):
         value = int(value)
-    try:
-        return _number({key: value}, key, bits=bits)
-    except PkProtocolError:
-        return None
+    return _number({key: value}, key, bits=bits)
 
 
 def _member(data, *, classic=False):
@@ -98,8 +95,7 @@ def parse_pk_info(data):
                               _number(match, "match_max_time"),
                               _number(match, "match_end_time")),
                   _number(data, "timestamp"), deepcopy(data),
-                  members=tuple(_member(member) for member in members if
-                                isinstance(member, dict)),
+                  members=tuple(_member(member) for member in members),
                   countdown_seconds=_countdown(numbers["status"],
                                                _optional_number(data,
                                                                 "timestamp"),
@@ -129,8 +125,8 @@ def classic_pk_info(data, *, auto_matching=False, cached_timestamp=0):
     end = _optional_number(data, "pk_frozen_time")
     sprint_start = _optional_number(data, "pk_countdown")
     punishment = data.get("video_punish")
-    duration = _optional_number(punishment, "duration") if isinstance(
-        punishment, dict) else None
+    duration = (None if punishment is None else
+                _optional_number(punishment, "duration"))
     punish_end = timestamp + duration if duration is not None else None
     info = PkInfo(3, PkBasicInfo(pk_id=_number(data, "pk_id"),
                                  status=_number(data, "status", bits=32),
@@ -148,7 +144,7 @@ def classic_pk_info(data, *, auto_matching=False, cached_timestamp=0):
                   timestamp, deepcopy(data), legacy=True,
                   members=tuple(_member(data[key], classic=True) for key in
                                 ("init_info", "match_info")
-                                if isinstance(data.get(key), dict)),
+                                if data.get(key) is not None),
                   countdown_seconds=None if auto_matching else _countdown(
                       _number(data, "status", bits=32),
                       _optional_number(data, "timestamp"), end, punish_end))

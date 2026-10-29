@@ -12,7 +12,7 @@ class PkSearchCandidatesWorker(PkRequestWorker):
                          fields=video_search_fields(search, page=page))
 
     def parse_result(self, result):
-        page = parse_candidate_page(result.data,
+        page = parse_candidate_page(result,
                                     requested_type=int(self.fields["type"]))
         if page.search_type != 1:
             raise PkProtocolError("返回的候选人不属于指定视频 PK 搜索")

@@ -37,13 +37,12 @@ def _emit_state_changed(bridge_ref):
 class PkEncoderSettingsWidget(QDialog):
     """Four editable preferences; active RTC sessions retain their snapshot."""
 
-    def __init__(self, parent=None, *, manager, is_active=lambda: False):
+    def __init__(self, parent):
         super().__init__(parent)
         self.setWindowTitle("PK 视频编码设置")
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.resize(560, 450)
-        self._is_active = is_active
-        self._manager = manager
+        self._window = parent
         self._closed = False
         self._probe_worker = self._detection = None
         self._detect_generation = 0
@@ -200,7 +199,7 @@ class PkEncoderSettingsWidget(QDialog):
             progress=partial(self._on_probe_progress, generation))
         self._probe_worker = ScanPkEncodersWorker(presenter)
         try:
-            self._detection = self._manager.submit(self._probe_worker,
+            self._detection = self._window._workers.submit(self._probe_worker,
                                                    on_progress=True)
         except Exception as error:
             self._on_probe_failed(generation, error)
@@ -264,7 +263,7 @@ class PkEncoderSettingsWidget(QDialog):
         self._detection = None
         self.codec_refresh.setEnabled(True)
         self.codec_refresh.setText("重新检测可用编码器")
-        self.codec_notice.setText(f"检测失败：{type(error).__name__}")
+        self.codec_notice.setText(f"检测失败：{type(error).__name__}: {error}")
 
     @Slot(str)
     def _on_state_changed(self, _source):
@@ -297,7 +296,7 @@ class PkEncoderSettingsWidget(QDialog):
             self._save_timer.start()
             self.message.setText("设置已更新，正在自动保存…" +
                                  (
-                                     " 下次视频连接生效。" if self._is_active() else ""))
+                                     " 下次视频连接生效。" if self._window._connection_active else ""))
 
     @Slot()
     def _persist(self):
@@ -319,7 +318,7 @@ class PkEncoderSettingsWidget(QDialog):
         self._persist()
         app_state.pk_encoder_runtime.unsubscribe(self._runtime_state_listener)
         if self._detection is not None:
-            self._manager.cancel(self._detection)
+            self._window._workers.cancel(self._detection)
 
     def done(self, result):
         self._cleanup()

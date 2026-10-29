@@ -11,4 +11,4 @@ class FetchPkUserSettingsWorker(PkRequestWorker):
 
     def parse_result(self, result):
         require_current_identity(self.identity)
-        return parse_user_settings(result.data)
+        return parse_user_settings(result)

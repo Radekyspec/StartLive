@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from startlive.core.exceptions import PkProtocolError
+
 from startlive.core.pk.states.info import PkInfo
-from startlive.core.pk.states.session import PkResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,19 @@ class PkInvitationEvent(PkEvent):
     invitation_timeout: int | None
     trace_id: str | None = field(repr=False)
     user_info: dict[str, Any] = field(repr=False)
+
+    @property
+    def handle_source(self) -> int:
+        if self.source is None:
+            raise PkProtocolError("邀请缺少来源信息")
+        # Handle consumes the signed low 32 bits of the incoming source value.
+        source = self.source & 0xFFFFFFFF
+        return source - (1 << 32) if source >= 1 << 31 else source
+
+    @property
+    def selected_peer_uid(self) -> int:
+        # Preserve native preference: a positive peer UID, otherwise initiator.
+        return self.peer_search if self.peer_search and self.peer_search > 0 else self.initiator or 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,7 +93,7 @@ class PkStreamControlEvent(PkEvent):
     biz_session_id: str | None
     rtc_channel_id: str | None
     uid: int | None
-    stream_control: Any = field(repr=False)
+    stream_control: dict[str, Any] = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,45 +133,3 @@ class PkBattleEndEvent(PkRoundEvent):
 class PkMatchTimeoutEvent(PkEvent):
     """Matching-family timeout; the native payload has no round/attempt ID."""
     battle_type: int = 0
-
-
-@dataclass(frozen=True, slots=True)
-class PkInvitationContext:
-    """Verified dialog inputs; mapping from incoming events is still separate."""
-    peer_search: int
-    fallback_peer_uid: int
-    biz_session_id: str = field(repr=False)
-    source: int
-    trace_id: str = field(repr=False)
-    raw: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
-
-    @property
-    def selected_peer_uid(self) -> int:
-        """Preserve native invitation preference: positive peer UID first, else initiator."""
-        return self.peer_search if self.peer_search > 0 else self.fallback_peer_uid
-
-
-@dataclass(frozen=True, slots=True)
-class PkInvitationEligibility:
-    """None means the local eligibility decision has not been established."""
-    allowed: bool | None
-    reason: str = field(default="", repr=False)
-
-
-@dataclass(frozen=True, slots=True)
-class PkJoinEligibility:
-    """Separate from invitation eligibility: JOIN has its own preceding gates."""
-    allowed: bool | None
-    reason: str = field(default="", repr=False)
-
-
-@dataclass(frozen=True, slots=True)
-class PkLocalQuit:
-    reason: int
-    toast: str = field(repr=False)
-
-
-@dataclass(frozen=True, slots=True)
-class PkHandleResult:
-    response: PkResult = field(repr=False)
-    join_event: PkJoinEvent | None = field(repr=False)

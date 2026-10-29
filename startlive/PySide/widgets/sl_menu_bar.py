@@ -9,8 +9,6 @@ from PySide6.QtGui import QActionGroup, QDesktopServices
 from PySide6.QtWidgets import QMenuBar, QMenu
 from PySide6.QtWidgets import QMessageBox
 
-from startlive.PySide.interface_adapters.pk.session_controller import \
-    PkSessionController
 from startlive.PySide.log import get_logger, get_log_path
 from startlive.core import app_state
 from startlive.core.cache import cache_base_dir, del_cache_user
@@ -94,8 +92,7 @@ class StartLiveMenuBar(QMenuBar):
         if self._pk_window is None or self._pk_window._shutdown:
             if self._pk_window is not None:
                 self._pk_window.deleteLater()
-            self._pk_window = PkWindow(self,
-                                       session_factory=PkSessionController)
+            self._pk_window = PkWindow(self)
         self._pk_window.show()
         self._pk_window.raise_()
         self._pk_window.activateWindow()

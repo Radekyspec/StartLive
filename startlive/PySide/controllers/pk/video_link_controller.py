@@ -2,7 +2,6 @@
 from startlive.core.constant.pk import PkPhase
 from startlive.core.constant.pk_info import NativePkState
 from startlive.core.exceptions import PkError
-from startlive.core.pk.pk_info import queried_pk_info
 from startlive.core.pk.states.events import PkInvitationEvent
 from startlive.core.workers.pk.video_link import (
     PkConnectWorker, PkCancelConnectWorker, PkConnectionStartWorker,
@@ -35,13 +34,8 @@ class PkVideoLinkController:
         worker.request_allowed = lambda: not self.session.closed
         self.attempt.submit(self.session.manager, worker)
 
-    def _connected(self, result):
+    def _connected(self, value):
         self.connecting_request = False
-        data = result.data
-        value = data.get("biz_session_id") if isinstance(data, dict) else None
-        if not isinstance(value, str) or not value:
-            self._failed(PkError("Connect 响应缺少连线会话 ID"))
-            return
         self.biz_session_id = value
         self.session.round_state.biz_session_id = value
         self.refresh_list()
@@ -98,8 +92,12 @@ class PkVideoLinkController:
         if event.target_uid != session.expected_peer_uid:
             return
         if self.connecting_request:
-            if len(self.pending_operations) < 8:
-                self.pending_operations.append(event)
+            if len(self.pending_operations) >= 8:
+                self._failed(PkError(
+                    f"等待 Connect 响应时操作通知积压已达 8 条，无法继续确认连线"
+                    f"（新通知 operation_type={event.operation_type}）"))
+                return
+            self.pending_operations.append(event)
             return
         if not self.biz_session_id or event.biz_session_id != self.biz_session_id:
             return
@@ -121,13 +119,16 @@ class PkVideoLinkController:
             expected = invite.biz_session_id if invite is not None else None
         else:
             if self.connecting_request:
-                if len(self.pending_joins) < 8 or event.biz_session_id in self.pending_joins:
-                    self.pending_joins[event.biz_session_id] = event
+                if len(self.pending_joins) >= 8 and event.biz_session_id not in self.pending_joins:
+                    self._failed(PkError(
+                        "等待 Connect 响应时已积压 8 个不同会话的 JOIN，无法继续确认连线"))
+                    return False
+                self.pending_joins[event.biz_session_id] = event
                 return False
             expected = self.biz_session_id
         if not expected or event.biz_session_id != expected:
             return False
-        result = session.join.handle(event)
+        result = session.rtc.handle_join(event)
         if result:
             self.phase = PkPhase.ACTIVE
             self.refresh_list()
@@ -146,7 +147,7 @@ class PkVideoLinkController:
 
     def _cancel(self):
         worker = PkCancelConnectWorker(self.attempt.presenter(
-            lambda _: self._cancelled(), self._failed), self.session.identity,
+            lambda _=None: self._cancelled(), self._failed), self.session.identity,
             self.candidate.uid)
         worker.request_allowed = lambda: not self.session.closed
         self.attempt.submit(self.session.manager, worker)
@@ -166,13 +167,19 @@ class PkVideoLinkController:
             return
         self.list_busy = True
 
-        def done(_):
+        def done(_=None):
             self.list_busy = False
             if self.list_again and not self.session.closed:
                 self.list_again = False
                 self.refresh_list()
 
-        worker = PkInteractListWorker(self.attempt.presenter(done, done),
+        def failed(error):
+            try:
+                self.session._error(error)
+            finally:
+                done()
+
+        worker = PkInteractListWorker(self.attempt.presenter(done, failed),
                                       self.session.identity)
         self.attempt.submit(self.session.manager, worker)
 
@@ -185,14 +192,13 @@ class PkVideoLinkController:
             raise PkError("请在视频连线就绪且没有 PK 回合时转为 PK")
         self.starting_pk = True
 
-        def loaded(result):
+        def loaded(info):
             self.starting_pk = False
             if session.closed or session.stopping:
                 return
             try:
-                info = queried_pk_info(result.data)
-                if info.basic.pk_id <= 0 or info.basic.biz_session_id != session.join_event.biz_session_id:
-                    raise PkError("转 PK 响应与当前连线不符")
+                if session.join_event is None or info.basic.biz_session_id != session.join_event.biz_session_id:
+                    raise PkError("转 PK 响应到达时连线已改变")
                 if info.basic.pk_id == session.round_state.last_ended_round_id:
                     return
                 if session.round_state.state == NativePkState.IDLE:

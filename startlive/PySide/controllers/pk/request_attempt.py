@@ -1,5 +1,5 @@
 """Dispatcher-owned request generation, independent of worker admission keys."""
-from .pk_presenter import PkPresenter
+from startlive.core.workers.base.CallbackPresenter import CallbackPresenter
 
 
 class RequestAttempt:
@@ -14,13 +14,13 @@ class RequestAttempt:
     def presenter(self, finished, failed, *, stale=None):
         serial = self.serial
 
-        def deliver(callback, value):
+        def deliver(callback, *args, **kwargs):
             if serial == self.serial:
-                callback(value)
+                callback(*args, **kwargs)
             elif stale is not None:
                 stale(serial)
 
-        return PkPresenter(finished=lambda value: deliver(finished, value),
+        return CallbackPresenter(finished=lambda *args, **kwargs: deliver(finished, *args, **kwargs),
                            failed=lambda error: deliver(failed, error))
 
     def submit(self, manager, worker):
@@ -28,11 +28,11 @@ class RequestAttempt:
         # starts after retire/invalidate must not send: the room may already
         # be closed. Compose with any caller-supplied send gate.
         serial = self.serial
-        previous = getattr(worker, "request_allowed", None)
+        previous = worker.request_allowed
 
         def allowed():
             return serial == self.serial and (
-                previous() if previous is not None else True)
+                previous is None or previous())
 
         worker.request_allowed = allowed
         try:

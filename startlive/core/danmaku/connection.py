@@ -16,12 +16,11 @@ class DanmakuConnection:
 
     def __init__(self, manager, identity, *, ready, event, failed,
                  state_changed=None,
-                 settings=None, push_factory=DanmakuWorker,
-                 ack_factory=DanmakuAckWorker):
+                 settings=None, push_factory=DanmakuWorker):
         self.manager, self.identity = manager, identity
         self.ready, self.event, self.failed, self.state_changed = ready, event, failed, state_changed
         self.settings = settings or settings_for_identity(identity)
-        self.push_factory, self.ack_factory = push_factory, ack_factory
+        self.push_factory = push_factory
         self.running = self.authenticated = False
         self._generation = 0
         self._ready_called = False
@@ -59,7 +58,7 @@ class DanmakuConnection:
                 self.event(value)
 
         try:
-            ack = self.ack_factory(
+            ack = DanmakuAckWorker(
                 CallbackPresenter(finished=unexpected_finish, failed=failure),
                 self.identity)
             self._workers.append(ack)

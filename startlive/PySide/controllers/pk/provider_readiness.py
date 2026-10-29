@@ -10,8 +10,8 @@ from startlive.core.workers.pk.provider_preflight import \
 
 
 class VideoProviderReadiness:
-    def __init__(self, manager, check=None):
-        self.manager, self.check = manager, check
+    def __init__(self, manager):
+        self.manager = manager
         self.ready = False
         self._worker = None
         self._waiters = {}
@@ -32,7 +32,7 @@ class VideoProviderReadiness:
             return
         worker = PkProviderPreflightWorker(CallbackPresenter(
             finished=lambda: self._completed(worker),
-            failed=lambda error: self._completed(worker, error)), self.check)
+            failed=lambda error: self._completed(worker, error)))
         self._worker = worker
         try:
             self.manager.submit(worker)
@@ -66,7 +66,8 @@ class VideoProviderReadiness:
                     # One observer must not strand other owners after the check
                     # has completed and there is no worker left to wake them.
                     pk_trace("provider.callback.failed",
-                             error_type=type(callback_error).__name__)
+                             error_type=type(callback_error).__name__,
+                             error=str(callback_error))
 
     @staticmethod
     def _deliver(ready, failed, *, error=None):

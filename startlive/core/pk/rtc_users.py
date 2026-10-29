@@ -7,10 +7,13 @@ from startlive.core.pk.states.peers import RtcStream, RtcUserEvent, RtcUserState
 
 
 def _stream(value):
-    value = value if isinstance(value, dict) else {}
+    # Protobuf decoding guarantees field types; only absent fields default.
     return RtcStream(
-        **{key: value[key] for key in RtcStream.__dataclass_fields__ if
-           key in value})
+        video=value.get("video", False), audio=value.get("audio", False),
+        audio_muted=value.get("audio_muted", False),
+        video_muted=value.get("video_muted", False),
+        spatial_layers=value.get("spatial_layers", 0),
+        temporal_layers=value.get("temporal_layers", 0))
 
 
 class RtcUserRegistry:
@@ -36,7 +39,7 @@ class RtcUserRegistry:
         if uid in self.users:
             return None
         state = RtcUserState(uid, user.get("role", 0), "stream" in user,
-                             _stream(user.get("stream")), deepcopy(user))
+                             _stream(user.get("stream", {})), deepcopy(user))
         self.users[uid] = state
         self.emit(RtcUserEvent("joined", uid))
         return state
@@ -52,7 +55,7 @@ class RtcUserRegistry:
             uid = event.get("uid", 0)
             state = self.users.get(uid) or self._join({"uid": uid})
             updated = replace(state, published=True,
-                              stream=_stream(event.get("stream")))
+                              stream=_stream(event.get("stream", {})))
             self.users[uid] = updated
             if not state.published:
                 self.emit(RtcUserEvent("published", uid, updated.stream))

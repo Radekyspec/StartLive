@@ -3,5 +3,5 @@ from time import time_ns
 from uuid import uuid4
 
 
-def new_trace_id(*, clock_ns=time_ns, uuid_factory=uuid4) -> str:
-    return f"PC_LINK:{str(uuid_factory()).lower()}:{clock_ns() // 1_000_000}"
+def new_trace_id() -> str:
+    return f"PC_LINK:{str(uuid4()).lower()}:{time_ns() // 1_000_000}"

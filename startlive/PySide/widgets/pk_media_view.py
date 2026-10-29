@@ -1,6 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
 from math import ceil
-from threading import local
 from time import monotonic, perf_counter
 
 from PySide6.QtCore import QEvent, QRectF, Qt, QTimer, Signal
@@ -12,9 +10,6 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from startlive.core.constant.pk_media import PK_VIEW_AUDIO_BYTES_PER_SECOND, \
     PK_VIEW_AUDIO_PREFILL_BYTES
 from startlive.core.pk.trace import pk_trace
-
-_preview_context = local()
-
 
 class VideoSurface(QLabel):
     """Paint directly from the source rectangle, without intermediate rasters."""
@@ -46,11 +41,10 @@ class VideoSurface(QLabel):
 
 class PkMediaView(QWidget):
     imageChanged = Signal(object)
-    _previewReady = Signal(object, int)
     AUDIO_BYTES_PER_SECOND = PK_VIEW_AUDIO_BYTES_PER_SECOND
     AUDIO_PREFILL_BYTES = PK_VIEW_AUDIO_PREFILL_BYTES
 
-    def __init__(self, parent=None, *, title):
+    def __init__(self, parent, *, title):
         super().__init__(parent)
         self.title = QLabel(title)
         self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -72,10 +66,8 @@ class PkMediaView(QWidget):
         self._image = None
         self._image_is_cropped = False
         self._preview_packet = None
-        self._preview_executor = None
         self._preview_busy = False
         self._preview_generation = 0
-        self._previewReady.connect(self._apply_preview)
         self._crop = None
         self.video.installEventFilter(self)
         self._sink = None
@@ -122,7 +114,7 @@ class PkMediaView(QWidget):
 
     def _request_preview(self):
         packet = self._preview_packet
-        if packet is None or self._preview_busy or not self.isVisible():
+        if packet is None or self._preview_busy or not self.isVisible() or self.parent()._shutdown:
             return
         # Read QWidget geometry on the GUI thread. Workers receive only values.
         bounds = self.video.contentsRect()
@@ -131,60 +123,19 @@ class PkMediaView(QWidget):
                   max(1, ceil(bounds.height() * dpr)))
         rectangle = self._crop.rectangle(packet.width,
                                          packet.height) if self._crop else None
-        if self._preview_executor is None:
-            executor = self._preview_executor = ThreadPoolExecutor(
-                max_workers=1, thread_name_prefix="PK-preview")
-            self.destroyed.connect(
-                lambda: executor.shutdown(wait=False, cancel_futures=True))
         self._preview_busy = True
-        generation = self._preview_generation
-        future = self._preview_executor.submit(self._convert_preview, packet,
-                                               rectangle, pixels)
+        try:
+            self.parent()._request_frame_preview(
+                self, self._preview_generation, packet, rectangle, pixels)
+        except Exception as error:
+            self._preview_conversion_failed(error)
 
-        def done(result):
-            try:
-                images = result.result()
-            except Exception as error:
-                pk_trace("video.preview.failed", error=error)
-                images = None
-            try:
-                self._previewReady.emit(images, generation)
-            except RuntimeError:
-                pass  # Widget already destroyed; no native memory is borrowed.
-
-        future.add_done_callback(done)
-
-    @staticmethod
-    def _convert_preview(packet, rectangle, pixels):
-        from av.video.reformatter import Interpolation, VideoReformatter
-        from startlive.core.pk.video_frames import packet_frame, reformat_packet
-        if not hasattr(_preview_context, "reformatters"):
-            _preview_context.reformatters = (VideoReformatter(),
-                                             VideoReformatter())
-
-        def convert(frame, bounds, reformatter, interpolation):
-            scale = min(1, bounds[0] / frame.width, bounds[1] / frame.height)
-            frame = reformat_packet(reformatter, frame, packet,
-                                    width=max(1, round(frame.width * scale)),
-                                    height=max(1, round(frame.height * scale)),
-                                    format="bgra", dst_color_range="JPEG",
-                                    interpolation=interpolation)
-            return QImage(memoryview(frame.planes[0]), frame.width,
-                          frame.height,
-                          frame.planes[0].line_size,
-                          QImage.Format.Format_ARGB32).copy()
-
-        # Main preview crops original pixels BEFORE scaling to physical pixels.
-        image = convert(packet_frame(packet, rectangle), pixels,
-                        _preview_context.reformatters[0], Interpolation.LANCZOS)
-        # The crop selector needs the entire source, not the main preview aperture.
-        thumbnail = (convert(packet_frame(packet), (960, 768),
-                             _preview_context.reformatters[1],
-                             Interpolation.BILINEAR)
-                     if rectangle is not None else image.copy())
-        thumbnail.setText("source_width", str(packet.width))
-        thumbnail.setText("source_height", str(packet.height))
-        return image, thumbnail
+    def _preview_conversion_failed(self, error):
+        self._preview_busy = False
+        pk_trace("video.preview.failed", view=self.title.text(),
+                 error_type=type(error).__name__, error=str(error))
+        if self._image is None:
+            self.video.setText(f"画面转换失败：{type(error).__name__}: {error}")
 
     def _apply_preview(self, images, generation):
         self._preview_busy = False
@@ -261,14 +212,14 @@ class PkMediaView(QWidget):
                 self._device = device
                 if device is None:
                     self._audio_failed(
-                        "已收到声音，但无法启动本机音频播放；将自动重试")
+                        f"无法启动本机音频播放（{sink.error().name}，{sink.state().name}）；将自动重试")
                     return
                 pk_trace("audio.playback.started", view=self.title.text(),
                          sample_rate=48000,
                          channels=2, sample_format="s16")
-            except (RuntimeError, OSError):
+            except (RuntimeError, OSError) as error:
                 self._audio_failed(
-                    "已收到声音，但无法启动本机音频播放；将自动重试")
+                    f"无法启动本机音频播放：{type(error).__name__}: {error}；将自动重试")
                 return
         self._audio_state_changed(self._sink)
         if self._sink is None:
@@ -322,15 +273,16 @@ class PkMediaView(QWidget):
                     return
                 if written < 0:
                     self._audio_failed(
-                        "已收到声音，但本机音频输出写入失败；将自动重试")
+                        f"本机音频输出写入失败：{device.errorString()}（{sink.error().name}）；将自动重试")
                 else:
                     del self._pending_audio[:written]
                     if sink.error() == QtAudio.Error.NoError:
                         self._audio_status("")
             if not self._pending_audio:
                 self._audio_timer.stop()
-        except (RuntimeError, OSError):
-            self._audio_failed("已收到声音，但本机音频播放失败；将自动重试")
+        except (RuntimeError, OSError) as error:
+            self._audio_failed(
+                f"本机音频播放失败：{type(error).__name__}: {error}；将自动重试")
 
     def _audio_status(self, message):
         if message != self.audio_status.text():
@@ -355,7 +307,8 @@ class PkMediaView(QWidget):
         if (error in (QtAudio.Error.OpenError, QtAudio.Error.IOError,
                       QtAudio.Error.FatalError)
                 or state == QtAudio.State.StoppedState):
-            self._audio_failed("已收到声音，但本机音频播放已中断；将自动重试")
+            self._audio_failed(
+                f"本机音频播放已中断（{state.name}，{error.name}）；将自动重试")
         elif state == QtAudio.State.IdleState or error == QtAudio.Error.UnderrunError:
             # A temporarily empty audio queue can recover with the next packet;
             # do not recreate the device on every ordinary playback underrun.

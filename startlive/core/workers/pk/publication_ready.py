@@ -1,6 +1,5 @@
 """Native business2 notification after successful RTC Pub (main3e18fc)."""
 from startlive.core.pk.events import join_from_handle_response
-from startlive.core.pk.states.events import PkHandleResult
 from .pk_request import PkRequestWorker
 
 
@@ -16,5 +15,4 @@ class PkPublicationReadyWorker(PkRequestWorker):
         })
 
     def parse_result(self, result):
-        return PkHandleResult(result,
-                              join_from_handle_response(result.data))
+        return result, join_from_handle_response(result)

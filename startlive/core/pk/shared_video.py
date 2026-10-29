@@ -10,6 +10,7 @@ from threading import Lock
 from startlive.core.constant.pk_media import SHARED_CAPACITY, SHARED_HEADER
 from startlive.core.exceptions import PkProtocolError
 from startlive.core.pk.states.session import MediaPacket
+from startlive.core.pk.trace import pk_trace
 
 
 class FramePool:
@@ -44,10 +45,10 @@ class FramePool:
 
 
 class SharedVideoReader:
-    def __init__(self, token, *, pool=None):
+    def __init__(self, token):
         if len(token) != 32 or any(c not in "0123456789abcdef" for c in token):
             raise PkProtocolError("Invalid OBS shared memory identifier")
-        self.pool = pool if pool is not None else FramePool()
+        self.pool = FramePool()
         self.sequence = 0
         self.fd = self.mapping = self.mutex = self.address = self.view = None
         self.semaphore = None
@@ -57,8 +58,13 @@ class SharedVideoReader:
                 self._open_windows(token)
             else:
                 self._open_posix(token)
-        except BaseException:
-            self.close()
+        except BaseException as error:
+            try:
+                self.close()
+            except Exception as cleanup_error:
+                # close() logs each failed release. Preserve the open failure
+                # as the primary error while retaining cleanup diagnostics.
+                error.add_note(str(cleanup_error))
             raise
 
     def _open_windows(self, token):
@@ -78,12 +84,17 @@ class SharedVideoReader:
         api.CloseHandle.argtypes = [w.HANDLE]
         name = "Local\\StartLive.PkVideo." + token
         self.mapping = api.OpenFileMappingW(4, False, name)
+        if not self.mapping:
+            error = ctypes.WinError(ctypes.get_last_error())
+            raise PkProtocolError(f"Cannot open OBS shared video memory: {error}") from error
         self.mutex = api.OpenMutexW(0x100001, False, name + ".lock")
-        if not self.mapping or not self.mutex:
-            raise PkProtocolError("OBS shared memory session is unavailable")
+        if not self.mutex:
+            error = ctypes.WinError(ctypes.get_last_error())
+            raise PkProtocolError(f"Cannot open OBS shared video lock: {error}") from error
         self.address = api.MapViewOfFile(self.mapping, 4, 0, 0, SHARED_CAPACITY)
         if not self.address:
-            raise PkProtocolError("Cannot map OBS video memory")
+            error = ctypes.WinError(ctypes.get_last_error())
+            raise PkProtocolError(f"Cannot map OBS video memory: {error}") from error
         self.view = memoryview(
             (ctypes.c_ubyte * SHARED_CAPACITY).from_address(self.address)).cast(
             "B").toreadonly()
@@ -106,8 +117,10 @@ class SharedVideoReader:
         lock_name = ("/slpk-l-" + token[:22]).encode("ascii")
         self.fd = api.shm_open(name, os.O_RDONLY, 0)
         if self.fd < 0:
+            code = ctypes.get_errno()
             self.fd = None
-            raise PkProtocolError("OBS shared memory session is unavailable")
+            error = OSError(code, os.strerror(code))
+            raise PkProtocolError(f"Cannot open OBS shared video memory: {error}") from error
         info = os.fstat(self.fd)
         # Darwin shm fstat omits S_IFREG and reports a page-rounded length;
         # Linux reports S_IFREG and the exact ftruncate length.
@@ -116,20 +129,29 @@ class SharedVideoReader:
         if (stat.S_IFMT(info.st_mode) not in (0,
                                               stat.S_IFREG) or info.st_uid != os.getuid()
                 or info.st_mode & 0o077 or not SHARED_CAPACITY <= info.st_size <= rounded_capacity):
-            raise PkProtocolError("Invalid OBS shared memory file")
+            raise PkProtocolError(
+                f"Invalid OBS shared memory file: mode={info.st_mode:#o}, "
+                f"uid={info.st_uid} (expected {os.getuid()}), "
+                f"size={info.st_size} (expected {SHARED_CAPACITY}..{rounded_capacity})")
         self.mapping = mmap.mmap(self.fd, SHARED_CAPACITY,
                                  access=mmap.ACCESS_READ)
         self.view = memoryview(self.mapping)
         self.semaphore = api.sem_open(lock_name, 0)
         if self.semaphore in (None, ctypes.c_void_p(-1).value):
+            code = ctypes.get_errno()
             self.semaphore = None
-            raise PkProtocolError("OBS shared memory lock is unavailable")
+            error = OSError(code, os.strerror(code))
+            raise PkProtocolError(f"Cannot open OBS shared video lock: {error}") from error
         # Every connection has a new token. Handles survive unlink and this
         # session leaves no named file if either process subsequently crashes.
         if api.shm_unlink(name):
-            raise PkProtocolError("Cannot retire OBS shared memory name")
+            code = ctypes.get_errno()
+            error = OSError(code, os.strerror(code))
+            raise PkProtocolError(f"Cannot retire OBS shared memory name: {error}") from error
         if api.sem_unlink(lock_name):
-            raise PkProtocolError("Cannot retire OBS shared lock name")
+            code = ctypes.get_errno()
+            error = OSError(code, os.strerror(code))
+            raise PkProtocolError(f"Cannot retire OBS shared lock name: {error}") from error
 
     def _lock(self):
         if os.name == "nt":
@@ -140,20 +162,30 @@ class SharedVideoReader:
                     "OBS stopped while writing a shared frame")
             if result == 0x102:
                 return False
+            if result == 0xFFFFFFFF:
+                error = ctypes.WinError(ctypes.get_last_error())
+                raise PkProtocolError(f"Cannot acquire OBS video lock: {error}") from error
             if result != 0:
-                raise PkProtocolError("OBS video lock failed")
+                raise PkProtocolError(f"OBS video lock returned unexpected status: 0x{result:08X}")
         else:
             if self.posix_api.sem_trywait(self.semaphore):
-                if ctypes.get_errno() in (errno.EAGAIN, errno.EINTR):
+                code = ctypes.get_errno()
+                if code in (errno.EAGAIN, errno.EINTR):
                     return False
-                raise PkProtocolError("OBS video lock failed")
+                error = OSError(code, os.strerror(code))
+                raise PkProtocolError(f"Cannot acquire OBS video lock: {error}") from error
         return True
 
     def _unlock(self):
         if os.name == "nt":
-            self.api.ReleaseMutex(self.mutex)
+            if not self.api.ReleaseMutex(self.mutex):
+                error = ctypes.WinError(ctypes.get_last_error())
+                raise PkProtocolError(f"Cannot release OBS video lock: {error}") from error
         else:
-            self.posix_api.sem_post(self.semaphore)
+            if self.posix_api.sem_post(self.semaphore):
+                code = ctypes.get_errno()
+                error = OSError(code, os.strerror(code))
+                raise PkProtocolError(f"Cannot release OBS video lock: {error}") from error
 
     def snapshot(self, notice_sequence):
         if not self._lock():
@@ -170,7 +202,11 @@ class SharedVideoReader:
             expected = width * height * 4 if fmt == 1 else width * height * 3 // 2
             if not valid or size != expected or (
                     fmt == 2 and (width % 2 or height % 2)):
-                raise PkProtocolError("Invalid OBS shared video frame")
+                raise PkProtocolError(
+                    f"Invalid OBS shared video frame: magic={magic!r}, version={version}, "
+                    f"sequence={sequence} (notice={notice_sequence}), "
+                    f"dimensions={width}x{height}, format={fmt}, colorspace={cs}, "
+                    f"range={color_range}, size={size} (expected {expected})")
             if sequence <= self.sequence:
                 return None
             owned = self.pool.acquire(size)
@@ -191,21 +227,50 @@ class SharedVideoReader:
             self._unlock()
 
     def close(self):
+        failures = []
         if self.view is not None:
-            self.view.release()
+            try:
+                self.view.release()
+            except Exception as error:
+                failures.append(("memoryview.release", error))
             self.view = None
         if os.name == "nt":
-            if self.address:
-                self.api.UnmapViewOfFile(self.address)
-            for handle in (self.mapping, self.mutex):
+            for operation, handle in (
+                    ("UnmapViewOfFile", self.address),
+                    ("CloseHandle(mapping)", self.mapping),
+                    ("CloseHandle(mutex)", self.mutex)):
                 if handle:
-                    self.api.CloseHandle(handle)
+                    try:
+                        release = (self.api.UnmapViewOfFile if operation == "UnmapViewOfFile"
+                                   else self.api.CloseHandle)
+                        if not release(handle):
+                            raise ctypes.WinError(ctypes.get_last_error())
+                    except Exception as error:
+                        failures.append((operation, error))
         else:
             if self.mapping is not None:
-                self.mapping.close()
+                try:
+                    self.mapping.close()
+                except Exception as error:
+                    failures.append(("mmap.close", error))
             if self.fd is not None:
-                os.close(self.fd)
+                try:
+                    os.close(self.fd)
+                except Exception as error:
+                    failures.append(("os.close", error))
             if self.semaphore is not None:
-                self.posix_api.sem_close(self.semaphore)
+                try:
+                    if self.posix_api.sem_close(self.semaphore):
+                        code = ctypes.get_errno()
+                        raise OSError(code, os.strerror(code))
+                except Exception as error:
+                    failures.append(("sem_close", error))
                 self.semaphore = None
         self.fd = self.mapping = self.mutex = self.address = None
+        if failures:
+            for operation, error in failures:
+                pk_trace("obs.shared_video.close.failed", operation=operation,
+                         error_type=type(error).__name__, error=str(error))
+            detail = "; ".join(f"{operation}: {type(error).__name__}: {error}"
+                               for operation, error in failures)
+            raise PkProtocolError(f"Cannot release OBS shared video resources: {detail}") from failures[0][1]

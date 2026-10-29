@@ -14,7 +14,7 @@ from .trace import pk_trace, sdp_for_trace
 
 
 class RtcSignaling:
-    def __init__(self, channel, ticket, *, notification=None, timeout=10):
+    def __init__(self, channel, ticket, *, notification, timeout=10):
         self.channel = channel
         self.ticket = ticket
         self.notification = notification
@@ -24,6 +24,7 @@ class RtcSignaling:
         self.next_id = 1
         self.joined = False
         self.closed = False
+        self.failure = None
         self._notification_blocks = 0
         self._buffered_notifications = deque()
         channel.on("message", self.receive)
@@ -46,10 +47,10 @@ class RtcSignaling:
             return
         try:
             message = decode("ResponseMessage", raw)
-        except PkProtocolError:
+        except PkProtocolError as error:
             self._trace("rtc.rpc.decode.failed", raw_hex=raw.hex(),
-                        size=len(raw))
-            self.close(PkProtocolError("RTC 信令解析失败"))
+                        size=len(raw), error_type=type(error).__name__, error=str(error))
+            self.close(PkProtocolError(f"RTC 信令解析失败：{error}"))
             return
         request_id = message.get("request_id", 0)
         self._trace(
@@ -87,13 +88,13 @@ class RtcSignaling:
 
     def _dispatch_notification(self, message):
         self._trace("rtc.rpc.notification.dispatch", response=message)
-        if self.notification:
-            try:
-                self.notification(message)
-            except Exception as error:
-                self._trace("rtc.rpc.notification.failed", error=error,
-                            response=message)
-                self.close(PkProtocolError("RTC 通知处理失败"))
+        try:
+            self.notification(message)
+        except Exception as error:
+            self._trace("rtc.rpc.notification.failed", error=error,
+                        response=message)
+            self.close(PkProtocolError(
+                f"RTC 通知处理失败：{type(error).__name__}: {error}"))
 
     async def request(self, kind, payload, expected, *, parse_result=None):
         context = dict(kind=kind, expected=expected,
@@ -103,7 +104,9 @@ class RtcSignaling:
         if self.closed or self.channel.readyState != "open":
             self._trace("rtc.rpc.rejected", **context, closed=self.closed,
                         channel_state=self.channel.readyState, response=None)
-            raise PkError("RTC 信令通道尚未连接")
+            if self.closed:
+                raise self.failure
+            raise PkError(f"RTC 信令通道尚未连接（状态 {self.channel.readyState}）")
         request_id = self.next_id
         self.next_id += 2
         context["request_id"] = request_id
@@ -121,7 +124,9 @@ class RtcSignaling:
             if response.get("code", 0) != 0:
                 raise PkError(f"RTC 服务拒绝请求（错误码 {response['code']}）")
             if expected not in response:
-                raise PkProtocolError("RTC 响应类型与请求不符")
+                received = [key for key in response if key.endswith("_resp")]
+                raise PkProtocolError(
+                    f"RTC {kind} 响应类型不符：期待 {expected}，收到 {received}")
             parsed = parse_result(response[expected]) if parse_result else \
                 response[expected]
             self._trace("rtc.rpc.success", **context, result=response[expected])
@@ -129,7 +134,8 @@ class RtcSignaling:
         except asyncio.TimeoutError:
             self._trace("rtc.rpc.timeout", **context, timeout=self.timeout,
                         response=response)
-            raise PkError("RTC 请求超时") from None
+            raise PkError(
+                f"RTC {kind} 请求超时（request_id={request_id}，等待 {self.timeout} 秒）") from None
         except BaseException as error:
             self._trace("rtc.rpc.failed", **context, error=error,
                         response=response)
@@ -175,8 +181,6 @@ class RtcSignaling:
         null-pointer completion case does not prove a missing reply is success.
         """
         self._require_joined()
-        if media not in ("audio", "video") or type(muted) is not bool:
-            raise PkProtocolError("RTC 静音请求需指定音频或视频及布尔值")
         return await self.request("mute_req", {media + "_muted": muted},
                                   "user_mute_resp")
 
@@ -235,7 +239,9 @@ class RtcSignaling:
             raise PkProtocolError("RTC 对端 UID 无效")
 
     def _require_joined(self):
-        if not self.joined or self.closed:
+        if self.closed:
+            raise self.failure
+        if not self.joined:
             raise PkError("RTC 尚未入会")
 
     @staticmethod
@@ -249,7 +255,8 @@ class RtcSignaling:
 
     def close(self, error=None):
         if not self.closed:
-            self._trace("rtc.rpc.closed", error=error,
+            self.failure = error if error is not None else PkError("RTC 信令通道已断开")
+            self._trace("rtc.rpc.closed", error=self.failure,
                         pending_ids=list(self.pending),
                         buffered_notifications=len(
                             self._buffered_notifications))
@@ -258,4 +265,4 @@ class RtcSignaling:
         self._buffered_notifications.clear()
         for future in self.pending.values():
             if not future.done():
-                future.set_exception(error or PkError("RTC 信令通道已断开"))
+                future.set_exception(self.failure)

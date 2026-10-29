@@ -18,8 +18,8 @@ from startlive.core.exceptions import PkError
 from .trace import pk_trace
 
 
-def _unsupported():
-    return PkError("当前 RTC 库不支持所需的仅中继连接")
+def _unsupported(detail):
+    return PkError("当前 RTC 库不支持所需的仅中继连接：" + detail)
 
 
 async def _drain_close(task):
@@ -117,7 +117,7 @@ class _Allocation:
         try:
             # inner exists before endpoint creation, so even cancellation after
             # connection_made but before this await returns has an owned socket.
-            self.raw = await self.adapter.owner.endpoint_factory(self.inner,
+            self.raw = await _create_endpoint(self.inner,
                                                                  self.adapter.connection)
             self.protocol = StunProtocol(self.adapter.connection)
             transport = _RelayTransport(self)
@@ -199,7 +199,10 @@ class _Allocation:
                 try:
                     await asyncio.wait_for(self.inner.delete(),
                                            self.adapter.owner.close_timeout)
-                except (Exception, asyncio.CancelledError):
+                except (Exception, asyncio.CancelledError) as error:
+                    pk_trace("rtc.relay.delete_failed",
+                             server=self.adapter.connection.turn_server,
+                             error_type=type(error).__name__, error=str(error))
                     # Forced local close is still required when the relay does
                     # not acknowledge deletion. Never leave its refresh alive.
                     abort = True
@@ -247,16 +250,16 @@ class _RelayConnection:
                 or getattr(self.ice._send, "__self__", None) is not connection
                 or connection.gather_candidates != self.gather or connection.close != self.close
                 or self.closing or self.failed):
-            raise _unsupported()
+            raise _unsupported("ICE 连接绑定已改变或正在关闭")
         candidates = connection._local_candidates
         protocols = connection._protocols
         if any(c.type != "relay" or c.transport != "udp" for c in candidates):
-            raise _unsupported()
+            raise _unsupported("本地候选包含非 UDP 中继地址")
         admitted = {allocation.protocol for allocation in self.allocations if
                     allocation.protocol}
         if any(p not in admitted or p.local_candidate not in candidates for p in
                protocols):
-            raise _unsupported()
+            raise _unsupported("ICE 协议不属于已分配的中继")
         pairs = list(connection._check_list) + list(
             connection._nominated.values())
         if (any(
@@ -264,7 +267,7 @@ class _RelayConnection:
                 for pair in pairs)
                 or any(item[2] not in protocols for item in
                        connection._early_checks)):
-            raise _unsupported()
+            raise _unsupported("候选对或早期检查引用了非中继协议")
         if complete and (not candidates or not protocols
                          or {c.component for c in
                              candidates} != connection._components):
@@ -293,13 +296,26 @@ class _RelayConnection:
             connection._local_candidates_end = True
         except BaseException as error:
             self.failed = True
-            await asyncio.gather(
-                *(a.close(force=True) for a in self.allocations))
+            cleanup = await asyncio.gather(
+                *(a.close(force=True) for a in self.allocations),
+                return_exceptions=True)
+            for failure in cleanup:
+                if isinstance(failure, BaseException):
+                    pk_trace("rtc.relay.cleanup.failed",
+                             server=connection.turn_server,
+                             error_type=type(failure).__name__, error=str(failure))
             if isinstance(error, (asyncio.CancelledError, PkError)):
                 raise
             if isinstance(error, asyncio.TimeoutError):
-                raise PkError("TURN 中继连接分配超时") from error
-            raise PkError("TURN 中继连接分配失败") from error
+                raise PkError(
+                    f"TURN 中继连接分配超时（服务器 {connection.turn_server}，"
+                    f"限时 {self.owner.allocation_timeout} 秒）") from error
+            detail = str(error)
+            for credential in (connection.turn_username, connection.turn_password):
+                if credential:
+                    detail = detail.replace(credential, "[redacted]")
+            raise PkError(
+                f"TURN 中继连接分配失败：{type(error).__name__}: {detail}") from error
 
     async def close(self):
         if self.close_task is None:
@@ -320,10 +336,9 @@ class _RelayConnection:
 
 
 class _RelayOwner:
-    def __init__(self, pc, allocation_timeout, close_timeout, endpoint_factory):
+    def __init__(self, pc, allocation_timeout, close_timeout):
         self.pc = pc
         self.allocation_timeout, self.close_timeout = allocation_timeout, close_timeout
-        self.endpoint_factory = endpoint_factory or _create_endpoint
         self.adapters = {}
         self.original_close = pc.close
         self.close_task = None
@@ -347,15 +362,16 @@ class _RelayOwner:
             self.adapters.clear()
 
 
-def configure_relay(pc, *, allocation_timeout=5, close_timeout=3,
-                    endpoint_factory=None):
+def configure_relay(pc, *, allocation_timeout=5, close_timeout=3):
     """Mark one PC for relay preparation; this never starts an allocation."""
     existing = getattr(pc, "_startlive_relay_owner", None)
     if existing is not None:
         return existing
-    if version("aiortc") != "1.15.0" or version("aioice") != "0.10.2":
-        raise _unsupported()
-    owner = _RelayOwner(pc, allocation_timeout, close_timeout, endpoint_factory)
+    aiortc_version, aioice_version = version("aiortc"), version("aioice")
+    if aiortc_version != "1.15.0" or aioice_version != "0.10.2":
+        raise _unsupported(
+            f"需要 aiortc 1.15.0 / aioice 0.10.2，实际为 {aiortc_version} / {aioice_version}")
+    owner = _RelayOwner(pc, allocation_timeout, close_timeout)
     pc._startlive_relay_owner = owner
     return owner
 
@@ -367,14 +383,14 @@ def prepare_relay(pc):
         return
     try:
         if owner.close_task is not None:
-            raise _unsupported()
+            raise _unsupported("中继所有者正在关闭")
         transports = {t.receiver.transport.transport for t in
                       pc.getTransceivers()}
         if pc.sctp is not None:
             transports.add(pc.sctp.transport.transport)
         # Fail explicitly if a changed library retains an unexamined transport.
         if transports != pc._RTCPeerConnection__iceTransports:
-            raise _unsupported()
+            raise _unsupported("存在未纳入中继管理的 ICE 传输")
         for ice in transports:
             gatherer, connection = ice.iceGatherer, ice.iceGatherer._connection
             existing = owner.adapters.get(connection)
@@ -394,8 +410,8 @@ def prepare_relay(pc):
                     or ice._connection is not connection
                     or getattr(ice._recv, "__self__", None) is not connection
                     or getattr(ice._send, "__self__", None) is not connection):
-                raise _unsupported()
+                raise _unsupported("ICE 收集器已经启动，或 TURN 配置、连接绑定无效")
             adapter = _RelayConnection(owner, ice)
             owner.adapters[connection] = adapter
     except (AttributeError, TypeError, KeyError) as error:
-        raise _unsupported() from error
+        raise _unsupported(f"{type(error).__name__}: {error}") from error

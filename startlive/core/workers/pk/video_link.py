@@ -1,7 +1,8 @@
-from startlive.core.exceptions import PkProtocolError
-from startlive.core.pk.api import PkApi
+from dataclasses import replace
+
+from startlive.core.exceptions import PkError, PkProtocolError, TaskCancelled
 from startlive.core.pk.candidates import parse_candidate_page
-from startlive.core.pk.identity import require_current_identity
+from startlive.core.pk.pk_info import queried_pk_info
 from startlive.core.pk.parameters import connect_fields, cancel_connect_fields, \
     connection_pk_fields
 from .pk_request import PkRequestWorker
@@ -13,6 +14,12 @@ class PkConnectWorker(PkRequestWorker):
     def __init__(self, presenter, identity, /, candidate):
         super().__init__(presenter, identity, fields=connect_fields(
             candidate.uid, invited_type_label=candidate.label_type))
+
+    def parse_result(self, data):
+        value = data.get("biz_session_id") if isinstance(data, dict) else None
+        if not isinstance(value, str) or not value:
+            raise PkProtocolError("Connect 响应缺少连线会话 ID")
+        return value
 
 
 class PkCancelConnectWorker(PkRequestWorker):
@@ -30,6 +37,12 @@ class PkConnectionStartWorker(PkRequestWorker):
         super().__init__(presenter, identity,
                          fields=connection_pk_fields(biz_session_id))
 
+    def parse_result(self, data):
+        info = queried_pk_info(data)
+        if info.basic.pk_id <= 0 or info.basic.biz_session_id != self.fields["biz_session_id"]:
+            raise PkProtocolError("转 PK 响应与当前连线不符")
+        return info
+
 
 class PkInteractListWorker(PkRequestWorker):
     operation = "interact_list"
@@ -46,21 +59,15 @@ class PkLinkPanelWorker(PkRequestWorker):
         super().__init__(presenter, identity, fields={})
 
     def run(self, report_progress, *args, **kwargs):
-        api = PkApi(self._session, self.identity,
-                    logger_name=type(self).__name__)
+        self._request("layout_data", {})
+        self._request("match_list", {}, after_sign={"type": "0", "last_id": "0"})
+        self._request("get_match_select", {})
+        self._request("in_conn_panel", {"room_id": str(self.identity.room_id)})
+        return self._request("batch_recommend_list", {
+            "label_map": '{"conn_random":"","universal_multi_conn_v2":""}'},
+            parse_result=self.parse_result)
 
-        def request(operation, fields, **kwargs):
-            return api.request(operation, fields,
-                               before_send=lambda: require_current_identity(
-                                   self.identity), **kwargs)
-
-        request("layout_data", {})
-        request("match_list", {}, after_sign={"type": "0", "last_id": "0"})
-        request("get_match_select", {})
-        request("in_conn_panel", {"room_id": str(self.identity.room_id)})
-        result = request("batch_recommend_list", {
-            "label_map": '{"conn_random":"","universal_multi_conn_v2":""}'})
-        data = result.data
+    def parse_result(self, data):
         if not isinstance(data, dict) or not isinstance(
                 data.get("batch_data_map"), dict):
             raise PkProtocolError("连线推荐列表响应无效")
@@ -68,8 +75,15 @@ class PkLinkPanelWorker(PkRequestWorker):
         if not isinstance(group, dict):
             raise PkProtocolError("响应缺少视频连线候选列表")
         # Pagination below is the existing view model, not request parameters.
-        return parse_candidate_page({"users": group.get("users"), "page": 1,
+        page = parse_candidate_page({"users": group.get("users"), "page": 1,
                                      "type": 1, "next": False})
+        # The link panel can include the current anchor and occupied rooms.
+        # Apply its invitation rules before presenting selectable candidates.
+        return replace(page, users=tuple(
+            candidate for candidate in page.users
+            if candidate.uid != self.identity.uid and candidate.label_type
+            and not candidate.biz_session_id
+            and not candidate.raw.get("other_users_num", 0)))
 
 
 class PkDisconnectLinkWorker(PkRequestWorker):
@@ -82,16 +96,24 @@ class PkDisconnectLinkWorker(PkRequestWorker):
         self.exit_pk = exit_pk
 
     def run(self, report_progress, *args, **kwargs):
-        api = PkApi(self._session, self.identity,
-                    logger_name=type(self).__name__)
-        guard = lambda: require_current_identity(self.identity)
         error = None
         if self.exit_pk:
             try:
-                api.request("exit", {"stop_pk": "1"}, before_send=guard)
+                self._request("exit", {"stop_pk": "1"})
+            except TaskCancelled:
+                raise
             except Exception as caught:
                 error = caught
-        result = api.request("quit", self.fields, before_send=guard)
+        try:
+            result = self._request("quit", self.fields)
+        except TaskCancelled:
+            raise
+        except Exception as quit_error:
+            if error is not None:
+                raise PkError(
+                    f"结束 PK 失败：{type(error).__name__}: {error}；"
+                    f"退出连线也失败：{type(quit_error).__name__}: {quit_error}") from quit_error
+            raise
         if error is not None:
             raise error
         return result

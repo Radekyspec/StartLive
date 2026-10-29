@@ -14,8 +14,12 @@ def select_capture(connection, *, audio=True, video=True):
         raise ValueError("At least one OBS capture stream must be enabled")
     request = b"SLPC" + bytes((1, mask, 0, 0))
     connection.write_exact(request)
-    if connection.read_exact(8) != b"SLPA" + request[4:]:
-        raise PkProtocolError("OBS PK 插件不支持采集选择，请更新插件并重启 OBS")
+    expected = b"SLPA" + request[4:]
+    response = connection.read_exact(8)
+    if response != expected:
+        raise PkProtocolError(
+            "OBS PK 插件采集选择响应不符，请更新插件并重启 OBS："
+            f"expected={expected.hex()}, received={response.hex()}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,36 +32,38 @@ class VideoNotice:
     sequence: int
 
 
-def parse_header(raw):
+def read_packet(connection):
+    """Read and validate one complete SLPK message from the capture transport."""
+    raw = connection.read_exact(HEADER.size)
     if len(raw) != HEADER.size:
-        raise PkProtocolError("OBS frame header is incomplete")
+        raise PkProtocolError(
+            f"OBS frame header is incomplete: received {len(raw)}/{HEADER.size} bytes")
     magic, version, kind, flags, size, stamp, width, height, rate, frames = HEADER.unpack(
         raw)
     if magic != b"SLPK" or version != 2 or flags:
         raise PkProtocolError(
-            "OBS media protocol mismatch; update both StartLive and its OBS plugin")
+            "OBS media protocol mismatch; update both StartLive and its OBS plugin: "
+            f"magic={magic!r}, version={version} (expected 2), flags={flags:#x}")
     if kind == 2:
         valid = not width and not height and rate == 48000 and 0 < frames <= 4800 and size == frames * 4
     else:
         valid = kind in (1, 3) and size == (8 if kind == 1 else 32) and not any(
             (stamp, width, height, rate, frames))
     if not valid:
-        raise PkProtocolError("Invalid OBS media header")
-    return size, (kind, stamp, width, height, rate, frames)
-
-
-def read_packet(read_exact):
-    size, metadata = parse_header(read_exact(HEADER.size))
-    payload = read_exact(size)
+        raise PkProtocolError(
+            f"Invalid OBS media header: kind={kind}, size={size}, timestamp={stamp}, "
+            f"dimensions={width}x{height}, sample_rate={rate}, frames={frames}")
+    payload = connection.read_exact(size)
     if len(payload) != size:
-        raise PkProtocolError("OBS media payload is incomplete")
-    if metadata[0] == 3:
+        raise PkProtocolError(
+            f"OBS media payload is incomplete: kind={kind}, received {len(payload)}/{size} bytes")
+    if kind == 3:
         if any(value not in b"0123456789abcdef" for value in payload):
             raise PkProtocolError("Invalid OBS shared memory identifier")
         return SharedVideoSetup(payload.decode("ascii"))
-    if metadata[0] == 1:
+    if kind == 1:
         sequence, = unpack("<Q", payload)
         if not sequence:
-            raise PkProtocolError("Invalid OBS frame sequence")
+            raise PkProtocolError("Invalid OBS frame sequence: expected a positive value, received 0")
         return VideoNotice(sequence)
-    return MediaPacket(*metadata, payload)
+    return MediaPacket(kind, stamp, width, height, rate, frames, payload)

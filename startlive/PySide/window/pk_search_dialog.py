@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QPushButton, QVBoxLayout,
 )
 
-from startlive.PySide.interface_adapters.pk.pk_presenter import PkPresenter
+from startlive.PySide.interface_adapters.pk.search_presenter import PkSearchPresenter
 from startlive.core.pk.identity import require_current_identity
 from startlive.core.workers.pk.search_candidates import PkSearchCandidatesWorker
 
@@ -79,20 +79,24 @@ class PkSearchDialog(QDialog):
         self._busy = True
         self._update_controls()
         self.status.setText("正在查找对手…")
-        presenter = PkPresenter(finished=self._loaded, failed=self._failed)
-        if self.video_link:
-            from startlive.core.workers.pk.video_link import PkLinkPanelWorker
-            # The link panel is a readiness probe for the fixed candidate
-            # map; it has no search/page parameters. Do not pass the search
-            # worker's arguments to this constructor.
-            worker = PkLinkPanelWorker(presenter, self.identity)
-        else:
-            worker = PkSearchCandidatesWorker(presenter, self.identity,
-                                              self._search, page=page)
+        worker = None
         try:
+            presenter = PkSearchPresenter(self)
+            if self.video_link:
+                from startlive.core.workers.pk.video_link import PkLinkPanelWorker
+                worker = PkLinkPanelWorker(presenter, self.identity)
+            else:
+                worker = PkSearchCandidatesWorker(presenter, self.identity,
+                                                  self._search, page=page)
+            # Closing the dialog retires queued searches and remaining panel
+            # bootstrap steps; an already-sent request is allowed to complete.
+            worker.request_allowed = lambda: not self._closed
             self.manager.submit(worker)
         except Exception as error:
-            self._failed(error)
+            if worker is None:
+                self._failed(error)
+            else:
+                worker.on_exception(error)
 
     def _loaded(self, page):
         if self._closed:
@@ -100,11 +104,6 @@ class PkSearchDialog(QDialog):
         self._busy = False
         self._page, self._has_next = page.page, page.has_next
         for candidate in page.users:
-            if self.video_link and (
-                    candidate.uid == self.identity.uid or not candidate.label_type
-                    or candidate.biz_session_id or candidate.raw.get(
-                "other_users_num", 0)):
-                continue
             title = f"{candidate.uname or '未命名用户'}  ·  UID {candidate.uid}"
             if candidate.label:
                 title += f"\n{candidate.label}"
@@ -120,7 +119,7 @@ class PkSearchDialog(QDialog):
         if self._closed:
             return
         self._busy = False
-        self.status.setText(str(error))
+        self.status.setText(str(error) or type(error).__name__)
         self._update_controls()
 
     def _update_controls(self):
@@ -143,6 +142,6 @@ class PkSearchDialog(QDialog):
         self.accept()
 
     def done(self, result):
-        # Search is read-only; ignore a pending HTTP result after dismissal.
+        # Retire queued requests and ignore any result already in flight.
         self._closed = True
         super().done(result)

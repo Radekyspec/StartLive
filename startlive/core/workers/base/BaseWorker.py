@@ -15,6 +15,7 @@ class BaseWorker:
         "on_finished",
         "on_progress",
         "on_exception",
+        "on_cancelled",
     })
 
     _session: Optional[Session]
@@ -117,6 +118,11 @@ class BaseWorker:
     def on_progress(self, *args, **kwargs):
         if self._presenters:
             [p.prepare_progress_view(*args, **kwargs) for p in self._presenters]
+
+    @final
+    def on_cancelled(self):
+        for presenter in self._presenters:
+            presenter.prepare_cancel_view()
 
     @final
     def on_exception(self, exception: Exception, /):

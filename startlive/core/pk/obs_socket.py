@@ -17,9 +17,9 @@ def local_media_path():
 
 
 class ObsLocalSocket:
-    def __init__(self, cancelled=lambda: False, *, path=None):
+    def __init__(self, *, cancelled):
         self.cancelled = cancelled
-        self.path = Path(path) if path is not None else local_media_path()
+        self.path = local_media_path()
         self.socket = None
 
     def _check_cancelled(self):
@@ -28,6 +28,7 @@ class ObsLocalSocket:
 
     def connect(self, timeout=10):
         deadline = monotonic() + timeout
+        last_error = None
         while monotonic() < deadline:
             self._check_cancelled()
             client = None
@@ -46,14 +47,18 @@ class ObsLocalSocket:
                 self.socket = client
                 return
             except OSError as error:
+                last_error = error
                 if client is not None:
                     client.close()
                 if error.errno not in (errno.ENOENT, errno.ECONNREFUSED,
                                        errno.EAGAIN):
-                    raise PkError("无法连接 OBS 本地媒体通道") from None
+                    raise PkError(
+                        f"无法连接 OBS 本地媒体通道 {self.path}：{error}") from error
                 sleep(0.05)
+        detail = f"；最后一次连接失败：{last_error}" if last_error else ""
         raise PkError(
-            "未收到 OBS 媒体连接，请在 OBS 工具菜单启动 StartLive PK 采集")
+            f"未收到 OBS 媒体连接（{self.path}，等待 {timeout} 秒），"
+            f"请在 OBS 工具菜单启动 StartLive PK 采集{detail}") from last_error
 
     def write_exact(self, data):
         sent = 0
@@ -64,12 +69,15 @@ class ObsLocalSocket:
                 count = self.socket.send(memoryview(data)[sent:])
             except socket.timeout:
                 if monotonic() > deadline:
-                    raise PkError("发送 OBS 采集选择超时") from None
+                    raise PkError(
+                        f"发送 OBS 采集选择超时（已发送 {sent}/{len(data)} 字节）") from None
                 continue
-            except OSError:
-                raise PkError("OBS 媒体连接已断开") from None
+            except OSError as error:
+                raise PkError(
+                    f"写入 OBS 媒体通道失败（已发送 {sent}/{len(data)} 字节）：{error}") from error
             if not count:
-                raise PkError("OBS 媒体连接已断开")
+                raise PkError(
+                    f"OBS 媒体通道写入返回 0（已发送 {sent}/{len(data)} 字节）")
             sent += count
 
     def read_exact(self, size):
@@ -81,12 +89,15 @@ class ObsLocalSocket:
                 data = self.socket.recv(min(size - len(output), 1024 * 1024))
             except socket.timeout:
                 if monotonic() > deadline:
-                    raise PkError("等待 OBS 媒体帧超时") from None
+                    raise PkError(
+                        f"等待 OBS 媒体帧超时（已接收 {len(output)}/{size} 字节）") from None
                 continue
-            except OSError:
-                raise PkError("OBS 媒体连接已断开") from None
+            except OSError as error:
+                raise PkError(
+                    f"读取 OBS 媒体通道失败（已接收 {len(output)}/{size} 字节）：{error}") from error
             if not data:
-                raise PkError("OBS 媒体连接已断开")
+                raise PkError(
+                    f"OBS 已关闭媒体通道（已接收 {len(output)}/{size} 字节）")
             output.extend(data)
             deadline = monotonic() + 10
         return bytes(output)

@@ -1,12 +1,13 @@
 """Incoming prompt lifetime and outgoing invitation results on the GUI dispatcher."""
 from math import ceil
+from time import monotonic
 
 from startlive.core.constant.pk import NativeInteractionState, NativePkType, \
     PkMode, PkPhase
 from startlive.core.constant.pk_info import NativePkState
+from startlive.core.pk.identity import require_current_identity
 from startlive.core.exceptions import PkError
-from startlive.core.pk.events import invitation_context_from_event
-from startlive.core.pk.video_eligibility import invitation_eligibility
+from startlive.core.pk.video_eligibility import video_block_reason
 from .directed_invite import PkDirectedInviteController
 
 
@@ -25,7 +26,7 @@ class PkInvitationLifecycle:
                 and not session._business_started and self.pending is None
                 and self.accepted is None and not session.handle.busy
                 and session.rtc.future is None and session.rtc.event is None
-                and session.join.native_state == NativeInteractionState.READY
+                and session.rtc.native_state == NativeInteractionState.READY
                 and session.round_state.state == NativePkState.IDLE
                 and session.flow.phase in (PkPhase.IDLE, PkPhase.FINISHED))
 
@@ -65,16 +66,16 @@ class PkInvitationLifecycle:
             session._trace("session.invitation.answer_ignored",
                            reason="not_current_pending_invitation")
             return
-        session.identity_guard(session.identity)
+        require_current_identity(session.identity)
         if self.tick():
             return
         if not self.can_answer():
             raise PkError("当前已有 PK 操作，不能处理另一条邀请")
-        eligibility = invitation_eligibility(session._video_facts())
+        blocked_reason = video_block_reason(session._video_facts())
         if accept:
-            if eligibility.allowed is not True:
+            if blocked_reason is not None:
                 self.dismiss()
-                raise PkError(eligibility.reason)
+                raise PkError(blocked_reason)
             if not _provider_checked:
                 def failed(error):
                     if event is self.pending:
@@ -86,15 +87,14 @@ class PkInvitationLifecycle:
                     lambda: self.answer(event, True, _provider_checked=True),
                     failed)
                 return
-            context = invitation_context_from_event(event)
             session.exit.retire()
-            session.expected_peer_uid = context.selected_peer_uid
+            session.expected_peer_uid = event.selected_peer_uid
             self.accepted = event
             session.presentation.info = None
             session.presentation.ended = False
             session._business_started = True
             session.kind = session.round_state.kind = NativePkType.DOUBLE_INVITE
-            session.round_state.biz_session_id = context.biz_session_id
+            session.round_state.biz_session_id = event.biz_session_id or ""
             session.presentation.render()
             session.view.set_invitation_waiting(False)
             session._status("正在接受视频 PK 邀请…")
@@ -106,7 +106,7 @@ class PkInvitationLifecycle:
             session.view.set_invitation_waiting(False)
         try:
             session.handle.handle_event(event, accept=accept,
-                                        eligibility=eligibility)
+                                        blocked_reason=blocked_reason)
         except Exception as error:
             self.failed(error)
         finally:
@@ -120,7 +120,7 @@ class PkInvitationLifecycle:
         return (session.invitation_only and session.invitation_display_allowed
                 and session._push_authenticated and not session.closed
                 and not session.stopping and not session._business_started and not session.handle.busy
-                and session.rtc.future is None and session.join.native_state == NativeInteractionState.READY
+                and session.rtc.future is None and session.rtc.native_state == NativeInteractionState.READY
                 and session.round_state.state == NativePkState.IDLE
                 and session.flow.phase in (PkPhase.IDLE, PkPhase.FINISHED))
 
@@ -138,7 +138,7 @@ class PkInvitationLifecycle:
         session = self.session
         if self.pending is None or self.deadline is None:
             return False
-        remaining = max(0, ceil(self.deadline - session._clock()))
+        remaining = max(0, ceil(self.deadline - monotonic()))
         if remaining == 0:
             session._trace("session.invitation.expired",
                            initiator=self.pending.initiator)
@@ -165,7 +165,7 @@ class PkInvitationLifecycle:
         elif (session.flow.phase not in (PkPhase.INVITING, PkPhase.STOPPING)
               or session.round_state.state != NativePkState.STARTING
               or session.rtc.event is not None or session.rtc.future is not None
-              or session.join.native_state != NativeInteractionState.READY):
+              or session.rtc.native_state != NativeInteractionState.READY):
             # PREPARING has not sent an invitation. JOIN/round handoff wins
             # over a later pending-result notification for the same peer.
             reason = "not_pending_outgoing_invitation"
@@ -256,7 +256,7 @@ class PkInvitationLifecycle:
         if session.closed:
             return
         try:
-            session.identity_guard(session.identity)
+            require_current_identity(session.identity)
         except Exception as identity_error:
             session._fatal(identity_error)
             return
@@ -326,19 +326,19 @@ class PkInvitationLifecycle:
 
     def present(self, event):
         session = self.session
-        eligibility = invitation_eligibility(session._video_facts())
-        context = invitation_context_from_event(event)
+        blocked_reason = video_block_reason(session._video_facts())
+        source = event.handle_source
         # Source12 requires a separate room context. Listening never
         # cancels an outgoing request or auto-rejects a hidden invite.
         if (self.can_answer() and self.pending is None
-                and context.source in (
+                and source in (
                         (4,
                          7) if session.options.mode == PkMode.VIDEO_LINK else (
                                 5, 7,
                                 10,
                                 11))
-                and context.selected_peer_uid > 0
-                and eligibility.allowed is True):
+                and event.selected_peer_uid > 0
+                and blocked_reason is None):
             # StartLive presentation policy: only an explicit positive
             # int32 number of seconds permits an actionable prompt.
             # Missing/invalid/negative durations do not invent a server
@@ -354,18 +354,18 @@ class PkInvitationLifecycle:
             self.pending = event
             self.refresh_activity()
             session._trace("session.invitation.presented",
-                           peer_search=context.peer_search,
-                           initiator=event.initiator, source=context.source,
-                           invitation_biz_session_id=context.biz_session_id,
+                           peer_search=event.peer_search or 0,
+                           initiator=event.initiator, source=source,
+                           invitation_biz_session_id=event.biz_session_id or "",
                            invitation_timeout=duration)
             session.view.show_invitation(event)
             # Countdown starts when this item becomes the current
             # prompt, not at server send time or receipt in a queue.
-            self.deadline = session._clock() + duration
+            self.deadline = monotonic() + duration
             self.tick()
         else:
             session._trace("session.invitation.ignored",
                            reason="not_eligible_or_busy",
-                           source=context.source, eligible=eligibility.allowed,
-                           eligibility_reason=eligibility.reason,
+                           source=source, eligible=blocked_reason is None,
+                           eligibility_reason=blocked_reason,
                            pending=self.pending is not None)

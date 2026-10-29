@@ -1,17 +1,15 @@
 """Audio/video transport after the server's RTC signaling channel is ready.
 
-Imported only for video PK. Traditional PK has no aiortc/PyAV dependency.
+Loaded by the RTC worker after the selected PK mode admits media startup.
 """
 import asyncio
+from dataclasses import replace
 from fractions import Fraction
 from time import perf_counter, monotonic_ns
 
 from aiortc import (
     AudioStreamTrack,
     VideoStreamTrack,
-    RTCBundlePolicy,
-    RTCConfiguration,
-    RTCPeerConnection,
     RTCSessionDescription,
     clock,
 )
@@ -19,15 +17,13 @@ from aiortc.mediastreams import MediaStreamError
 from av import AudioFifo, AudioFrame, AudioResampler
 from av.video.reformatter import Interpolation, VideoReformatter
 
-from startlive.core.exceptions import PkError
-from startlive.core.pk.states.encoder import VideoEncodingConfig
+from startlive.core.exceptions import PkError, PkProtocolError
 from startlive.core.pk.states.session import MediaPacket
-from startlive.core.pk.video_encoder_config import configured_plan, \
-    current_video_config
+from startlive.core.pk.video_encoder_config import configured_plan
 from .output_readiness import require_publication_capture
 from .rtc_codecs import enable_av1_publication, set_native_codec_preferences
 from .rtc_h264 import source_capability
-from .rtc_mute import RtcPublisherMute
+from .states.mute import RtcMuteState
 from .rtc_relay import prepare_relay
 from .rtc_sdp import local_media_fragment, merge_remote_fragment
 from .rtc_timing import wait_until
@@ -51,10 +47,10 @@ async def _packet(buffer, kind, track):
 class ObsVideoTrack(VideoStreamTrack):
     """Crop owned NV12/BGRA snapshots into the existing I420 encoder contract."""
 
-    def __init__(self, buffer, *, require_negotiation=False, video_config=None):
+    def __init__(self, buffer, *, video_config):
         super().__init__()
         self.buffer = buffer
-        self.video_config = video_config or VideoEncodingConfig()
+        self.video_config = video_config
         self.origin = None
         self.last_pts = -1
         self._next_frame_time = None
@@ -63,7 +59,6 @@ class ObsVideoTrack(VideoStreamTrack):
         self._reformatter = VideoReformatter()
         self.muted = False
         self.frames_emitted = 0
-        self.require_negotiation = require_negotiation
         self.video_limits = None
         self._prefetched = None
         self._adaptation = None
@@ -84,7 +79,7 @@ class ObsVideoTrack(VideoStreamTrack):
         self.video_limits = limits
 
     async def recv(self):
-        if self.require_negotiation and self.video_limits is None:
+        if self.video_limits is None:
             raise PkError("视频帧尚未绑定服务端编码能力")
         if self._next_frame_time is not None:
             await wait_until(self._next_frame_time)
@@ -95,12 +90,6 @@ class ObsVideoTrack(VideoStreamTrack):
         else:
             packet = await _packet(self.buffer, 1, self)
         limits = self.video_limits
-        if limits is None:
-            if self.video_config.codec_family == "av1":
-                from .rtc_av1 import source_capability as av1_capability
-                limits = av1_capability()
-            else:
-                limits = source_capability(packet.width, packet.height)
         plan = configured_plan(packet.width, packet.height, limits,
                                self.video_config)
         adaptation = (packet.width, packet.height, plan.width, plan.height,
@@ -223,15 +212,9 @@ class RtcMediaSession:
     authenticated signaling and a peer whose publication is already known.
     """
 
-    def __init__(self, signaling, local_buffer, remote_buffer, *,
-                 peer_connection=None,
-                 configuration=None, owner_active=lambda: True):
-        self.signaling = signaling
+    def __init__(self, connection, local_buffer, remote_buffer, *, owner_active):
+        self.signaling, self.pc = connection.signaling, connection.pc
         self.local_buffer, self.remote_buffer = local_buffer, remote_buffer
-        config = configuration or RTCConfiguration(iceServers=[],
-                                                   bundlePolicy=RTCBundlePolicy.MAX_BUNDLE)
-        self._owns_pc = peer_connection is None
-        self.pc = peer_connection or RTCPeerConnection(config)
         # aiortc's SDP serializer drops rtcp-mux when the server omits a=rtcp.
         # Keep each successfully applied raw answer for the next fragment merge.
         self._remote_sdp = None
@@ -243,8 +226,8 @@ class RtcMediaSession:
         self.published = self.subscribed = False
         self.closed = False
         self.owner_active = owner_active
-        self.mute = RtcPublisherMute(signaling, ready=self._mute_ready,
-                                     apply_local=self._apply_muted)
+        self._mute_states = {kind: RtcMuteState() for kind in ("audio", "video")}
+        self._mute_lock = asyncio.Lock()
         self._received = {"audio": asyncio.Event(), "video": asyncio.Event()}
         self._frames_received = {"audio": 0, "video": 0}
         self._expected_media = {"audio", "video"}
@@ -253,7 +236,7 @@ class RtcMediaSession:
         self.pc.on("track", self._on_track)
 
     def _trace(self, event, **fields):
-        ticket = getattr(self.signaling, "ticket", None) or {}
+        ticket = self.signaling.ticket
         pk_trace(event, uid=ticket.get("uid"),
                  channel_id=ticket.get("channel_id"),
                  pc_id=hex(id(self.pc)), **fields)
@@ -273,8 +256,9 @@ class RtcMediaSession:
                                   for codec in negotiated_codecs(item)]} for
                       item in transceivers]
             self._trace("rtc.media.codecs", stage=stage, negotiated=codecs)
-        except Exception:
-            pass
+        except Exception as error:
+            self._trace("rtc.media.codecs.failed", stage=stage,
+                        error_type=type(error).__name__, error=str(error))
 
     def _video_failed(self, error):
         # Called from the sender's async wrapper on this RTC loop, including
@@ -436,15 +420,6 @@ class RtcMediaSession:
         return MediaPacket(1, monotonic_ns(), frame.width, frame.height,
                            payload=payload)
 
-    async def start(self, peer_search):
-        """Convenience path when the owner already verified peer readiness."""
-        try:
-            await self.publish()
-            await self.subscribe(peer_search)
-        except BaseException:
-            await self.close()
-            raise
-
     def _require_ready(self):
         if self.failure is not None:
             raise self.failure
@@ -453,12 +428,13 @@ class RtcMediaSession:
         if self.pc.remoteDescription is None:
             raise PkError("RTC 初次连接尚未完成")
 
-    def _mute_ready(self):
-        return (
-                not self.closed and self.published and self.owner_active() is True
-                and self.signaling.joined and not getattr(self.signaling,
-                                                          "closed", False)
-                and self.pc.remoteDescription is not None and self.pc.connectionState == "connected")
+    def _require_mute_ready(self):
+        if not (not self.closed and self.published and self.owner_active() is True
+                and self.signaling.joined and not self.signaling.closed
+                and self.pc.remoteDescription is not None
+                and self.pc.connectionState == "connected"):
+            raise PkError("RTC 发布尚未就绪或当前会话已结束")
+        self.signaling._require_joined()
 
     def _published_track(self, media):
         track = next((track for track in self.tracks if
@@ -472,12 +448,34 @@ class RtcMediaSession:
         self._trace("rtc.media.mute.local", media=media, muted=muted)
 
     def mute_state(self, media):
-        return self.mute.state(media)
+        return self._mute_states[media]
 
     async def set_muted(self, media, muted, *, changed=None, signal=True):
         self._published_track(media)
-        return await self.mute.set_muted(media, muted, changed=changed,
-                                         signal=signal)
+        self._require_mute_ready()
+        async with self._mute_lock:
+            self._require_mute_ready()
+            self._mute_states[media] = replace(
+                self._mute_states[media], requested=muted, pending=True)
+            try:
+                # Close the local gate before signaling; open only after success.
+                if muted:
+                    self._apply_muted(media, True)
+                    self._mute_states[media] = replace(
+                        self._mute_states[media], local_muted=True)
+                if changed is not None:
+                    changed(self._mute_states[media])
+                if signal:
+                    await self.signaling.mute(media, muted)
+                self._require_mute_ready()
+                if not muted:
+                    self._apply_muted(media, False)
+                self._mute_states[media] = replace(
+                    self._mute_states[media], local_muted=muted, acknowledged=muted)
+            finally:
+                # Failure retains the local gate without compensating requests.
+                self._mute_states[media] = replace(self._mute_states[media], pending=False)
+            return self._mute_states[media]
 
     async def update_subscription(self, peer_uid, *, video, audio):
         """Change active receive channels on the negotiated subscription."""
@@ -500,7 +498,8 @@ class RtcMediaSession:
                 self._start_monitor()
                 require_publication_capture(self.local_buffer, video=video,
                                             audio=audio)
-                video_config = current_video_config() if video else None
+                from startlive.core import app_state
+                video_config = app_state.pk_encoder_settings["config"] if video else None
                 if video_config is not None:
                     self._trace("rtc.video.bitrate_policy", mode="fixed",
                                 requested_bitrate_bps=video_config.bitrate_bps,
@@ -514,7 +513,6 @@ class RtcMediaSession:
                     from .video_encoder_backend import available_encoders
                     await asyncio.to_thread(available_encoders)
                 self.tracks = ([ObsVideoTrack(self.local_buffer,
-                                              require_negotiation=True,
                                               video_config=video_config)] if video else []) + (
                                   [ObsAudioTrack(
                                       self.local_buffer)] if audio else [])
@@ -686,15 +684,14 @@ class RtcMediaSession:
                                         audio=any(
                                             track.kind == "audio" for track in
                                             self.tracks))
-        if getattr(self.signaling, "closed", False):
-            raise PkError("RTC 信令连接已断开")
+        if self.signaling.closed:
+            raise self.signaling.failure
         if self.pc.connectionState in ("failed", "closed"):
             raise PkError("RTC 媒体连接已断开")
 
     async def close(self):
         self._trace("rtc.media.close.start", published=self.published,
-                    subscribed=self.subscribed,
-                    owns_pc=self._owns_pc)
+                    subscribed=self.subscribed)
         if self._monitor_task is not None:
             self._monitor_task.cancel()
             await asyncio.gather(self._monitor_task, return_exceptions=True)
@@ -702,17 +699,13 @@ class RtcMediaSession:
         if self.published and not self.closed:
             await self._trace_stats("close")
         self.closed = True
-        self.mute.close()
         for track in self.tracks:
             track.stop()
         tasks = list(self.receivers)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        # RtcConnection owns a shared PC and must send Leave before closing
-        # its signaling transport. Standalone loopback sessions own their PC.
-        if self._owns_pc:
-            await self.pc.close()
+        # RtcConnection sends Leave and closes the shared peer after media stops.
         self.remote_buffer.clear()
         from startlive.core import app_state
         app_state.pk_encoder_runtime.reset()

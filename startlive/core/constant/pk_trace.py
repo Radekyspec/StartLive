@@ -114,7 +114,7 @@ _DESCRIPTIONS = {
     "settings.failed": "PK 设置处理失败",
 }
 
-_OPERATIONS = {name: operation.label for name, operation in OPERATIONS.items()}
+_OPERATIONS = {name: operation["label"] for name, operation in OPERATIONS.items()}
 
 _RTC_STATE_TYPES = {
     "connectionState": "整体连接",

@@ -1,43 +1,36 @@
 from startlive.core.constant.pk import NativePkType, PkPhase
 from startlive.core.exceptions import PkError
-from startlive.core.pk.trace_id import new_trace_id
 from startlive.core.workers.pk.cancel_match import PkCancelMatchWorker
 from startlive.core.workers.pk.match import PkMatchWorker
-from startlive.core.workers.pk.precheck import PkMatchPrecheckWorker
+from startlive.core.workers.pk.precheck import PkPrecheckWorker
 from .request_attempt import RequestAttempt
 
 
 class PkMatchController:
     """Classic/random-video matchmaking; media belongs to the owning session."""
 
-    def __init__(self, manager, identity, kind, *, waiting, cancelled, failed,
-                 intercepted):
+    def __init__(self, session):
+        kind = session.kind
         if kind not in (NativePkType.DOUBLE_CLASSIC,
                         NativePkType.DOUBLE_RANDOM):
             raise PkError("该类型尚未接入随机 PK 流程")
-        self.manager, self.identity, self.kind = manager, identity, kind
-        self.waiting, self.cancelled, self.failed, self.intercepted = waiting, cancelled, failed, intercepted
+        self.session = session
+        self.manager, self.identity, self.kind = session.manager, session.identity, kind
         self.phase = PkPhase.IDLE
         self.trace_id = ""
         self.attempt = RequestAttempt()
 
-    def start(self, *, trace_id=None):
+    def start(self, *, trace_id):
         if self.phase not in (PkPhase.IDLE, PkPhase.FINISHED, PkPhase.FAILED):
             raise PkError("已有 PK 匹配正在处理")
-        self.trace_id = trace_id or new_trace_id()
+        self.trace_id = trace_id
         self.attempt.invalidate()
         self.phase = PkPhase.PREPARING
         self.attempt.inflight, self.attempt.cancel_requested = True, False
-        self._submit(PkMatchPrecheckWorker(
-            self._presenter(finished=self._prechecked, failed=self._failed),
+        self.attempt.submit(self.manager, PkPrecheckWorker(
+            self.attempt.presenter(finished=self._prechecked, failed=self._failed),
             self.identity,
             self.kind, trace_id=self.trace_id))
-
-    def _presenter(self, *, finished, failed):
-        return self.attempt.presenter(finished, failed)
-
-    def _submit(self, worker):
-        self.attempt.submit(self.manager, worker)
 
     def start_continuous(self, *, trace_id):
         """Contract27 caller has checked both-idle/status2/effect2/eligibility."""
@@ -48,27 +41,27 @@ class PkMatchController:
         self.trace_id = trace_id
         self.attempt.invalidate()
         self.phase, self.attempt.inflight, self.attempt.cancel_requested = PkPhase.MATCHING, True, False
-        self._submit(PkMatchWorker(
-            self._presenter(finished=self._matched, failed=self._failed),
+        self.attempt.submit(self.manager, PkMatchWorker(
+            self.attempt.presenter(finished=self._matched, failed=self._failed),
             self.identity, self.kind, trace_id=trace_id))
 
-    def _prechecked(self, result):
+    def _prechecked(self, result=None):
         self.attempt.inflight = False
         if self.phase is not PkPhase.PREPARING:
             return
         if self.attempt.cancel_requested:
             self._cancelled()
-        elif result.intercepted:
+        elif result is not None:
             self.phase = PkPhase.IDLE
-            self.intercepted(result)
+            self.session._intercepted(result)
         else:
             self.phase, self.attempt.inflight = PkPhase.MATCHING, True
-            self._submit(PkMatchWorker(
-                self._presenter(finished=self._matched, failed=self._failed),
+            self.attempt.submit(self.manager, PkMatchWorker(
+                self.attempt.presenter(finished=self._matched, failed=self._failed),
                 self.identity,
                 self.kind, trace_id=self.trace_id))
 
-    def _matched(self, result):
+    def _matched(self, result=None):
         self.attempt.inflight = False
         # A confirmed event can hand ownership to the session before this HTTP
         # callback arrives. Do not then cancel an already-established PK.
@@ -77,7 +70,7 @@ class PkMatchController:
         if self.attempt.cancel_requested:
             self._send_cancel()
         else:
-            self.waiting(result)
+            self.session._waiting()
 
     def cancel(self):
         if self.phase not in (PkPhase.PREPARING, PkPhase.MATCHING):
@@ -118,8 +111,8 @@ class PkMatchController:
 
     def _send_cancel(self):
         self.phase, self.attempt.inflight = PkPhase.STOPPING, True
-        self._submit(PkCancelMatchWorker(
-            self._presenter(finished=lambda _: self._cancelled(),
+        self.attempt.submit(self.manager, PkCancelMatchWorker(
+            self.attempt.presenter(finished=lambda _=None: self._cancelled(),
                             failed=self._cancel_failed),
             self.identity, self.kind, trace_id=self.trace_id))
 
@@ -128,7 +121,7 @@ class PkMatchController:
             self.attempt.inflight = False
             return
         self.phase, self.attempt.inflight, self.attempt.cancel_requested = PkPhase.FINISHED, False, False
-        self.cancelled()
+        self.session._cancelled()
 
     def _cancel_failed(self, error):
         # Keep cancellation available: an HTTP error does not prove the server
@@ -137,11 +130,11 @@ class PkMatchController:
         if self.phase in (PkPhase.CONNECTING, PkPhase.FINISHED):
             return
         self.phase = PkPhase.MATCHING
-        self.failed(error)
+        self.session._flow_failed(error)
 
     def _failed(self, error):
         if self.phase in (PkPhase.CONNECTING, PkPhase.FINISHED):
             self.attempt.inflight = False
             return
         self.phase, self.attempt.inflight = PkPhase.FAILED, False
-        self.failed(error)
+        self.session._flow_failed(error)

@@ -13,16 +13,8 @@ class RtcBusinessMessage:
 
 
 @dataclass(frozen=True, slots=True)
-class PkRoomInfoContext:
-    """Explicit business context; interact_channel_id is not an RTC channel ID."""
-    biz_session_id: str = field(repr=False)
-    business_label: str
-    interact_channel_id: str = field(repr=False)
-
-
-@dataclass(frozen=True, slots=True)
 class PkRoomInfo:
-    context: PkRoomInfoContext
+    interact_channel_id: str = field(repr=False)
     version: int
     members_version: int
     session_status: int
@@ -31,9 +23,3 @@ class PkRoomInfo:
     layout_id: str
     members: tuple[PkRemoteMember, ...]
     raw: dict[str, Any] = field(repr=False, compare=False)
-
-
-@dataclass(frozen=True, slots=True)
-class PkRoomInfoBatch:
-    infos: tuple[PkRoomInfo, ...]
-    stop_polling: bool

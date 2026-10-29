@@ -202,7 +202,12 @@ def probe_encoder(name):
     config = (VideoEncodingConfig(encoder=name) if is_av1 else
               VideoEncodingConfig(encoder=name, bitrate_kbps=800, width=320,
                                   height=180))
-    limits = encoder_type._source_capability(config.width, config.height)
+    if is_av1:
+        from .rtc_av1 import source_capability
+        limits = source_capability()
+    else:
+        from .rtc_h264 import source_capability
+        limits = source_capability(config.width, config.height)
     plan = configured_plan(config.width, config.height, limits, config)
     encoder = ProbeEncoder(video_config=config, allow_fallback=False,
                            use_codec_defaults=not is_av1)
@@ -312,13 +317,14 @@ def _probe_failure(name, status, diagnostic, code=None, error=None):
                 value = result.get(key)
                 if isinstance(value, str):
                     fields[key] = value[:PROBE_DIAGNOSTIC_MAX_CHARS]
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError) as diagnostic_error:
+            fields["diagnostic_error"] = (
+                f"{type(diagnostic_error).__name__}: {diagnostic_error}")[:PROBE_DIAGNOSTIC_MAX_CHARS]
     elif status == "timeout":
         fields["detail"] = "Probe child exceeded its deadline"
     # Exception text may contain filesystem surrogate escapes. Keep the main
     # UTF-8 file handler writable even when a native error contains them.
-    for key in ("reason", "detail"):
+    for key in ("reason", "detail", "diagnostic_error"):
         if key in fields:
             fields[key] = fields[key].encode("utf-8", errors="replace").decode(
                 "utf-8")
@@ -393,8 +399,12 @@ def probe_encoder_isolated(name, *, timeout=PROBE_TIMEOUT_SECONDS,
                 # Preserve the existing bounded reap even if a driver hangs.
                 try:
                     proc.wait(timeout=1)
-                except TimeoutExpired:
-                    pass
+                except TimeoutExpired as error:
+                    pk_trace("rtc.video.encoder_probe_cleanup.failed",
+                             backend=name, pid=proc.pid, status=status,
+                             error_type=type(error).__name__,
+                             detail="Probe child did not exit within 1 second after kill",
+                             exit_code=proc.poll())
         if status not in ("ok", "cancelled"):
             _probe_failure(name, status, diagnostic, code=proc.returncode)
         return status

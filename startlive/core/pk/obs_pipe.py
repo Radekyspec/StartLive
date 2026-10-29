@@ -10,7 +10,7 @@ from startlive.core.exceptions import TaskCancelled
 
 
 class ObsPipe:
-    def __init__(self, cancelled=lambda: False):
+    def __init__(self, *, cancelled):
         if os.name != "nt":
             raise PkError("OBS 原始媒体插件目前支持 Windows")
         self.cancelled = cancelled
@@ -51,6 +51,7 @@ class ObsPipe:
 
     def connect(self, timeout=10):
         deadline = monotonic() + timeout
+        last_error = None
         while monotonic() < deadline:
             self._check_cancelled()
             # Identification-only prevents a spoofed pipe server impersonating this client.
@@ -59,12 +60,17 @@ class ObsPipe:
             if handle != wintypes.HANDLE(-1).value:
                 self.handle = handle
                 return
-            if ctypes.get_last_error() not in (2, 231):
+            code = ctypes.get_last_error()
+            last_error = ctypes.WinError(code)
+            if code not in (2, 231):
                 raise PkError(
-                    "无法打开 OBS 媒体管道，请重新安装 OBS PK 插件并重启 OBS，确认两端使用同一 Windows 用户")
+                    f"无法打开 OBS 媒体管道：{last_error}；"
+                    "请重新安装 OBS PK 插件并重启 OBS，确认两端使用同一 Windows 用户") from last_error
             sleep(0.05)
+        detail = f"；最后一次连接失败：{last_error}" if last_error else ""
         raise PkError(
-            "未收到 OBS 媒体连接，请在 OBS 工具菜单启动 StartLive PK 采集")
+            f"未收到 OBS 媒体连接（等待 {timeout} 秒），"
+            f"请在 OBS 工具菜单启动 StartLive PK 采集{detail}") from last_error
 
     def _check_cancelled(self):
         if self.cancelled():
@@ -82,13 +88,15 @@ class ObsPipe:
         self._transfer(output, len(data), self.api.WriteFile)
 
     def _transfer(self, output, size, operation):
+        action = "读取" if operation is self.api.ReadFile else "写入"
         received = 0
         while received < size:
             self._check_cancelled()
             overlap = self.Overlapped()
             overlap.hEvent = self.api.CreateEventW(None, True, False, None)
             if not overlap.hEvent:
-                raise PkError("无法创建 OBS 媒体读取事件")
+                error = ctypes.WinError(ctypes.get_last_error())
+                raise PkError(f"无法创建 OBS 媒体{action}事件：{error}") from error
             count = wintypes.DWORD()
             pending = False
             try:
@@ -98,8 +106,11 @@ class ObsPipe:
                                ctypes.byref(count),
                                ctypes.byref(overlap))
                 if not ok:
-                    if ctypes.get_last_error() != 997:
-                        raise PkError("OBS 媒体连接已断开")
+                    code = ctypes.get_last_error()
+                    if code != 997:
+                        error = ctypes.WinError(code)
+                        raise PkError(
+                            f"OBS 媒体管道{action}失败（{received}/{size} 字节）：{error}") from error
                     pending = True
                     deadline = monotonic() + 10
                     while True:
@@ -107,16 +118,27 @@ class ObsPipe:
                         wait = self.api.WaitForSingleObject(overlap.hEvent, 50)
                         if wait == 0:
                             break
-                        if wait != 258 or monotonic() > deadline:
-                            raise PkError("等待 OBS 媒体帧超时")
+                        if wait == 0xFFFFFFFF:
+                            error = ctypes.WinError(ctypes.get_last_error())
+                            raise PkError(
+                                f"等待 OBS 媒体{action}事件失败：{error}") from error
+                        if wait != 258:
+                            raise PkError(
+                                f"等待 OBS 媒体{action}事件返回异常状态：0x{wait:08X}")
+                        if monotonic() > deadline:
+                            raise PkError(
+                                f"等待 OBS 媒体{action}超时（{received}/{size} 字节）")
                     if not self.api.GetOverlappedResult(self.handle,
                                                         ctypes.byref(overlap),
                                                         ctypes.byref(count),
                                                         False):
-                        raise PkError("OBS 媒体连接已断开")
+                        error = ctypes.WinError(ctypes.get_last_error())
+                        raise PkError(
+                            f"获取 OBS 媒体{action}结果失败（{received}/{size} 字节）：{error}") from error
                     pending = False
                 if not count.value:
-                    raise PkError("OBS 媒体连接已断开")
+                    raise PkError(
+                        f"OBS 媒体管道{action}返回 0（{received}/{size} 字节，连接已结束）")
                 received += count.value
             finally:
                 if pending:

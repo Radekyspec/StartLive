@@ -31,8 +31,11 @@ def parse_candidate_page(data, *, requested_type=None) -> PkCandidatePage:
         raise PkProtocolError("PK 候选人分页信息无效")
 
     def text(obj, name):
-        value = obj.get(name)
-        return value if isinstance(value, str) else ""
+        value = obj.get(name, "")
+        if not isinstance(value, str):
+            raise PkProtocolError(
+                f"PK 候选人 {name} 必须为文本，实际为 {type(value).__name__}")
+        return value
 
     users = []
     for item in items:
@@ -42,8 +45,8 @@ def parse_candidate_page(data, *, requested_type=None) -> PkCandidatePage:
         uid = user.get("uid")
         if type(uid) is not int or not 0 < uid < 1 << 64:
             raise PkProtocolError("PK 候选人的 UID 无效")
-        # Missing or non-string label_type stays empty, as in the initialized
-        # native item. Never substitute item.label or the request's invite_pk.
+        # An absent label_type stays empty; malformed fields are errors.
+        # Never substitute item.label or the request's invite_pk.
         users.append(PkCandidate(uid, text(user, "uname"), text(user, "face"),
                                  text(item, "label"), text(item, "label_type"),
                                  text(item, "biz_session_id"), deepcopy(item)))

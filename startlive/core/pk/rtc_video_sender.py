@@ -1,5 +1,4 @@
 """Scoped PK video encoding and RTCP refresh-request compatibility."""
-from abc import abstractmethod
 from collections import deque
 from fractions import Fraction
 from math import ceil
@@ -16,10 +15,9 @@ from av.video.reformatter import VideoReformatter
 
 from startlive.core.constant.pk_video import MAX_ENCODER_LATENCY_SECONDS
 from startlive.core.exceptions import PkError
-from startlive.core.pk.states.encoder import VideoEncodingConfig
-from startlive.core.pk.states.video_publication import VideoPublication
+from .rtc_video_negotiation import VideoPublication
 from startlive.core.pk.video_encoder_config import configured_plan
-from .rtc_h264 import source_capability, validate_encoder_sps
+from .rtc_h264 import validate_encoder_sps
 from .rtc_video_pacer import configure_video_pacing
 from .trace import pk_trace
 from .video_encoder_backend import encoder_attempts, make_video_context
@@ -40,24 +38,12 @@ class PkVideoEncoder(Encoder):
     REMB is recorded by the feedback adapter without changing this target.
     """
 
-    @staticmethod
-    @abstractmethod
-    def _source_capability(width, height):
-        """Return codec limits for a source geometry.
-
-        Subclasses must accept both dimensions even when their codec ceiling is
-        fixed. Live sending and encoder probing deliberately share this one
-        signature; do not hide a missing argument behind defaults.
-        """
-        pass
-
-    def __init__(self, *, require_negotiation=False, video_config=None,
+    def __init__(self, *, video_config,
                  allow_fallback=True, use_codec_defaults=False):
         super().__init__()
         self.codec = None
         self.limits = None
-        self.require_negotiation = require_negotiation
-        self.video_config = video_config or VideoEncodingConfig()
+        self.video_config = video_config
         self.allow_fallback = allow_fallback
         self.use_codec_defaults = use_codec_defaults
         self._codec_limits = None
@@ -230,10 +216,9 @@ class PkVideoEncoder(Encoder):
         return self._packetize(units), timestamp
 
     def _encode_frame(self, frame, force_keyframe):
-        if self.require_negotiation and self.limits is None:
+        if self.limits is None:
             raise PkError("视频尚未完成编码能力协商")
-        limits = self.limits or self._source_capability(frame.width,
-                                                        frame.height)
+        limits = self.limits
         plan = configured_plan(frame.width, frame.height, limits,
                                self.video_config)
         if (plan.width, plan.height) != (frame.width, frame.height):
@@ -281,10 +266,6 @@ class PkVideoEncoder(Encoder):
 
 
 class PkH264Encoder(PkVideoEncoder):
-    @staticmethod
-    def _source_capability(width, height):
-        return source_capability(width, height)
-
     _packetize = staticmethod(H264Encoder._packetize)
     _split_bitstream = staticmethod(H264Encoder._split_bitstream)
 
@@ -326,15 +307,6 @@ class PkH264Encoder(PkVideoEncoder):
 
 class PkAv1Encoder(PkVideoEncoder):
     @staticmethod
-    def _source_capability(width, height):
-        # AV1's sender ceiling is a fixed level, independent of source size.
-        # Keep the shared parameter names so keyword callers stay compatible;
-        # the live/probe paths intentionally still pass both dimensions.
-        del width, height
-        from .rtc_av1 import source_capability
-        return source_capability()
-
-    @staticmethod
     def _parameters(limits):
         return limits.parameters
 
@@ -359,48 +331,42 @@ class PkAv1Encoder(PkVideoEncoder):
         return obus, keyframe
 
 
-def configure_video_sender(sender, *, capability=None, failed=None,
-                           video_config=None):
-    if not isinstance(sender, RTCRtpSender):
-        return
-    if sender.kind != "video" or sender._RTCRtpSender__encoder is not None:
-        return
-    config = video_config or VideoEncodingConfig()
-    encoder_type = PkAv1Encoder if config.codec_family == "av1" else PkH264Encoder
-    encoder = encoder_type(require_negotiation=capability is not None,
-                           video_config=config)
+def configure_video_sender(sender, *, capability, failed, video_config):
+    """Install the fixed negotiated-video pipeline on one new RTP sender."""
+    if not isinstance(sender, RTCRtpSender) or sender.kind != "video":
+        raise PkError("PK 视频发布需要视频 RTP 发送器")
+    if sender._RTCRtpSender__encoder is not None:
+        raise PkError("PK 视频发送器已安装编码器")
+    if capability is None:
+        raise PkError("PK 视频发布缺少本机编码能力")
+    encoder_type = PkAv1Encoder if video_config.codec_family == "av1" else PkH264Encoder
+    encoder = encoder_type(video_config=video_config)
     encoder.ssrc = sender._ssrc
     sender._RTCRtpSender__encoder = encoder
-    publication = VideoPublication(capability,
-                                   config) if capability is not None else None
-    if publication is not None:
-        original_send = sender.send
-        original_next_frame = sender._next_encoded_frame
+    publication = VideoPublication(capability, video_config)
+    original_send = sender.send
+    original_next_frame = sender._next_encoded_frame
 
-        async def send(parameters):
-            if sender._RTCRtpSender__started:
-                # A Sub reoffer re-enters send(). aiortc does not reconfigure
-                # an active sender; neither should this scoped first-bind hook.
-                return await original_send(parameters)
-            try:
-                await original_send(publication.sender_parameters(parameters))
-            except Exception as error:
-                if failed is not None:
-                    failed(error)
-                raise
+    async def send(parameters):
+        if sender._RTCRtpSender__started:
+            # A Sub reoffer re-enters send(); aiortc keeps the active sender.
+            return await original_send(parameters)
+        try:
+            await original_send(publication.sender_parameters(parameters))
+        except Exception as error:
+            failed(error)
+            raise
 
-        async def next_frame(codec):
-            try:
-                return await original_next_frame(codec)
-            except Exception as error:
-                # The executor's encode exception is back on the RTC loop here.
-                # aiortc otherwise logs it and silently retires the sender.
-                if failed is not None:
-                    failed(error)
-                raise
+    async def next_frame(codec):
+        try:
+            return await original_next_frame(codec)
+        except Exception as error:
+            # Surface executor failures; aiortc otherwise silently retires RTP.
+            failed(error)
+            raise
 
-        sender.send = send
-        sender._next_encoded_frame = next_frame
+    sender.send = send
+    sender._next_encoded_frame = next_frame
     configure_video_pacing(sender)
     configure_refresh_requests(sender.transport)
     return publication

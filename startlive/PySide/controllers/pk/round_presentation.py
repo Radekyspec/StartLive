@@ -1,5 +1,6 @@
 """Presentation-only round snapshot and countdown; no business transitions."""
 from math import ceil
+from time import monotonic
 
 from startlive.core.constant.pk_info import NativePkState
 from startlive.core.pk.pk_display import build_round_display
@@ -31,7 +32,7 @@ class PkRoundPresentation:
                 else None)
             # Contracts48/49 supply a duration, not a Unix timestamp. A fresh
             # accepted snapshot resynchronizes this presentation-only clock.
-            self.deadline = session._clock() + seconds if seconds is not None else None
+            self.deadline = monotonic() + seconds if seconds is not None else None
         self.remaining = self.remaining_seconds()
         session.view.set_round_info(build_round_display(self.info,
                                                         state=session.round_state.state,
@@ -45,5 +46,5 @@ class PkRoundPresentation:
 
     def remaining_seconds(self):
         session = self.session
-        return (max(0, ceil(self.deadline - session._clock()))
+        return (max(0, ceil(self.deadline - monotonic()))
                 if self.deadline is not None else None)

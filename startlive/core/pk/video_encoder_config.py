@@ -1,11 +1,6 @@
-"""Read the current PK video configuration and derive its output plan."""
+"""Derive the output plan from a captured PK encoder configuration."""
 
 from startlive.core.pk.states.video import VideoEncodingPlan
-
-
-def current_video_config():
-    from startlive.core import app_state
-    return app_state.pk_encoder_settings["config"]
 
 
 def configured_plan(source_width, source_height, limits, config):

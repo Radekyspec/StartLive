@@ -9,4 +9,4 @@ class FetchContinuousPkStatusWorker(PkRequestWorker):
         super().__init__(presenter, identity, fields={})
 
     def parse_result(self, result):
-        return parse_continuous_status(result.data)
+        return parse_continuous_status(result)

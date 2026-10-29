@@ -5,45 +5,40 @@ from startlive.core.constant.pk_api import PK_CLASSIC_INFO_UNAVAILABLE
 from startlive.core.constant.pk_info import NativePkState, PkInfoAction
 from startlive.core.exceptions import PkError
 from startlive.core.pk.identity import require_current_identity
-from startlive.core.pk.pk_info import classic_pk_info, queried_pk_info
+from startlive.core.pk.pk_info import classic_pk_info
 from startlive.core.pk.states.events import (
     PkBattleEndEvent,
     PkInfoEvent,
     PkMatchTimeoutEvent,
 )
-from startlive.core.pk.states.info import PkClassicInfoResult
 from startlive.core.pk.trace import pk_trace
 from startlive.core.workers.pk.fetch_classic_info import PkClassicInfoWorker
 from startlive.core.workers.pk.fetch_info import PkInfoWorker
-from .pk_presenter import PkPresenter
+from startlive.PySide.interface_adapters.pk.round_query_presenter import PkRoundQueryPresenter
 
 
 class PkRoundController:
     """One account/flow owner for PK_INFO and classic query reconciliation.
 
-    cleanup_round must release only round state/UI. No RTC shutdown dependency
-    is accepted here: neither state Exit nor a terminal PK status proves Leave.
-    Callbacks run on the GUI dispatcher through the injected worker presenter.
+    A terminal round releases round state/UI only; it does not prove RTC Leave.
+    Worker callbacks run on the owning session's GUI dispatcher.
     """
 
-    def __init__(self, manager, identity, state, *, changed, cleanup_round,
-                 refresh_continuous, terminal_notice, failed,
-                 identity_guard=require_current_identity,
-                 clock=monotonic, polling_allowed=lambda: True, trace_id=""):
-        self.manager, self.identity, self.state = manager, identity, state
-        self.changed, self.cleanup_round = changed, cleanup_round
-        self.refresh_continuous, self.terminal_notice = refresh_continuous, terminal_notice
-        self.failed, self.identity_guard = failed, identity_guard
+    def __init__(self, session):
+        self.session = session
+        self.manager, self.identity, self.state = session.manager, session.identity, session.round_state
         self._query_serial, self._pending_id, self._closed = 0, None, False
         self._repeat_id = None
         self._pending_classic = None
         self._pending_serial = None
-        self._clock, self._poll_deadline = clock, None
-        self._polling_allowed = polling_allowed
-        self.trace_id = trace_id
+        self._poll_deadline = None
+
+    def _polling_allowed(self):
+        session = self.session
+        return not (session.closed or session.stopping or session._polling_suspended)
 
     def _trace(self, event, **fields):
-        pk_trace(event, **({"trace_id": self.trace_id, "uid": self.identity.uid,
+        pk_trace(event, **({"trace_id": self.session.trace_id, "uid": self.identity.uid,
                             "room_id": self.identity.room_id,
                             "pk_id": self.state.round_id,
                             "biz_session_id": self.state.biz_session_id,
@@ -65,7 +60,7 @@ class PkRoundController:
                                            NativePkType.DOUBLE_INVITE)):
             return False
         if self._poll_deadline is None:
-            self._poll_deadline = self._clock() + 1
+            self._poll_deadline = monotonic() + 1
             self._trace("round.polling.started", resume=resume)
         return True
 
@@ -86,8 +81,8 @@ class PkRoundController:
             if not self._polling_allowed():
                 self.stop_polling()
                 return False
-            self.identity_guard(self.identity)
-            now = self._clock()
+            require_current_identity(self.identity)
+            now = monotonic()
             if now < self._poll_deadline:
                 return False
             self._poll_deadline = now + 1
@@ -98,25 +93,25 @@ class PkRoundController:
             return self.query_current(self.state.round_id)
         except Exception as error:
             self.stop_polling()
-            self.failed(error)
+            self.session._error(error)
             return False
 
-    def handle_event(self, event):
+    def handle_event(self, event: PkInfoEvent | PkBattleEndEvent):
         if self._closed:
             return False
-        if not isinstance(event, (PkInfoEvent, PkBattleEndEvent)):
-            return False
         try:
-            self.identity_guard(self.identity)
+            require_current_identity(self.identity)
             if isinstance(event, PkBattleEndEvent):
                 return self.handle_battle_end(event)
             previous_timestamp = self.state.timestamp
-            return self._dispatch(self.state.from_push(event.info),
+            return self._dispatch(self.state.from_push(
+                event.info, start_state=self.session._start_facts()
+                if self.state.state == NativePkState.IDLE else None),
                                   previous_timestamp=previous_timestamp)
         except Exception as error:
             self._trace("round.push.failed", response=event.raw,
                         error_type=type(error).__name__, error=str(error))
-            self.failed(error)
+            self.session._error(error)
             return False
 
     def handle_battle_end(self, event):
@@ -162,16 +157,16 @@ class PkRoundController:
         return self._dispatch(decision,
                               previous_timestamp=state.timestamp)
 
-    def handle_match_timeout(self, event):
+    def handle_match_timeout(self, event: PkMatchTimeoutEvent):
         """Contract43: retire only a matching attempt in a supported family.
 
         There is no attempt ID to compare. The authenticated account owner
         remains the caller's scope; a timeout is not RTC Leave or round END.
         """
-        if self._closed or not isinstance(event, PkMatchTimeoutEvent):
+        if self._closed:
             return False
         try:
-            self.identity_guard(self.identity)
+            require_current_identity(self.identity)
             expected = {NativePkType.DOUBLE_CLASSIC: 1,
                         NativePkType.DOUBLE_RANDOM: 2}.get(self.state.kind)
             if self.state.state != NativePkState.MATCHING or expected is None or event.battle_type != expected:
@@ -185,7 +180,7 @@ class PkRoundController:
         except Exception as error:
             self._trace("round.push.failed", response=event.raw,
                         error_type=type(error).__name__, error=str(error))
-            self.failed(error)
+            self.session._error(error)
             return False
 
     def _match_timed_out(self, context):
@@ -195,8 +190,8 @@ class PkRoundController:
                     context_type=type(context).__name__)
         self.stop_polling()
         self.state.state = NativePkState.IDLE
-        self.cleanup_round(context)
-        self.failed(PkError("PK 匹配超时，可尝试重新匹配"))
+        self.session._round_finished(context)
+        self.session._error(PkError("PK 匹配超时，可尝试重新匹配"))
 
     def query_classic(self, pk_id, *, replace=False):
         if self._closed:
@@ -215,7 +210,9 @@ class PkRoundController:
             raise PkError("此模式尚未接入经典 PK 当前状态查询")
         return self._query(0, classic=True, replace=replace)
 
-    def query_current(self, pk_id, *, replace=False):
+    def query_current(self, pk_id: int, *, replace=False):
+        if not 0 <= pk_id < 1 << 63:
+            raise PkError(f"PK 查询的回合 ID 超出有效范围：{pk_id}")
         if self.state.kind == NativePkType.CHATROOM_GROUP and pk_id == 0:
             raise PkError("此语音 PK 模式的初始查询尚未接入")
         if self.state.kind == NativePkType.DOUBLE_CLASSIC:
@@ -224,9 +221,9 @@ class PkRoundController:
         return self._query(pk_id, classic=False, replace=replace)
 
     def _query(self, pk_id, *, classic, replace=False):
-        if self._closed:
+        if self._closed or not self._polling_allowed():
             return False
-        self.identity_guard(self.identity)
+        require_current_identity(self.identity)
         if self._pending_id is not None:
             if replace or (self._pending_id, self._pending_classic) != (pk_id,
                                                                         classic):
@@ -243,15 +240,11 @@ class PkRoundController:
         self._trace("round.query.started", requested_pk_id=pk_id,
                     classic=classic)
         try:
-            worker_class = PkClassicInfoWorker if classic else PkInfoWorker
-            worker = worker_class(PkPresenter(
-                finished=lambda result: self._queried(serial, pk_id, result,
-                                                      classic=classic),
-                failed=lambda error: self._query_failed(serial, error,
-                                                        pk_id=pk_id,
-                                                        classic=classic)),
-                self.identity, pk_id,
-                **({"current_state": pk_id == 0} if classic else {}))
+            presenter = PkRoundQueryPresenter(self, serial, pk_id, classic=classic)
+            if classic:
+                worker = PkClassicInfoWorker(presenter, self.identity, pk_id)
+            else:
+                worker = PkInfoWorker(presenter, self.identity, pk_id)
             worker.request_allowed = lambda: not self._closed and serial == self._query_serial and self._polling_allowed()
             self.manager.submit(worker)
         except Exception as error:
@@ -263,7 +256,7 @@ class PkRoundController:
             self._trace("round.query.failed",
                         **self._query_context(pk_id, classic),
                         error_type=type(error).__name__, error=str(error))
-            self.failed(error)
+            self.session._error(error)
 
     def _query_context(self, pk_id, classic):
         request = {"pk_id": str(pk_id), "room_id": str(self.identity.room_id)}
@@ -283,7 +276,8 @@ class PkRoundController:
         self._pending_serial = None
         if self._repeat_id is not None:
             request, self._repeat_id = self._repeat_id, None
-            self._effect(lambda: self._query(request[0], classic=request[1]))
+            if self._polling_allowed():
+                self._effect(lambda: self._query(request[0], classic=request[1]))
             self._trace("round.query.reply_ignored",
                         reason="replacement_requested")
             return False
@@ -295,11 +289,9 @@ class PkRoundController:
         if not self._take_reply(serial):
             return
         try:
-            self.identity_guard(self.identity)
+            require_current_identity(self.identity)
             if classic:
-                response = result.data
-                if not isinstance(response, PkClassicInfoResult):
-                    raise PkError("经典 PK 查询响应无效")
+                response = result
                 if response.code == PK_CLASSIC_INFO_UNAVAILABLE:
                     self._trace("round.classic.recovery", code=response.code,
                                 auto_match_status=response.auto_match_status)
@@ -315,13 +307,13 @@ class PkRoundController:
                         else:
                             self.stop_polling()
                             self.state.quit_round()
-                            self.cleanup_round(response)
+                            self.session._round_finished(response)
                         return
                 info = classic_pk_info(response.data,
                                        auto_matching=response.code == PK_CLASSIC_INFO_UNAVAILABLE,
                                        cached_timestamp=self.state.timestamp)
             else:
-                info = queried_pk_info(result.data)
+                info = result
             if not classic and self.state.state == NativePkState.IDLE and info.basic.pk_id == self.state.last_ended_round_id:
                 self._trace("round.query.reply_ignored",
                             event_pk_id=info.basic.pk_id,
@@ -337,7 +329,7 @@ class PkRoundController:
                         **self._query_context(pk_id, classic),
                         response=result, stage="callback",
                         error_type=type(error).__name__, error=str(error))
-            self.failed(error)
+            self.session._error(error)
 
     def _dispatch(self, decision, *, previous_timestamp=None):
         action = decision.action
@@ -360,18 +352,18 @@ class PkRoundController:
             # Contract21 confirmed invocation order, with no HTTP completion
             # barrier and no automatic new match or RTC disconnection.
             self.stop_polling()
-            self._effect(lambda: self.cleanup_round(decision))
-            self._effect(self.refresh_continuous)
+            self._effect(lambda: self.session._round_finished(decision))
+            self._effect(self.session._refresh_continuous)
             if self.state.kind == NativePkType.DOUBLE_CLASSIC:
                 self._effect(lambda: self.query_classic_current(replace=True))
-            self._effect(lambda: self.terminal_notice(decision))
+            self._effect(lambda: self.session._status("本轮 PK 已结束"))
         elif action == PkInfoAction.ROUND_IDLE:
             self.stop_polling()
-            self.cleanup_round(decision)
+            self.session._round_finished(decision)
         else:
             if decision.state == NativePkState.MATCHING:
                 self.start_polling()
-            self.changed(decision)
+            self.session._round_changed(decision)
         return True
 
     def _effect(self, callback):
@@ -380,7 +372,7 @@ class PkRoundController:
         except Exception as error:
             # E.g. a continuous-switch refresh already in progress must not
             # prevent classic reconciliation or the terminal notification.
-            self.failed(error)
+            self.session._error(error)
 
     def close(self):
         """Invalidate pending callbacks when this account/flow owner retires."""

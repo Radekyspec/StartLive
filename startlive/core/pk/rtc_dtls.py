@@ -23,15 +23,13 @@ class _PkCertificate(RTCCertificate):
         return context
 
 
-def observe_pk_dtls(peer, on_error):
+def observe_pk_dtls(peer: RTCPeerConnection, on_error):
     """Surface startup exceptions from aiortc's detached connection task.
 
     SSL context construction precedes the first DTLS statechange event. If it
     raises, aiortc can leave the channel connecting and DTLS in 'new' forever.
     Keep this handler scoped to the initial data transport of this peer.
     """
-    if not isinstance(peer, RTCPeerConnection):
-        return
     dtls = peer.sctp.transport
     original_start = dtls.start
 
@@ -53,19 +51,14 @@ def observe_pk_dtls(peer, on_error):
     dtls.start = start
 
 
-def configure_pk_dtls(peer):
+def configure_pk_dtls(peer: RTCPeerConnection):
     """Install before creating any transport, without global provider patches.
 
     aiortc has no public certificate/cipher configuration on RTCPeerConnection.
     Isolate the private adapter here; reject incompatible layouts explicitly.
-    Injected non-aiortc offline peers do not need this provider-specific setup.
     """
-    if not isinstance(peer, RTCPeerConnection):
-        return
-    certificates = getattr(peer, "_RTCPeerConnection__certificates", None)
-    if (not isinstance(certificates, list) or len(certificates) != 1
-            or not isinstance(certificates[0], RTCCertificate)
-            or peer.sctp is not None or peer.getTransceivers()):
+    certificates = peer._RTCPeerConnection__certificates
+    if len(certificates) != 1 or peer.sctp is not None or peer.getTransceivers():
         raise PkError("RTC 组件不支持当前 PK 安全连接配置")
     certificate = certificates[0]
     # Retain the original key/certificate; all SDP fingerprints stay identical.

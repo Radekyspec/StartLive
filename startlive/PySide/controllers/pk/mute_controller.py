@@ -1,12 +1,12 @@
 """Business mute synchronization for one admitted RTC generation."""
 from collections import deque
-from copy import deepcopy
 from dataclasses import replace
 
 from startlive.core.exceptions import PkError
+from startlive.core.pk.room_info import parse_stream_controls
 from startlive.core.pk.states.peers import RtcSubscription
 from startlive.core.workers.pk.mute import PkMuteWorker
-from .pk_presenter import PkPresenter
+from startlive.core.workers.base.CallbackPresenter import CallbackPresenter
 
 
 class PkMuteController:
@@ -17,19 +17,17 @@ class PkMuteController:
         self.pending = {}
         self.failed_muted = set()
         self.snapshot_epoch = self.local_revision = 0
-        self.versions = {"audio": -1, "video": -1}
-        for media in self.versions:
-            baseline = rtc.event.stream_control.get(media + "_control", {})
-            version = baseline.get("version") if isinstance(baseline,
-                                                            dict) else None
-            if type(version) is int:
-                self.versions[media] = version
+        baseline, _ = parse_stream_controls(rtc.event.stream_control)
+        self.versions = {
+            media: baseline[media]["version"] if media in baseline else -1
+            for media in ("audio", "video")
+        }
         self.controls = {}
         self.initial_audio_muted = rtc.mute_states["audio"].local_muted
         self.remote = {"audio": False,
                        "video": rtc.event.biz_label == "classic_pk"}
         self.capabilities = None
-        self.unknown_stream_control_raw = None
+        self._reported_unknown_controls = False
 
     def initialize(self):
         if self.closed or self.initialized or self.rtc.selected is None:
@@ -84,60 +82,21 @@ class PkMuteController:
             self._enqueue(media, True, muted)
 
     def _render_remote(self):
-        view = self.rtc.session.view
-        if hasattr(view, "set_remote_mute_state"):
-            view.set_remote_mute_state(**self.remote)
-
-    @staticmethod
-    def _known_shape(controls):
-        if not isinstance(controls, dict) or not controls:
-            return False
-        if set(controls) - {"audio_control", "video_control",
-                            "pub_sub_control"}:
-            return False
-        recognized = False
-        for media in ("audio", "video"):
-            if media + "_control" not in controls:
-                continue
-            control = controls[media + "_control"]
-            if not isinstance(control, dict) or type(
-                    control.get("version")) is not int:
-                return False
-            if set(control) - {"version", "operator_uid", "mute_local_mode",
-                               "mute_remote_uids"}:
-                return False
-            if not ({"mute_local_mode", "mute_remote_uids"} & control.keys()):
-                return False
-            if "mute_local_mode" in control:
-                mode = control["mute_local_mode"]
-                if type(mode) is not int or mode not in (0, 1):
-                    return False
-            if "mute_remote_uids" in control:
-                remotes = control["mute_remote_uids"]
-                if remotes is not None and (not isinstance(remotes, list) or
-                                            any(type(uid) is not int for uid in
-                                                remotes)):
-                    return False
-            recognized = True
-        return recognized
+        self.rtc.session.view.set_remote_mute_state(**self.remote)
 
     def receive(self, controls, *, raw_event=None):
         if self.closed:
             return
-        if (raw_event is not None and self.unknown_stream_control_raw is None
-                and not self._known_shape(controls)):
-            self.unknown_stream_control_raw = deepcopy(raw_event)
-            self.rtc.session._trace("session.stream_control.unknown_shape",
-                                    response=self.unknown_stream_control_raw)
-        if not isinstance(controls, dict):
-            return
+        parsed, issues = parse_stream_controls(controls)
+        if issues and not self._reported_unknown_controls:
+            self._reported_unknown_controls = True
+            self.rtc.session._trace(
+                "session.stream_control.invalid", details=issues,
+                response=raw_event if raw_event is not None else controls)
         updated = []
-        for media in ("audio", "video"):
-            control = controls.get(media + "_control")
-            if not isinstance(control, dict):
-                continue
-            version = control.get("version")
-            if type(version) is not int or version <= self.versions[media]:
+        for media, control in parsed.items():
+            version = control["version"]
+            if version <= self.versions[media]:
                 continue
             self.versions[media] = version
             self.controls[media] = control
@@ -151,23 +110,14 @@ class PkMuteController:
             if updated is not None and media not in updated:
                 continue
             mode = control.get("mute_local_mode")
-            # Only observed 0/1 modes are interpreted; unknown modes stay raw.
-            if (media == "audio" and type(mode) is int and mode in (0, 1)
-                    and self.rtc.publisher_ready and self._accept_control(media,
-                                                                          False,
-                                                                          bool(
-                                                                              mode))):
-                self.local(media, bool(mode), send=False)
-            remotes = control.get("mute_remote_uids")
-            if remotes is None:
-                remotes = []
-            if ("mute_remote_uids" in control
-                    and isinstance(remotes, list) and all(
-                        type(uid) is int for uid in remotes)
-                    and self._accept_control(media, True,
-                                             self.capabilities.uid in remotes)):
-                self.set_remote(media, self.capabilities.uid in remotes,
-                                send=False)
+            if (media == "audio" and mode is not None
+                    and self.rtc.publisher_ready
+                    and self._accept_control(media, False, mode)):
+                self.local(media, mode, send=False)
+            if "mute_remote_uids" in control:
+                muted = self.capabilities.uid in control["mute_remote_uids"]
+                if self._accept_control(media, True, muted):
+                    self.set_remote(media, muted, send=False)
 
     def _accept_control(self, media, remote, muted):
         key = (media, remote)
@@ -188,11 +138,10 @@ class PkMuteController:
         self.queue.append((media, remote, muted, target))
         self._drain()
 
-    def snapshot_guard(self):
-        """A query overlapping a local write cannot undo that write on delivery."""
-        epoch = self.snapshot_epoch
-        settled = not any(self.pending.values())
-        return lambda: not self.closed and settled and epoch == self.snapshot_epoch
+    @property
+    def snapshot_revision(self):
+        """Only settled revisions may apply controls from an HTTP snapshot."""
+        return None if self.closed or any(self.pending.values()) else self.snapshot_epoch
 
     def _drain(self):
         if self.closed or self.busy or not self.queue:
@@ -217,7 +166,7 @@ class PkMuteController:
 
         try:
             worker = PkMuteWorker(
-                PkPresenter(finished=lambda _: done(), failed=done),
+                CallbackPresenter(finished=lambda _=None: done(), failed=done),
                 session.identity, self.rtc.event.biz_session_id, target,
                 media=media, remote=remote, muted=muted)
             worker.request_allowed = lambda: not self.closed

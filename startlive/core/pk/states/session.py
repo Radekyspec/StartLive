@@ -1,13 +1,12 @@
 from dataclasses import dataclass, field
 
 from startlive.core.constant.pk import PkMode, NativePkType
-from startlive.core.danmaku.states.models import DanmakuIdentity, DanmakuResult
+from startlive.core.danmaku.states.models import DanmakuIdentity
 from startlive.core.pk.states.candidates import PkCandidate
 
 # Public aliases are assignments, not import re-exports, so an import
 # optimizer cannot silently delete this module's external contract.
 PkIdentity = DanmakuIdentity
-PkResult = DanmakuResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,13 +28,6 @@ class PkOptions:
     peer_search: int | None = None  # None means random matching.
     continuous: bool = False
     candidate: PkCandidate | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RtcTicket:
-    channel_id: int
-    uid: int
-    access_token: str = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,12 +3,6 @@ from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
-class PkInteractionScope:
-    biz_session_id: str = field(repr=False)
-    rtc_channel_id: str = field(repr=False)
-
-
-@dataclass(frozen=True, slots=True)
 class PkMediaPreference:
     audio_muted: bool
     video_muted: bool
@@ -19,13 +13,6 @@ class PkRemoteMember:
     uid: int
     preference: PkMediaPreference
     raw: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
-
-
-@dataclass(frozen=True, slots=True)
-class RtcPublication:
-    uid: int
-    video: bool
-    audio: bool
 
 
 @dataclass(frozen=True, slots=True)

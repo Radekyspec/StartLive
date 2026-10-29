@@ -15,18 +15,15 @@ from startlive.core.pk.states.info import (
     PkInfoDecision,
     PkMatchInfo,
 )
-from .pk_eligibility import pk_start_eligibility, pk_type_from_server
+from .pk_eligibility import pk_start_block_reason, pk_type_from_server
 
 
 class PkRoundState:
-    def __init__(self, kind, *, accepts_type=None, idle_eligibility=None,
+    def __init__(self, kind, *,
                  state=NativePkState.IDLE, round_id=0, biz_session_id="",
-                 last_ended_round_id=0,
-                 start_state_provider=None):
+                 last_ended_round_id=0):
         self.kind = NativePkType(kind)
         self.state = NativePkState(state)
-        self.accepts_type, self.idle_eligibility = accepts_type, idle_eligibility
-        self.start_state_provider = start_state_provider
         self.round_id, self.biz_session_id = round_id, biz_session_id
         self.last_ended_round_id = last_ended_round_id
         self.timestamp, self.info = 0, None
@@ -39,20 +36,13 @@ class PkRoundState:
 
     def _type_allowed(self, info):
         mapped = pk_type_from_server(info.basic.type, info.basic.sub_type)
-        return mapped is not None and (
-                self.accepts_type is None or self.accepts_type(
-            info.basic) is True)
+        return mapped is not None
 
-    def _idle_allowed(self, info):
-        if self.start_state_provider is not None:
-            mapped = pk_type_from_server(info.basic.type, info.basic.sub_type)
-            decision = pk_start_eligibility(mapped, self.start_state_provider())
-            if decision.allowed is not True:
-                return False
-            return self.idle_eligibility is None or self.idle_eligibility(
-                info) is True
-        return self.idle_eligibility is not None and self.idle_eligibility(
-            info) is True
+    def _idle_block_reason(self, info, start_state):
+        if start_state is None:
+            return "尚未确认是否可以接管此 PK 回合"
+        mapped = pk_type_from_server(info.basic.type, info.basic.sub_type)
+        return pk_start_block_reason(mapped, start_state)
 
     def _belongs(self, info):
         if self.round_id and info.basic.pk_id != self.round_id:
@@ -62,7 +52,7 @@ class PkRoundState:
         return not (not info.legacy and self.biz_session_id
                     and info.basic.biz_session_id != self.biz_session_id)
 
-    def from_push(self, info):
+    def from_push(self, info, *, start_state=None):
         if self.state <= NativePkState.PREPARING and info.basic.status >= 1001:
             return self._decision(PkInfoAction.IGNORED, info,
                                   "terminal_before_round")
@@ -73,9 +63,12 @@ class PkRoundState:
             if info.basic.pk_id == self.last_ended_round_id:
                 return self._decision(PkInfoAction.IGNORED, info,
                                       "already_ended")
-            if not self._type_allowed(info) or not self._idle_allowed(info):
+            if not self._type_allowed(info):
                 return self._decision(PkInfoAction.BLOCKED, info,
-                                      "尚未确认是否可以接管此 PK 回合")
+                                      "尚未确认此 PK 类型的状态映射")
+            blocked_reason = self._idle_block_reason(info, start_state)
+            if blocked_reason is not None:
+                return self._decision(PkInfoAction.BLOCKED, info, blocked_reason)
             if info.basic.pk_id <= 0:
                 return self._decision(PkInfoAction.BLOCKED, info,
                                       "PK 状态缺少有效回合 ID")
