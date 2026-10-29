@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from startlive.core.identity import AccountIdentity
+
 
 @dataclass(frozen=True, slots=True)
 class DanmakuBootstrap:
@@ -29,14 +31,7 @@ class DanmakuPacket:
     payload: bytes = field(repr=False)
 
 
-@dataclass(frozen=True, slots=True)
-class DanmakuIdentity:
-    uid: int
-    room_id: int
-    cookies: tuple[tuple[str, str], ...] = field(repr=False)
-    csrf: str = field(repr=False)
-    access_key: str = field(default="", repr=False)
-    buvid: str = field(default="", repr=False)
+DanmakuIdentity = AccountIdentity
 
 
 @dataclass(frozen=True, slots=True)

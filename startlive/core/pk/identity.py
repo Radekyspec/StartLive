@@ -1,27 +1,15 @@
-from startlive.core import app_state
-from startlive.core.credentials.states import AccountSnapshot
 from startlive.core.exceptions import PkAuthenticationError
+from startlive.core.identity import current_identity as _current_identity, identity_is_current
 from startlive.core.pk.states.session import PkIdentity
 
 
 def current_identity() -> PkIdentity:
     try:
-        snapshot = app_state.account_snapshot()
-        uid, room_id = snapshot.uid, snapshot.room_id
-    except (ValueError, TypeError) as error:
-        raise PkAuthenticationError(
-            f"登录用户或直播间信息无效：{type(error).__name__}: {error}") from error
-    cookies = dict(snapshot.cookies)
-    if uid <= 0 or room_id <= 0 or not cookies.get(
-            "SESSDATA") or not cookies.get("bili_jct"):
-        raise PkAuthenticationError("请先登录并获取直播间信息")
-    # QR login supplies cookies, not an OAuth access_key. Never substitute SESSDATA.
-    return PkIdentity(uid, room_id, snapshot.cookies, cookies["bili_jct"],
-                      buvid=app_state.app_settings.app_buvid)
+        return _current_identity()
+    except ValueError as error:
+        raise PkAuthenticationError(str(error)) from error
 
 
 def require_current_identity(identity: PkIdentity) -> None:
-    active = current_identity()
-    if not AccountSnapshot(active.uid, active.room_id, active.cookies).matches(
-            identity):
+    if not identity_is_current(identity):
         raise PkAuthenticationError("登录账号已改变，请结束当前 PK 后重新开始")
